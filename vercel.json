@@ -1,0 +1,17 @@
+{
+  "functions": {
+    "api/index.js": {
+      "runtime": "nodejs20.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/demo/checkout",
+      "destination": "/frontend/checkout.html"
+    },
+    {
+      "source": "/",
+      "destination": "/frontend/checkout.html"
+    }
+  ]
+}
