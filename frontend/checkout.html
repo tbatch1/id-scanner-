@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>THC Club | Age Verified Checkout</title>
+    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-barcode-reader-bundle@10.4.3100/dist/dbr.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-code-parser@2.4.32/dist/dcp.js"></script>
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #111;
+            color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        header {
+            background: #181818;
+            padding: 18px 32px;
+            border-bottom: 2px solid #0d6efd;
+        }
+
+        header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 15px;
+            color: #a5a5a5;
+        }
+
+        main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        aside {
+            width: 340px;
+            background: #161616;
+            border-right: 1px solid #222;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        .sale-summary h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .sale-lines {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .sale-line {
+            background: #1f1f1f;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .sale-line-title {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .sale-line-meta {
+            font-size: 13px;
+            color: #b5b5b5;
+            margin-top: 4px;
+        }
+
+        .status-card {
+            background: #1f1f1f;
+            border-radius: 10px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .status-pill {
+            align-self: flex-start;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            background: #343434;
+            color: #d8d8d8;
+        }
+
+        .status-pill.approved {
+            background: rgba(13, 110, 253, 0.2);
+            color: #74b4ff;
+        }
+
+        .status-pill.flagged {
+            background: rgba(220, 53, 69, 0.24);
+            color: #ff8a8a;
+        }
+
+        .status-message {
+            font-size: 15px;
+            line-height: 1.4;
+            color: #c9c9c9;
+        }
+
+        .actions {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 14px 18px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s ease, opacity 0.1s ease;
+        }
+
+        button.primary {
+            background: #0d6efd;
+            color: white;
+        }
+
+        button.secondary {
+            background: #2b2b2b;
+            color: #f5f5f5;
+        }
+
+        button:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        button:not(:disabled):active {
+            transform: scale(0.98);
+        }
+
+        section.scanner {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: black;
+        }
+
+        #scanner-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #camera-view-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #instruction {
+            position: absolute;
+            top: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 15, 15, 0.88);
+            padding: 16px 28px;
+            border-radius: 10px;
+            font-size: 16px;
+            z-index: 10;
+        }
+
+        #result {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.92);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 24px;
+            padding: 20px;
+            padding-bottom: 100px;
+            text-align: center;
+            z-index: 100;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #result.show {
+            display: flex;
+        }
+
+        .result-card {
+            background: #1b1b1b;
+            border-radius: 16px;
+            padding: 32px 42px;
+            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
+            max-width: 540px;
+            width: 100%;
+            margin: auto 0;
+        }
+
+        .age-status {
+            font-size: 56px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            padding: 18px;
+        }
+
+        .age-status.approved {
+            background: #198754;
+            color: #e8fff1;
+        }
+
+        .age-status.denied {
+            background: #dc3545;
+            color: #ffecec;
+        }
+
+        .info {
+            font-size: 20px;
+            line-height: 1.5;
+            margin: 16px 0;
+        }
+
+        .info-label {
+            color: #a5a5a5;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1.4px;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            padding: 14px 22px;
+            border-radius: 10px;
+            font-size: 15px;
+            display: none;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+            z-index: 200;
+        }
+
+        .toast.show {
+            display: inline-flex;
+        }
+
+        @media (max-width: 980px) {
+            body {
+                overflow-y: auto;
+            }
+
+            main {
+                flex-direction: column;
+            }
+
+            aside {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid #222;
+            }
+
+            section.scanner {
+                min-height: 420px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Age Verified Checkout</h1>
+        <div class="meta">
+            <span id="sale-label">Sale: --</span>
+            <span id="total-label">Total: --</span>
+            <span id="clerk-label">Clerk: --</span>
+            <span id="status-label">Status: Awaiting scan</span>
+        </div>
+    </header>
+    <main>
+        <aside>
+            <section class="sale-summary">
+                <h2>Current Sale</h2>
+                <div class="sale-lines" id="sale-lines"></div>
+            </section>
+            <section class="status-card">
+                <span class="status-pill" id="verification-pill">Not verified</span>
+                <p class="status-message" id="status-message">
+                    Hold the ID 4-6 inches from the camera. Keep the PDF417 barcode visible and avoid glare.
+                </p>
+            </section>
+            <div class="actions">
+                <button class="primary" id="complete-sale" disabled>Complete Sale</button>
+                <button class="secondary" id="restart-scan">Restart Scan</button>
+            </div>
+        </aside>
+        <section class="scanner">
+            <div id="scanner-container">
+                <div id="camera-view-container"></div>
+                <div id="instruction">Aim at the barcode on the driver's license</div>
+                <div id="result">
+                    <div class="result-card">
+                        <div id="age-status" class="age-status">Scanning...</div>
+                        <div class="info">
+                            <div class="info-label">Customer</div>
+                            <div id="name">--</div>
+                        </div>
+                        <div class="info">
+                            <div class="info-label">Date of Birth</div>
+                            <div id="dob">--</div>
+                        </div>
+                        <div class="info">
+                            <div class="info-label">Calculated Age</div>
+                            <div id="age">--</div>
+                        </div>
+                        <button class="secondary" id="scan-again" type="button">Scan Another ID</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <div class="toast" id="toast"></div>
+    <script>
+    (function () {
+        'use strict';
+
+        // Initialize Dynamsoft license
+        Dynamsoft.License.LicenseManager.initLicense("DLS2eyJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSJ9");
+
+        // Preload modules
+        Dynamsoft.Core.CoreModule.loadWasm(["DBR", "DCP"]);
+        Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID");
+        Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID_WITH_MAG_STRIPE");
+        Dynamsoft.DCP.CodeParserModule.loadSpec("SOUTH_AFRICA_DL");
+
+        // URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const saleId = urlParams.get('saleId') || 'SALE-1001';
+        const clerkId = urlParams.get('clerkId') || 'demo-clerk';
+        const apiOverride = urlParams.get('api');
+        const defaultApiBase = window.location.protocol === 'file:'
+            ? 'http://localhost:4000/api'
+            : `${window.location.origin}/api`;
+        const API_BASE = apiOverride || defaultApiBase;
+
+        // UI Elements
+        const ui = {
+            saleLabel: document.getElementById('sale-label'),
+            totalLabel: document.getElementById('total-label'),
+            clerkLabel: document.getElementById('clerk-label'),
+            statusLabel: document.getElementById('status-label'),
+            saleLinesContainer: document.getElementById('sale-lines'),
+            verificationPill: document.getElementById('verification-pill'),
+            statusMessage: document.getElementById('status-message'),
+            completeSaleBtn: document.getElementById('complete-sale'),
+            restartScanBtn: document.getElementById('restart-scan'),
+            scanAgainBtn: document.getElementById('scan-again'),
+            resultOverlay: document.getElementById('result'),
+            ageStatusDiv: document.getElementById('age-status'),
+            nameDiv: document.getElementById('name'),
+            dobDiv: document.getElementById('dob'),
+            ageDiv: document.getElementById('age'),
+            toast: document.getElementById('toast'),
+            cameraViewContainer: document.getElementById('camera-view-container')
+        };
+
+        // Global state
+        let cvRouter = null;
+        let cameraEnhancer = null;
+        let parser = null;
+
+        function showToast(message, variant = 'error') {
+            ui.toast.textContent = message;
+            ui.toast.style.background = variant === 'error'
+                ? 'rgba(220, 53, 69, 0.9)'
+                : 'rgba(13, 110, 253, 0.9)';
+            ui.toast.classList.add('show');
+            setTimeout(() => ui.toast.classList.remove('show'), 3200);
+        }
+
+        function setVerificationState(state, message) {
+            ui.verificationPill.textContent = state;
+            ui.verificationPill.classList.remove('approved', 'flagged');
+            ui.statusMessage.textContent = message;
+
+            if (state === 'Approved') {
+                ui.verificationPill.classList.add('approved');
+            } else if (state === 'Flagged') {
+                ui.verificationPill.classList.add('flagged');
+            }
+        }
+
+        function renderSaleLines(sale) {
+            ui.saleLinesContainer.innerHTML = '';
+            sale.items.forEach((line) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'sale-line';
+                wrapper.innerHTML = `
+                    <div class="sale-line-title">${line.description}</div>
+                    <div class="sale-line-meta">Qty ${line.quantity} | ${sale.currency || 'USD'} ${line.price.toFixed(2)}</div>
+                `;
+                ui.saleLinesContainer.appendChild(wrapper);
+            });
+        }
+
+        function calculateAge(dobString) {
+            if (!dobString || dobString.length < 8) return null;
+
+            let month, day, year;
+
+            if (dobString.length === 8) {
+                const monthCandidate = parseInt(dobString.substring(0, 2), 10);
+                if (monthCandidate > 12) {
+                    year = parseInt(dobString.substring(0, 4), 10);
+                    month = parseInt(dobString.substring(4, 6), 10);
+                    day = parseInt(dobString.substring(6, 8), 10);
+                } else {
+                    month = monthCandidate;
+                    day = parseInt(dobString.substring(2, 4), 10);
+                    year = parseInt(dobString.substring(4, 8), 10);
+                }
+            } else if (dobString.includes('-')) {
+                const parts = dobString.split('-');
+                year = parseInt(parts[0], 10);
+                month = parseInt(parts[1], 10);
+                day = parseInt(parts[2], 10);
+            } else {
+                return null;
+            }
+
+            if ([month, day, year].some((value) => Number.isNaN(value))) return null;
+
+            const dob = new Date(year, month - 1, day);
+            if (Number.isNaN(dob.getTime())) return null;
+
+            const today = new Date();
+            let age = today.getFullYear() - dob.getFullYear();
+            const monthDiff = today.getMonth() - dob.getMonth();
+
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+                age -= 1;
+            }
+
+            return {
+                age,
+                formatted: `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`
+            };
+        }
+
+        function parseLicenseData(parsedInfo) {
+            const data = {
+                firstName: '',
+                lastName: '',
+                middleName: '',
+                dob: '',
+                licenseNumber: ''
+            };
+
+            // Track all found fields for debugging
+            const foundFields = [];
+
+            function extractFields(fields) {
+                for (const field of fields) {
+                    if (Array.isArray(field)) {
+                        extractFields(field);
+                    } else {
+                        if (field.FieldName && field.Value) {
+                            foundFields.push({ name: field.FieldName, value: field.Value });
+                        }
+
+                        // Multiple field name variations for better compatibility
+                        const fieldName = field.FieldName ? field.FieldName.toLowerCase() : '';
+                        const value = field.Value || '';
+
+                        // First name variations
+                        if (fieldName === 'givenname' || fieldName === 'firstname' ||
+                            fieldName === 'given_name' || fieldName === 'first_name' ||
+                            fieldName === 'dcdname' || fieldName === 'customerfirstname') {
+                            data.firstName = value;
+                        }
+
+                        // Last name variations
+                        if (fieldName === 'familyname' || fieldName === 'lastname' ||
+                            fieldName === 'family_name' || fieldName === 'last_name' ||
+                            fieldName === 'surname' || fieldName === 'dcsname' ||
+                            fieldName === 'customerfamilyname') {
+                            data.lastName = value;
+                        }
+
+                        // Middle name variations
+                        if (fieldName === 'middlename' || fieldName === 'middle_name' ||
+                            fieldName === 'ddename') {
+                            data.middleName = value;
+                        }
+
+                        // DOB variations
+                        if (fieldName === 'birthdate' || fieldName === 'dateofbirth' ||
+                            fieldName === 'birth_date' || fieldName === 'date_of_birth' ||
+                            fieldName === 'dob' || fieldName === 'dbbname') {
+                            data.dob = value;
+                        }
+
+                        // License number variations
+                        if (fieldName === 'licensenumber' || fieldName === 'license_number' ||
+                            fieldName === 'dlnumber' || fieldName === 'daqname' ||
+                            fieldName === 'customernumber' || fieldName === 'documentnumber') {
+                            data.licenseNumber = value;
+                        }
+
+                        if (field.ChildFields) extractFields(field.ChildFields);
+                    }
+                }
+            }
+
+            if (parsedInfo.ResultInfo) {
+                extractFields(parsedInfo.ResultInfo);
+            }
+
+            // Debug logging
+            console.log('All found fields:', foundFields);
+            console.log('Extracted data:', data);
+
+            return data;
+        }
+
+        async function loadSale() {
+            ui.saleLabel.textContent = `Sale: ${saleId}`;
+            ui.clerkLabel.textContent = `Clerk: ${clerkId}`;
+            try {
+                const response = await fetch(`${API_BASE}/sales/${saleId}`);
+                if (!response.ok) throw new Error(`Unable to load sale (${response.status})`);
+
+                const payload = await response.json();
+                const sale = payload.data;
+
+                ui.totalLabel.textContent = `Total: ${sale.currency || 'USD'} ${sale.total.toFixed(2)}`;
+                renderSaleLines(sale);
+
+                if (sale.verification && !sale.verificationExpired) {
+                    setVerificationState('Approved', 'Existing verification found. Complete the sale or rescan to refresh.');
+                    ui.statusLabel.textContent = 'Status: Verified';
+                    ui.completeSaleBtn.disabled = false;
+                } else if (sale.verification && sale.verificationExpired) {
+                    setVerificationState('Flagged', 'Previous verification expired. Rescan before completing the sale.');
+                    ui.statusLabel.textContent = 'Status: Verification expired';
+                    ui.completeSaleBtn.disabled = true;
+                } else {
+                    setVerificationState('Not verified', 'Scan the government ID to proceed with checkout.');
+                    ui.statusLabel.textContent = 'Status: Awaiting scan';
+                    ui.completeSaleBtn.disabled = true;
+                }
+            } catch (error) {
+                showToast(error.message);
+                setVerificationState('Unavailable', 'Sale data could not be loaded. Retry or contact support.');
+            }
+        }
+
+        async function submitVerification(licenseData, ageData) {
+            ui.statusLabel.textContent = 'Status: Sending verification...';
+            setVerificationState('Pending', 'Uploading scan result. Hold tight.');
+            ui.completeSaleBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/sales/${saleId}/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        clerkId,
+                        scan: {
+                            approved: ageData.age >= 21,
+                            firstName: licenseData.firstName,
+                            lastName: licenseData.lastName,
+                            dob: licenseData.dob,
+                            age: ageData.age
+                        }
+                    })
+                });
+
+                if (!response.ok) throw new Error('Unable to record verification. Try again.');
+
+                const payload = await response.json();
+                const verification = payload.data;
+
+                if (verification.status === 'approved') {
+                    setVerificationState('Approved', 'Verification recorded. You can complete the sale now.');
+                    ui.statusLabel.textContent = 'Status: Verified';
+                    ui.completeSaleBtn.disabled = false;
+                } else {
+                    setVerificationState('Flagged', verification.reason || 'Verification rejected.');
+                    ui.statusLabel.textContent = 'Status: Verification failed';
+                    ui.completeSaleBtn.disabled = true;
+                }
+            } catch (error) {
+                showToast(error.message);
+                setVerificationState('Not verified', 'Scan failed to upload. Rescan or refresh.');
+                ui.statusLabel.textContent = 'Status: Awaiting scan';
+            }
+        }
+
+        async function completeSale() {
+            const latestVerificationResponse = await fetch(`${API_BASE}/sales/${saleId}`);
+            const latestSaleData = await latestVerificationResponse.json();
+            const latestVerification = latestSaleData.data.verification;
+
+            if (!latestVerification) {
+                showToast('No verification on record. Scan the ID first.');
+                return;
+            }
+
+            ui.completeSaleBtn.disabled = true;
+            ui.completeSaleBtn.textContent = 'Completing...';
+            try {
+                const response = await fetch(`${API_BASE}/sales/${saleId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        verificationId: latestVerification.verificationId
+                    })
+                });
+
+                if (!response.ok) {
+                    const payload = await response.json().catch(() => ({}));
+                    throw new Error(payload.message || 'Unable to complete sale. Try again.');
+                }
+
+                ui.statusLabel.textContent = 'Status: Completed';
+                setVerificationState('Approved', 'Sale flagged as complete. Return to Lightspeed to finish checkout.');
+                showToast('Sale completed in mock backend.', 'info');
+            } catch (error) {
+                showToast(error.message);
+                ui.completeSaleBtn.disabled = false;
+            } finally {
+                ui.completeSaleBtn.textContent = 'Complete Sale';
+            }
+        }
+
+        function resetResultOverlay() {
+            ui.resultOverlay.classList.remove('show');
+            ui.ageStatusDiv.textContent = 'Scanning...';
+            ui.ageStatusDiv.className = 'age-status';
+            ui.nameDiv.textContent = '--';
+            ui.dobDiv.textContent = '--';
+            ui.ageDiv.textContent = '--';
+        }
+
+        async function handleScan(bytesToParse) {
+            try {
+                if (cvRouter) await cvRouter.stopCapturing();
+
+                const parsedResult = await parser.parse(bytesToParse);
+                if (parsedResult.exception) {
+                    throw new Error('Unable to parse ID barcode');
+                }
+
+                const parsedInfo = JSON.parse(parsedResult.jsonString);
+                console.log('Parsed license data:', parsedInfo);
+
+                const licenseData = parseLicenseData(parsedInfo);
+
+                if (!licenseData.firstName && !licenseData.lastName) {
+                    throw new Error('Could not read name from ID. Please rescan.');
+                }
+
+                if (!licenseData.dob) {
+                    throw new Error('Could not read date of birth. Please rescan.');
+                }
+
+                const ageData = calculateAge(licenseData.dob);
+                if (!ageData) {
+                    throw new Error('Unable to calculate age. Try another scan.');
+                }
+
+                const fullName = [licenseData.firstName, licenseData.middleName, licenseData.lastName]
+                    .filter(Boolean)
+                    .join(' ');
+
+                ui.nameDiv.textContent = fullName || '--';
+                ui.dobDiv.textContent = ageData.formatted;
+                ui.ageDiv.textContent = `${ageData.age}`;
+
+                if (ageData.age >= 21) {
+                    ui.ageStatusDiv.textContent = '21+ Verified';
+                    ui.ageStatusDiv.className = 'age-status approved';
+                } else {
+                    ui.ageStatusDiv.textContent = 'Under 21';
+                    ui.ageStatusDiv.className = 'age-status denied';
+                }
+
+                ui.resultOverlay.classList.add('show');
+
+                await submitVerification(licenseData, ageData);
+            } catch (error) {
+                console.error('Scan error:', error);
+                showToast(error.message || 'Scan failed. Adjust the ID and try again.');
+                if (cvRouter) await startScanning();
+            }
+        }
+
+        async function initScanner() {
+            try {
+                parser = await Dynamsoft.DCP.CodeParser.createInstance();
+
+                const cameraView = await Dynamsoft.DCE.CameraView.createInstance();
+                cameraEnhancer = await Dynamsoft.DCE.CameraEnhancer.createInstance(cameraView);
+                cameraEnhancer.setResolution({ width: 1920, height: 1080 });
+                ui.cameraViewContainer.appendChild(cameraView.getUIElement());
+
+                cvRouter = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
+                cvRouter.setInput(cameraEnhancer);
+
+                const filter = new Dynamsoft.Utility.MultiFrameResultCrossFilter();
+                filter.enableResultDeduplication("barcode", true);
+                await cvRouter.addResultFilter(filter);
+
+                cvRouter.addResultReceiver({
+                    onDecodedBarcodesReceived: async (result) => {
+                        if (!result.barcodeResultItems.length) return;
+                        Dynamsoft.DCE.Feedback.beep();
+                        await handleScan(result.barcodeResultItems[0].bytes);
+                    }
+                });
+
+                let settings = await cvRouter.getSimplifiedSettings("ReadDenseBarcodes");
+                settings.barcodeSettings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_PDF417;
+                settings.barcodeSettings.localizationModes = [16, 2, 0, 0, 0, 0, 0, 0];
+                settings.barcodeSettings.expectBarcodeCount = 1;
+                await cvRouter.updateSettings("ReadDenseBarcodes", settings);
+
+                return true;
+            } catch (error) {
+                console.error('Scanner init error:', error);
+                showToast('Unable to initialize scanner: ' + error.message);
+                return false;
+            }
+        }
+
+        async function startScanning() {
+            try {
+                resetResultOverlay();
+                await cameraEnhancer.open();
+                await cvRouter.startCapturing("ReadDenseBarcodes");
+                setVerificationState('Not verified', 'Hold the ID inside the frame. Barcode will scan automatically.');
+                ui.statusLabel.textContent = 'Status: Scanning...';
+            } catch (error) {
+                console.error('Start scanning error:', error);
+                showToast('Unable to start camera: ' + error.message);
+            }
+        }
+
+        ui.scanAgainBtn.addEventListener('click', async () => {
+            await startScanning();
+        });
+
+        ui.restartScanBtn.addEventListener('click', async () => {
+            await startScanning();
+        });
+
+        ui.completeSaleBtn.addEventListener('click', completeSale);
+
+        window.addEventListener('beforeunload', () => {
+            if (cvRouter) cvRouter.stopCapturing();
+            if (cameraEnhancer) cameraEnhancer.close();
+        });
+
+        (async function init() {
+            await loadSale();
+            const initialized = await initScanner();
+            if (initialized) {
+                await startScanning();
+            }
+        })();
+    })();
+    </script>
+</body>
+</html>

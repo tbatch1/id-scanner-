@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ID Scanner - Age Verification</title>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background: #2d2d2d;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 3px solid #0066cc;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        #scanner-container {
+            flex: 1;
+            position: relative;
+            background: black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 400px;
+            height: 200px;
+            border: 3px solid #0066cc;
+            border-radius: 12px;
+            pointer-events: none;
+        }
+
+        #instruction {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        #result {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+        }
+
+        #result.show {
+            display: flex;
+        }
+
+        .result-content {
+            background: #2d2d2d;
+            padding: 40px;
+            border-radius: 16px;
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .age-status {
+            font-size: 72px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .age-status.approved {
+            background: #00a86b;
+            color: white;
+        }
+
+        .age-status.denied {
+            background: #dc3545;
+            color: white;
+        }
+
+        .info {
+            margin: 20px 0;
+            font-size: 24px;
+        }
+
+        .info-label {
+            color: #888;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        #scan-again {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 18px 40px;
+            font-size: 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 30px;
+            font-weight: 600;
+        }
+
+        #scan-again:active {
+            background: #0052a3;
+        }
+
+        #error {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #dc3545;
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            font-size: 18px;
+            text-align: center;
+            max-width: 80%;
+        }
+
+        #error.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>ID Scanner - 21+ Verification</h1>
+    </header>
+
+    <div id="scanner-container">
+        <video id="video" playsinline></video>
+        <div id="overlay"></div>
+        <div id="instruction">Point camera at barcode on BACK of ID</div>
+        <div id="error"></div>
+
+        <div id="result">
+            <div class="result-content">
+                <div id="age-status" class="age-status"></div>
+                <div class="info">
+                    <div class="info-label">Name</div>
+                    <div id="name" class="info-value"></div>
+                </div>
+                <div class="info">
+                    <div class="info-label">Age</div>
+                    <div id="age" class="info-value"></div>
+                </div>
+                <div class="info">
+                    <div class="info-label">Date of Birth</div>
+                    <div id="dob" class="info-value"></div>
+                </div>
+                <button id="scan-again">Scan Next ID</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const codeReader = new ZXing.BrowserMultiFormatReader();
+        const video = document.getElementById('video');
+        const resultDiv = document.getElementById('result');
+        const errorDiv = document.getElementById('error');
+        const scanAgainBtn = document.getElementById('scan-again');
+
+        // Parse AAMVA standard driver's license data
+        function parseDriverLicense(rawData) {
+            const data = {};
+
+            // Split by newline or record separator
+            const lines = rawData.split(/[\n\r]+/);
+
+            for (let line of lines) {
+                // AAMVA format: DAA = Full Name, DAG = Street Address, etc.
+                if (line.startsWith('DAC')) data.firstName = line.substring(3).trim();
+                if (line.startsWith('DCS')) data.lastName = line.substring(3).trim();
+                if (line.startsWith('DAD')) data.middleName = line.substring(3).trim();
+                if (line.startsWith('DBB')) data.dob = line.substring(3).trim();
+                if (line.startsWith('DAA')) {
+                    // Some states use DAA for full name
+                    const fullName = line.substring(3).trim();
+                    if (!data.lastName && fullName.includes(',')) {
+                        const parts = fullName.split(',');
+                        data.lastName = parts[0].trim();
+                        data.firstName = parts[1].trim();
+                    }
+                }
+            }
+
+            return data;
+        }
+
+        function calculateAge(dobString) {
+            // DOB format is usually MMDDYYYY or YYYYMMDD
+            let month, day, year;
+
+            if (dobString.length === 8) {
+                // Try MMDDYYYY
+                if (parseInt(dobString.substring(0, 2)) <= 12) {
+                    month = parseInt(dobString.substring(0, 2));
+                    day = parseInt(dobString.substring(2, 4));
+                    year = parseInt(dobString.substring(4, 8));
+                } else {
+                    // Try YYYYMMDD
+                    year = parseInt(dobString.substring(0, 4));
+                    month = parseInt(dobString.substring(4, 6));
+                    day = parseInt(dobString.substring(6, 8));
+                }
+            }
+
+            const dob = new Date(year, month - 1, day);
+            const today = new Date();
+            let age = today.getFullYear() - dob.getFullYear();
+            const monthDiff = today.getMonth() - dob.getMonth();
+
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+                age--;
+            }
+
+            return {
+                age,
+                formatted: `${month.toString().padStart(2, '0')}/${day.toString().padStart(2, '0')}/${year}`
+            };
+        }
+
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            setTimeout(() => {
+                errorDiv.classList.remove('show');
+            }, 3000);
+        }
+
+        function displayResult(licenseData) {
+            const { firstName, lastName, middleName, dob } = licenseData;
+
+            if (!firstName && !lastName) {
+                showError('Could not read name from ID. Please try again.');
+                return;
+            }
+
+            if (!dob) {
+                showError('Could not read date of birth. Please try again.');
+                return;
+            }
+
+            const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+            const ageData = calculateAge(dob);
+
+            document.getElementById('name').textContent = fullName;
+            document.getElementById('age').textContent = ageData.age;
+            document.getElementById('dob').textContent = ageData.formatted;
+
+            const statusDiv = document.getElementById('age-status');
+            if (ageData.age >= 21) {
+                statusDiv.textContent = '✓ 21+';
+                statusDiv.className = 'age-status approved';
+            } else {
+                statusDiv.textContent = '✗ UNDER 21';
+                statusDiv.className = 'age-status denied';
+            }
+
+            resultDiv.classList.add('show');
+        }
+
+        async function startScanning() {
+            try {
+                const devices = await codeReader.listVideoInputDevices();
+
+                // Try to find back camera on mobile devices
+                let selectedDevice = devices[0];
+                for (let device of devices) {
+                    if (device.label.toLowerCase().includes('back') ||
+                        device.label.toLowerCase().includes('rear')) {
+                        selectedDevice = device;
+                        break;
+                    }
+                }
+
+                codeReader.decodeFromVideoDevice(
+                    selectedDevice.deviceId,
+                    'video',
+                    (result, err) => {
+                        if (result) {
+                            const rawData = result.getText();
+                            console.log('Scanned data:', rawData);
+
+                            const licenseData = parseDriverLicense(rawData);
+                            displayResult(licenseData);
+
+                            // Stop scanning
+                            codeReader.reset();
+                        }
+
+                        if (err && !(err instanceof ZXing.NotFoundException)) {
+                            console.error(err);
+                        }
+                    }
+                );
+            } catch (err) {
+                console.error(err);
+                showError('Camera access denied. Please allow camera access and reload.');
+            }
+        }
+
+        scanAgainBtn.addEventListener('click', () => {
+            resultDiv.classList.remove('show');
+            startScanning();
+        });
+
+        // Start scanning on load
+        startScanning();
+    </script>
+</body>
+</html>

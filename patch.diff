@@ -1,0 +1,35 @@
+*** Update File: frontend/checkout.html
+@@
+-        captureFrameBtn.addEventListener('click', () => manualSnapshot({ showFlash: true }));
+-        shutterButton.addEventListener('click', () => manualSnapshot({ showFlash: true }));
++        captureFrameBtn.addEventListener('click', () => manualSnapshot({ showFlash: true }));
++        shutterButton.addEventListener('click', () => manualSnapshot({ showFlash: true }));
++        fallbackCaptureBtn.addEventListener('click', () => {
++            fallbackInput.click();
++        });
++
++        fallbackInput.addEventListener('change', async (event) => {
++            if (isProcessingResult) {
++                return;
++            }
++
++            const file = event.target.files && event.target.files[0];
++            if (!file) {
++                return;
++            }
++
++            const reader = new FileReader();
++            reader.onload = () => {
++                const dataUrl = reader.result;
++                showPreview(dataUrl);
++            };
++            reader.onerror = () => {
++                showToast('Unable to load photo. Try again.', 'error');
++            };
++            reader.readAsDataURL(file);
++            event.target.value = '';
++        });
+ 
+         // Gesture handlers must be registered once
+         registerGestureHandlers();
+*** End Patch
