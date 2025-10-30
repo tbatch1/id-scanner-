@@ -1,6 +1,6 @@
 const express = require('express');
 const config = require('./config');
-const lightspeed = require('./mockLightspeedClient');
+const lightspeed = require('./lightspeedClient');
 
 const router = express.Router();
 
@@ -109,8 +109,8 @@ router.post('/sales/:saleId/verify', (req, res) => {
   }
 });
 
-router.post('/sales/:saleId/complete', (req, res) => {
-  const { verificationId } = req.body || {};
+router.post('/sales/:saleId/complete', async (req, res) => {
+  const { verificationId, paymentType } = req.body || {};
 
   if (!verificationId) {
     return res.status(400).json({
@@ -119,8 +119,15 @@ router.post('/sales/:saleId/complete', (req, res) => {
     });
   }
 
+  if (!paymentType || !['cash', 'card'].includes(paymentType)) {
+    return res.status(400).json({
+      error: 'INVALID_REQUEST',
+      message: 'paymentType is required and must be either "cash" or "card".'
+    });
+  }
+
   try {
-    const sale = lightspeed.getSaleById(req.params.saleId);
+    const sale = await lightspeed.getSaleById(req.params.saleId);
     if (!sale) {
       return res.status(404).json({
         error: 'SALE_NOT_FOUND',
@@ -149,9 +156,10 @@ router.post('/sales/:saleId/complete', (req, res) => {
       });
     }
 
-    const completion = lightspeed.completeSale({
+    const completion = await lightspeed.completeSale({
       saleId: req.params.saleId,
-      verificationId
+      verificationId,
+      paymentType
     });
 
     res.status(200).json({
@@ -165,10 +173,13 @@ router.post('/sales/:saleId/complete', (req, res) => {
     if (error.message === 'VERIFICATION_NOT_APPROVED' || error.message === 'VERIFICATION_NOT_FOUND') {
       status = 409;
     }
+    if (error.message === 'SALE_ALREADY_COMPLETED') {
+      status = 409;
+    }
 
     res.status(status).json({
       error: error.message,
-      message: 'Unable to complete sale in mock environment.'
+      message: 'Unable to complete sale.'
     });
   }
 });

@@ -367,12 +367,15 @@
         // URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const saleId = urlParams.get('saleId') || 'SALE-1001';
-        const clerkId = urlParams.get('clerkId') || 'demo-clerk';
+        const clerkId = urlParams.get('clerkId') || urlParams.get('employeeID') || 'demo-clerk';
+        const paymentType = urlParams.get('type') || 'cash'; // 'cash' or 'card'
         const apiOverride = urlParams.get('api');
         const defaultApiBase = window.location.protocol === 'file:'
             ? 'http://localhost:4000/api'
             : `${window.location.origin}/api`;
         const API_BASE = apiOverride || defaultApiBase;
+
+        console.log('🎯 Scanner initialized:', { saleId, clerkId, paymentType });
 
         // UI Elements
         const ui = {
@@ -628,7 +631,7 @@
             }
         }
 
-        async function completeSale() {
+        async function completeSale(autoClose = false) {
             const latestVerificationResponse = await fetch(`${API_BASE}/sales/${saleId}`);
             const latestSaleData = await latestVerificationResponse.json();
             const latestVerification = latestSaleData.data.verification;
@@ -640,12 +643,16 @@
 
             ui.completeSaleBtn.disabled = true;
             ui.completeSaleBtn.textContent = 'Completing...';
+
             try {
+                console.log(`💳 Completing sale with ${paymentType} payment...`);
+
                 const response = await fetch(`${API_BASE}/sales/${saleId}/complete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        verificationId: latestVerification.verificationId
+                        verificationId: latestVerification.verificationId,
+                        paymentType: paymentType // 'cash' or 'card' from URL
                     })
                 });
 
@@ -654,10 +661,19 @@
                     throw new Error(payload.message || 'Unable to complete sale. Try again.');
                 }
 
+                console.log('✅ Sale completed successfully!');
                 ui.statusLabel.textContent = 'Status: Completed';
-                setVerificationState('Approved', 'Sale flagged as complete. Return to Lightspeed to finish checkout.');
-                showToast('Sale completed in mock backend.', 'info');
+                setVerificationState('Approved', `Sale completed with ${paymentType}. Returning to Lightspeed...`);
+                showToast(`✅ Sale completed with ${paymentType}!`, 'info');
+
+                // Auto-close after 2 seconds if in auto-close mode
+                if (autoClose) {
+                    setTimeout(() => {
+                        window.close(); // Close scanner window
+                    }, 2000);
+                }
             } catch (error) {
+                console.error('❌ Error completing sale:', error);
                 showToast(error.message);
                 ui.completeSaleBtn.disabled = false;
             } finally {
@@ -720,6 +736,14 @@
                 ui.resultOverlay.classList.add('show');
 
                 await submitVerification(licenseData, ageData);
+
+                // Auto-complete sale if approved and age >= 21
+                if (ageData.age >= 21) {
+                    console.log('🎯 ID approved! Auto-completing sale in 2 seconds...');
+                    setTimeout(async () => {
+                        await completeSale(true); // true = auto-close after completion
+                    }, 2000);
+                }
             } catch (error) {
                 console.error('Scan error:', error);
                 showToast(error.message || 'Scan failed. Adjust the ID and try again.');
