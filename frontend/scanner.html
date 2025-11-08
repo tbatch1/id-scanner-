@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>THC Club | ID Scanner</title>
+    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-barcode-reader-bundle@10.4.3100/dist/dbr.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-code-parser@2.4.32/dist/dcp.js"></script>
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #a8dadc;
+            margin-bottom: 30px;
+        }
+
+        .amount-display {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #4ecdc4;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        #camera-container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .dce-video-container {
+            width: 100%;
+            height: 400px;
+            position: relative;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .status.info {
+            background: rgba(78, 205, 196, 0.2);
+            border: 2px solid #4ecdc4;
+        }
+
+        .status.success {
+            background: rgba(34, 197, 94, 0.2);
+            border: 2px solid #22c55e;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid #ef4444;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 Scan Customer ID</h1>
+        <p class="subtitle">Position ID barcode in view</p>
+
+        <div id="amount-display" class="amount-display">
+            Transaction Amount: <span id="amount">Loading...</span>
+        </div>
+
+        <div id="status" class="status info">
+            Initializing scanner...
+        </div>
+
+        <div id="camera-container">
+            <div id="scanner-view" class="dce-video-container"></div>
+        </div>
+
+        <div id="manual-controls" class="hidden">
+            <button onclick="retryVerification()">Retry Scan</button>
+            <button class="secondary" onclick="cancelAndClose()">Cancel</button>
+        </div>
+
+        <!-- Fallback for iframe camera blocking -->
+        <div id="iframe-fallback" class="hidden" style="margin: 30px 0;">
+            <div style="background:rgba(255,193,7,0.2); border:2px solid #ffc107; border-radius:10px; padding:15px; margin:15px auto; max-width:500px;">
+                <div style="font-size:18px; font-weight:600; margin-bottom:8px;">📱 Camera Blocked in POS</div>
+                <div style="font-size:16px; line-height:1.5;">
+                    <strong>Long-press</strong> button below → Tap <strong>"Open"</strong> to launch scanner in Safari
+                </div>
+            </div>
+            <a id="fallbackLink" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:20px 40px; background:#10b981; color:white; text-decoration:none; border-radius:12px; font-size:20px; font-weight:700; margin:15px; box-shadow: 0 4px 15px rgba(16,185,129,0.4);">
+                📷 LONG-PRESS HERE → Open Scanner
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Parse query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session_id');
+        const registerId = urlParams.get('register_id');
+        const amount = urlParams.get('amount');
+        const outletId = urlParams.get('outlet_id') || '02f4a1bc-ae66-11f0-f174-8d8eeff9231e';
+        const origin = urlParams.get('origin'); // For postMessage back to Lightspeed
+
+        // Display amount
+        document.getElementById('amount').textContent = `$${parseFloat(amount).toFixed(2)}`;
+
+        // Dynamsoft license
+        Dynamsoft.License.LicenseManager.initLicense("DLS2eyJoYW5kc2hha2VDb2RlIjoiMTA0MDM4NjcxLVRYbFhaV0pRY205cVgyUmljZyIsIm1haW5TZXJ2ZXJVUkwiOiJodHRwczovL21kbHMuZHluYW1zb2Z0b25saW5lLmNvbSIsIm9yZ2FuaXphdGlvbklEIjoiMTA0MDM4NjcxIiwic3RhbmRieVNlcnZlclVSTCI6Imh0dHBzOi8vc2Rscy5keW5hbXNvZnRvbmxpbmUuY29tIiwiY2hlY2tDb2RlIjotNjgyNDc2OTE3fQ==");
+
+        let cameraEnhancer;
+        let router;
+        let isScanning = false;
+
+        async function initScanner() {
+            try {
+                updateStatus('Initializing camera...', 'info');
+
+                // Initialize camera
+                const view = await Dynamsoft.DCE.CameraView.createInstance(document.getElementById('scanner-view'));
+                cameraEnhancer = await Dynamsoft.DCE.CameraEnhancer.createInstance(view);
+
+                // Initialize barcode reader
+                router = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
+                router.setInput(cameraEnhancer);
+
+                // Set up result receiver
+                const resultReceiver = new Dynamsoft.CVR.CapturedResultReceiver();
+                resultReceiver.onDecodedBarcodesReceived = handleBarcode;
+                router.addResultReceiver(resultReceiver);
+
+                // Start camera
+                await cameraEnhancer.open();
+                await router.startCapturing("ReadBarcodes_Balance");
+                isScanning = true;
+
+                updateStatus('Ready to scan ID - Position barcode in view', 'info');
+
+            } catch (error) {
+                console.error('Scanner initialization error:', error);
+                updateStatus('❌ Camera blocked - Use fallback button below', 'error');
+
+                // Show fallback button if camera fails
+                document.getElementById('iframe-fallback').classList.remove('hidden');
+
+                // Set up fallback link
+                const fallbackUrl = window.location.origin + '/scanner.html?session_id=' + sessionId +
+                                   '&register_id=' + registerId +
+                                   '&amount=' + amount +
+                                   '&outlet_id=' + outletId;
+                document.getElementById('fallbackLink').href = fallbackUrl;
+
+                document.getElementById('manual-controls').classList.remove('hidden');
+            }
+        }
+
+        async function handleBarcode(result) {
+            if (!isScanning) return;
+
+            const barcodes = result.barcodeResultItems;
+            if (!barcodes || barcodes.length === 0) return;
+
+            isScanning = false;
+            await router.stopCapturing();
+
+            const barcodeText = barcodes[0].text;
+            updateStatus('ID detected! Parsing...', 'info');
+
+            try {
+                // Parse ID
+                await Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID");
+                const parser = await Dynamsoft.DCP.CodeParser.createInstance();
+                const parsedResult = await parser.parse(barcodeText);
+
+                const firstName = parsedResult.getFieldValue("firstName");
+                const lastName = parsedResult.getFieldValue("lastName");
+                const dob = parsedResult.getFieldValue("birthDate");
+                const age = calculateAge(dob);
+
+                // Verify age
+                if (age >= 21) {
+                    updateStatus(`✅ APPROVED: ${firstName} ${lastName} (Age ${age})`, 'success');
+
+                    // Save scan result to database
+                    await saveScanResult({
+                        approved: true,
+                        firstName,
+                        lastName,
+                        age,
+                        dob
+                    });
+
+                    // Send approval to Lightspeed parent window if in iframe
+                    sendPaymentStatus('ACCEPT', `ID verified - ${firstName} ${lastName}, Age ${age}`);
+
+                    // Close window after 2 seconds
+                    setTimeout(() => {
+                        window.close();
+                    }, 2000);
+
+                } else {
+                    updateStatus(`❌ REJECTED: Customer under 21 (Age ${age})`, 'error');
+
+                    // Save rejection
+                    await saveScanResult({
+                        approved: false,
+                        firstName,
+                        lastName,
+                        age,
+                        dob,
+                        reason: 'Under minimum age'
+                    });
+
+                    // Send decline to Lightspeed parent window if in iframe
+                    sendPaymentStatus('DECLINE', `Age verification failed - Under 21 (Age ${age})`);
+
+                    // Close window after 3 seconds
+                    setTimeout(() => {
+                        window.close();
+                    }, 3000);
+                }
+
+            } catch (error) {
+                console.error('Parsing error:', error);
+                updateStatus('Failed to parse ID. Please try again.', 'error');
+                document.getElementById('manual-controls').classList.remove('hidden');
+            }
+        }
+
+        function calculateAge(birthDate) {
+            const birth = new Date(birthDate);
+            const today = new Date();
+            let age = today.getFullYear() - birth.getFullYear();
+            const monthDiff = today.getMonth() - birth.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+                age--;
+            }
+            return age;
+        }
+
+        async function saveScanResult(data) {
+            try {
+                // Save to database with session ID
+                const response = await fetch('/api/scan-sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        approved: data.approved,
+                        firstName: data.firstName,
+                        lastName: data.lastName,
+                        age: data.age,
+                        dob: data.dob,
+                        reason: data.reason || null,
+                        outletId: outletId,
+                        registerId: registerId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save scan result');
+                }
+
+                console.log('Scan result saved successfully');
+            } catch (error) {
+                console.error('Failed to save scan result:', error);
+            }
+        }
+
+        function updateStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        async function retryVerification() {
+            document.getElementById('manual-controls').classList.add('hidden');
+            updateStatus('Restarting scanner...', 'info');
+            isScanning = true;
+            await router.startCapturing("ReadBarcodes_Balance");
+            updateStatus('Ready to scan ID - Position barcode in view', 'info');
+        }
+
+        function cancelAndClose() {
+            // Mark session as cancelled
+            fetch('/api/scan-sessions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionId: sessionId,
+                    approved: false,
+                    reason: 'Cancelled by clerk'
+                })
+            }).finally(() => {
+                // Send decline to parent window if in iframe
+                sendPaymentStatus('DECLINE', 'Scan cancelled by clerk');
+                window.close();
+            });
+        }
+
+        // Send payment status to Lightspeed parent window via postMessage
+        function sendPaymentStatus(status, message) {
+            if (origin && window.parent && window.parent !== window) {
+                try {
+                    window.parent.postMessage(
+                        { status: status, message: message },
+                        'https://' + origin
+                    );
+                    console.log(`Sent ${status} to parent window:`, message);
+                } catch (error) {
+                    console.error('Failed to send postMessage:', error);
+                }
+            }
+        }
+
+        // Initialize on page load
+        initScanner();
+    </script>
+</body>
+</html>

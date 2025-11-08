@@ -6,7 +6,7 @@
     },
     {
       "source": "/payment-gateway.html",
-      "destination": "/frontend/payment-gateway-auto.html"
+      "destination": "/frontend/scanner.html"
     },
     {
       "source": "/scanner.html",
