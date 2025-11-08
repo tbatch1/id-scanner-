@@ -6,11 +6,7 @@
     },
     {
       "source": "/payment-gateway.html",
-      "destination": "/frontend/scanner.html"
-    },
-    {
-      "source": "/scanner.html",
-      "destination": "/frontend/scanner.html"
+      "destination": "/frontend/payment-gateway.html"
     },
     {
       "source": "/checkout.html",
