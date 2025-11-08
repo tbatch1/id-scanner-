@@ -133,6 +133,15 @@
             Opening camera...
         </div>
 
+        <div id="logs" style="background:rgba(0,0,0,0.3); padding:15px; border-radius:10px; margin-bottom:20px; font-size:12px; text-align:left; max-height:150px; overflow-y:auto; font-family:monospace;">
+            <div style="color:#4ecdc4; font-weight:bold; margin-bottom:5px;">Debug Logs:</div>
+            <div id="logContent"></div>
+        </div>
+
+        <button onclick="startCamera()" style="margin-bottom:20px; background:#10b981; font-size:20px; padding:20px 50px;">
+            📷 START CAMERA
+        </button>
+
         <div id="camera-container">
             <div id="scanner-view" class="dce-video-container"></div>
         </div>
@@ -158,18 +167,38 @@
         let router;
         let isScanning = false;
 
+        // Logging function to show on screen
+        function log(message) {
+            const logContent = document.getElementById('logContent');
+            const timestamp = new Date().toLocaleTimeString();
+            logContent.innerHTML += `<div style="color:#a8dadc; margin:2px 0;">[${timestamp}] ${message}</div>`;
+            logContent.scrollTop = logContent.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        async function startCamera() {
+            log('START CAMERA button clicked');
+            await initScanner();
+        }
+
         async function initScanner() {
             try {
+                log('initScanner() started');
                 updateStatus('📷 Opening camera...', 'info');
 
-                // Initialize camera with iOS-friendly settings
+                log('Creating camera view...');
                 const view = await Dynamsoft.DCE.CameraView.createInstance(document.getElementById('scanner-view'));
+                log('Camera view created');
+
+                log('Creating camera enhancer...');
                 cameraEnhancer = await Dynamsoft.DCE.CameraEnhancer.createInstance(view);
+                log('Camera enhancer created');
 
                 // Set camera to use back camera (better for iOS)
                 try {
+                    log('Getting available cameras...');
                     const cameras = await cameraEnhancer.getAllCameras();
-                    console.log('Available cameras:', cameras);
+                    log(`Found ${cameras.length} cameras: ${cameras.map(c => c.label).join(', ')}`);
 
                     // Try to select back camera first (better for scanning)
                     const backCamera = cameras.find(camera =>
@@ -179,30 +208,41 @@
                     );
 
                     if (backCamera) {
+                        log(`Selecting back camera: ${backCamera.label}`);
                         await cameraEnhancer.selectCamera(backCamera);
-                        console.log('Selected back camera:', backCamera.label);
+                        log('Back camera selected');
+                    } else {
+                        log('No back camera found, using default');
                     }
                 } catch (e) {
-                    console.warn('Could not select specific camera:', e);
+                    log(`Warning selecting camera: ${e.message}`);
                 }
 
-                // Initialize barcode reader
+                log('Creating barcode router...');
                 router = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
                 router.setInput(cameraEnhancer);
+                log('Barcode router created');
 
-                // Set up result receiver
+                log('Setting up result receiver...');
                 const resultReceiver = new Dynamsoft.CVR.CapturedResultReceiver();
                 resultReceiver.onDecodedBarcodesReceived = handleBarcode;
                 router.addResultReceiver(resultReceiver);
+                log('Result receiver configured');
 
-                // Start camera
+                log('Opening camera...');
                 await cameraEnhancer.open();
+                log('Camera opened!');
+
+                log('Starting barcode capture...');
                 await router.startCapturing("ReadBarcodes_Balance");
                 isScanning = true;
+                log('Barcode capture started');
 
                 updateStatus('✅ Camera ready - Position ID barcode in view', 'info');
 
             } catch (error) {
+                log(`ERROR: ${error.name} - ${error.message}`);
+                log(`Error stack: ${error.stack}`);
                 console.error('Scanner initialization error:', error);
                 updateStatus('❌ Camera error: ' + error.message, 'error');
 
@@ -316,15 +356,13 @@
         }
 
         // Add debugging info
-        console.log('User Agent:', navigator.userAgent);
-        console.log('Platform:', navigator.platform);
-        console.log('Media Devices supported:', !!navigator.mediaDevices);
+        log(`User Agent: ${navigator.userAgent}`);
+        log(`Platform: ${navigator.platform}`);
+        log(`Media Devices supported: ${!!navigator.mediaDevices}`);
+        log(`getUserMedia available: ${!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)}`);
 
-        // Initialize on page load
-        window.addEventListener('load', () => {
-            console.log('Page fully loaded, initializing scanner...');
-            initScanner();
-        });
+        // Don't auto-start - wait for user to click START CAMERA button
+        log('Page loaded - tap START CAMERA button to begin');
     </script>
 </body>
 </html>
