@@ -159,8 +159,12 @@
         </div>
 
         <div id="fallback-controls" style="margin: 20px 0;">
-            <a id="scannerLink" href="#" target="_blank" onclick="openScannerFallback(); return true;" style="display:inline-block; padding:15px 30px; background:#10b981; color:white; text-decoration:none; border-radius:10px; font-size:18px; font-weight:600; margin:10px;">
+            <button id="scannerButton" onclick="openScannerFallback()" style="padding:15px 30px; background:#10b981; color:white; border:none; border-radius:10px; font-size:18px; font-weight:600; margin:10px; cursor:pointer;">
                 🔗 Open Scanner in Safari (Fallback)
+            </button>
+            <br>
+            <a id="scannerLink" href="#" target="_blank" rel="noopener noreferrer" onclick="startPolling(); return true;" style="display:inline-block; padding:12px 25px; background:#6366f1; color:white; text-decoration:none; border-radius:8px; font-size:16px; margin:10px;">
+                📱 Direct Link (if button fails)
             </a>
         </div>
 
@@ -384,14 +388,35 @@
                               '&amount=' + amount +
                               '&outlet_id=' + outletId;
 
-            // Try to open in new tab
-            const newWindow = window.open(scannerUrl, '_blank');
+            // Start polling immediately
+            updateStatus('🔄 Opening scanner - waiting for scan...', 'info');
+            startPolling();
 
-            if (newWindow) {
-                updateStatus('🔄 Scanner opened - waiting for scan...', 'info');
-                startPolling();
-            } else {
-                updateStatus('⚠️ Popup blocked - Please allow popups and try again', 'error');
+            // Try multiple methods to open scanner
+            try {
+                // Method 1: Try to break out of iframe completely
+                if (window.top !== window.self) {
+                    window.top.location.href = scannerUrl;
+                    return;
+                }
+
+                // Method 2: Try window.open with different parameters
+                const newWindow = window.open(scannerUrl, 'id_scanner', 'noopener,noreferrer');
+
+                if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                    // Method 3: Create a temporary link and click it
+                    const link = document.createElement('a');
+                    link.href = scannerUrl;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            } catch (error) {
+                console.error('Error opening scanner:', error);
+                updateStatus('⚠️ Could not open scanner - try the link directly', 'error');
             }
         }
 
