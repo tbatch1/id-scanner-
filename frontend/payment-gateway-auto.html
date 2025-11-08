@@ -159,12 +159,14 @@
         </div>
 
         <div id="fallback-controls" style="margin: 20px 0;">
-            <button id="scannerButton" onclick="openScannerFallback()" style="padding:15px 30px; background:#10b981; color:white; border:none; border-radius:10px; font-size:18px; font-weight:600; margin:10px; cursor:pointer;">
-                🔗 Open Scanner in Safari (Fallback)
-            </button>
-            <br>
-            <a id="scannerLink" href="#" target="_blank" rel="noopener noreferrer" onclick="startPolling(); return true;" style="display:inline-block; padding:12px 25px; background:#6366f1; color:white; text-decoration:none; border-radius:8px; font-size:16px; margin:10px;">
-                📱 Direct Link (if button fails)
+            <div style="background:rgba(255,193,7,0.2); border:2px solid #ffc107; border-radius:10px; padding:15px; margin:15px auto; max-width:500px;">
+                <div style="font-size:18px; font-weight:600; margin-bottom:8px;">📱 iPad Workaround:</div>
+                <div style="font-size:16px; line-height:1.5;">
+                    <strong>Long-press</strong> button below → Tap <strong>"Open"</strong> to launch scanner in Safari
+                </div>
+            </div>
+            <a id="scannerLink" href="#" target="_blank" rel="noopener noreferrer" onclick="startPolling(); return true;" style="display:inline-block; padding:20px 40px; background:#10b981; color:white; text-decoration:none; border-radius:12px; font-size:20px; font-weight:700; margin:15px; box-shadow: 0 4px 15px rgba(16,185,129,0.4);">
+                📷 LONG-PRESS HERE → Open Scanner
             </a>
         </div>
 
