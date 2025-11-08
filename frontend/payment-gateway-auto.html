@@ -158,7 +158,13 @@
             <div id="scanner-view" class="dce-video-container"></div>
         </div>
 
-        <div id="manual-controls" class="hidden">
+        <div id="fallback-controls" style="margin: 20px 0;">
+            <a id="scannerLink" href="#" target="_blank" onclick="openScannerFallback(); return true;" style="display:inline-block; padding:15px 30px; background:#10b981; color:white; text-decoration:none; border-radius:10px; font-size:18px; font-weight:600; margin:10px;">
+                🔗 Open Scanner in Safari (Fallback)
+            </a>
+        </div>
+
+        <div id="manual-controls">
             <button onclick="cancelAndReturn()">Cancel Payment</button>
         </div>
     </div>
@@ -352,6 +358,7 @@
 
         function cancelAndReturn() {
             // Mark session as cancelled
+            if (pollInterval) clearInterval(pollInterval);
             fetch('/api/scan-sessions', {
                 method: 'POST',
                 headers: {
@@ -366,6 +373,70 @@
                 declinePayment();
             });
         }
+
+        // FALLBACK: Open scanner in new tab and poll for results
+        let pollInterval = null;
+
+        function openScannerFallback() {
+            // Build scanner URL with session params
+            const scannerUrl = window.location.origin + '/scanner.html?session_id=' + sessionId +
+                              '&register_id=' + registerId +
+                              '&amount=' + amount +
+                              '&outlet_id=' + outletId;
+
+            // Try to open in new tab
+            const newWindow = window.open(scannerUrl, '_blank');
+
+            if (newWindow) {
+                updateStatus('🔄 Scanner opened - waiting for scan...', 'info');
+                startPolling();
+            } else {
+                updateStatus('⚠️ Popup blocked - Please allow popups and try again', 'error');
+            }
+        }
+
+        function startPolling() {
+            if (pollInterval) return; // Already polling
+
+            let pollCount = 0;
+            pollInterval = setInterval(async () => {
+                pollCount++;
+
+                try {
+                    const response = await fetch('/api/scan-sessions/' + sessionId);
+                    const data = await response.json();
+
+                    if (data.data && data.data.completed_at) {
+                        clearInterval(pollInterval);
+
+                        if (data.data.approved) {
+                            updateStatus(`✅ APPROVED: ${data.data.first_name} ${data.data.last_name} (Age ${data.data.age})`, 'success');
+                            approvePayment();
+                            setTimeout(() => approvePayment(), 1000); // Send again before potential close
+                        } else {
+                            updateStatus(`❌ REJECTED: ${data.data.reason || 'Under 21'}`, 'error');
+                            declinePayment();
+                            setTimeout(() => declinePayment(), 1000);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Polling error:', error);
+                }
+
+                // Timeout after 2 minutes
+                if (pollCount > 120) {
+                    clearInterval(pollInterval);
+                    updateStatus('⏱️ Timeout - scan not completed', 'error');
+                }
+            }, 1000);
+        }
+
+        // Set up the fallback link
+        const scannerUrl = window.location.origin + '/scanner.html?session_id=' + sessionId +
+                          '&register_id=' + registerId +
+                          '&amount=' + amount +
+                          '&outlet_id=' + outletId;
+        document.getElementById('scannerLink').href = scannerUrl;
 
         // AUTO-START camera when page loads
         initScanner();
