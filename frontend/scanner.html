@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>ID Scanner</title>
     <script src="https://cdn.jsdelivr.net/npm/dynamsoft-barcode-reader-bundle@10.4.3100/dist/dbr.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dynamsoft-code-parser@2.4.32/dist/dcp.js"></script>
@@ -161,9 +162,29 @@
             try {
                 updateStatus('📷 Opening camera...', 'info');
 
-                // Initialize camera
+                // Initialize camera with iOS-friendly settings
                 const view = await Dynamsoft.DCE.CameraView.createInstance(document.getElementById('scanner-view'));
                 cameraEnhancer = await Dynamsoft.DCE.CameraEnhancer.createInstance(view);
+
+                // Set camera to use back camera (better for iOS)
+                try {
+                    const cameras = await cameraEnhancer.getAllCameras();
+                    console.log('Available cameras:', cameras);
+
+                    // Try to select back camera first (better for scanning)
+                    const backCamera = cameras.find(camera =>
+                        camera.label.toLowerCase().includes('back') ||
+                        camera.label.toLowerCase().includes('rear') ||
+                        camera.label.toLowerCase().includes('environment')
+                    );
+
+                    if (backCamera) {
+                        await cameraEnhancer.selectCamera(backCamera);
+                        console.log('Selected back camera:', backCamera.label);
+                    }
+                } catch (e) {
+                    console.warn('Could not select specific camera:', e);
+                }
 
                 // Initialize barcode reader
                 router = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
@@ -184,6 +205,17 @@
             } catch (error) {
                 console.error('Scanner initialization error:', error);
                 updateStatus('❌ Camera error: ' + error.message, 'error');
+
+                // Show more detailed error for debugging
+                if (error.name === 'NotAllowedError') {
+                    updateStatus('❌ Camera permission denied. Please allow camera access in Safari settings.', 'error');
+                } else if (error.name === 'NotFoundError') {
+                    updateStatus('❌ No camera found on this device.', 'error');
+                } else if (error.name === 'NotReadableError') {
+                    updateStatus('❌ Camera is already in use by another app. Please close other apps using the camera.', 'error');
+                } else {
+                    updateStatus('❌ Camera error: ' + error.message, 'error');
+                }
             }
         }
 
@@ -283,8 +315,16 @@
             statusEl.className = `status ${type}`;
         }
 
+        // Add debugging info
+        console.log('User Agent:', navigator.userAgent);
+        console.log('Platform:', navigator.platform);
+        console.log('Media Devices supported:', !!navigator.mediaDevices);
+
         // Initialize on page load
-        initScanner();
+        window.addEventListener('load', () => {
+            console.log('Page fully loaded, initializing scanner...');
+            initScanner();
+        });
     </script>
 </body>
 </html>
