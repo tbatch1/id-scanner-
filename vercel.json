@@ -1,31 +1,54 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/index.js",
-      "use": "@vercel/node"
+      "source": "/api/(.*)",
+      "destination": "/api"
     },
     {
-      "src": "frontend/**",
-      "use": "@vercel/static"
+      "source": "/payment-gateway.html",
+      "destination": "/frontend/payment-gateway-auto.html"
+    },
+    {
+      "source": "/scanner.html",
+      "destination": "/frontend/scanner.html"
+    },
+    {
+      "source": "/checkout.html",
+      "destination": "/frontend/checkout.html"
     }
   ],
-  "routes": [
+  "redirects": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.js"
+      "source": "/",
+      "destination": "/checkout.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/payment-gateway.html",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=*, microphone=*, geolocation=*"
+        },
+        {
+          "key": "Feature-Policy",
+          "value": "camera *; microphone *; geolocation *"
+        }
+      ]
     },
     {
-      "src": "/demo/checkout",
-      "dest": "/frontend/checkout.html"
-    },
-    {
-      "src": "/checkout.html",
-      "dest": "/frontend/checkout.html"
-    },
-    {
-      "src": "/",
-      "dest": "/frontend/checkout.html"
+      "source": "/scanner.html",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=*, microphone=*, geolocation=*"
+        },
+        {
+          "key": "Feature-Policy",
+          "value": "camera *; microphone *; geolocation *"
+        }
+      ]
     }
   ]
 }
