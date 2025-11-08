@@ -20,7 +20,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
             color: #ffffff;
             min-height: 100vh;
             display: flex;
@@ -28,32 +28,59 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+            animation: pulse 15s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
 
         .container {
             max-width: 800px;
             width: 100%;
             text-align: center;
+            position: relative;
+            z-index: 1;
         }
 
         h1 {
-            font-size: 28px;
+            font-size: 32px;
             margin-bottom: 15px;
             font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
         }
 
         .instruction-box {
-            background: rgba(78, 205, 196, 0.2);
-            border: 2px solid #4ecdc4;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 25px;
-            font-size: 18px;
-            line-height: 1.6;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
+            border: 2px solid rgba(99, 102, 241, 0.5);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 28px;
+            font-size: 17px;
+            line-height: 1.7;
+            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.2);
+            backdrop-filter: blur(10px);
         }
 
         .instruction-box strong {
-            color: #4ecdc4;
+            color: #818cf8;
             font-size: 20px;
         }
 
@@ -64,22 +91,37 @@
         }
 
         .amount-display {
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid #4ecdc4;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 20px;
-            font-size: 22px;
-            font-weight: 600;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+            border: 2px solid rgba(139, 92, 246, 0.5);
+            border-radius: 20px;
+            padding: 20px 28px;
+            margin-bottom: 25px;
+            font-size: 18px;
+            font-weight: 500;
+            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .amount-display #amount {
+            display: block;
+            font-size: 38px;
+            font-weight: 700;
+            margin-top: 8px;
+            background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         #camera-container {
             width: 100%;
             max-width: 600px;
-            margin: 0 auto 20px;
-            border-radius: 15px;
+            margin: 0 auto 25px;
+            border-radius: 20px;
             overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(139, 92, 246, 0.3);
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(10px);
         }
 
         .dce-video-container {
@@ -89,44 +131,56 @@
         }
 
         .status {
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
+            padding: 18px 24px;
+            border-radius: 12px;
+            margin-bottom: 25px;
             font-size: 16px;
             font-weight: 500;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
         }
 
         .status.info {
-            background: rgba(78, 205, 196, 0.2);
-            border: 2px solid #4ecdc4;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
+            border: 2px solid rgba(99, 102, 241, 0.5);
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
         }
 
         .status.success {
-            background: rgba(34, 197, 94, 0.2);
-            border: 2px solid #22c55e;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%);
+            border: 2px solid rgba(34, 197, 94, 0.6);
+            box-shadow: 0 4px 20px rgba(34, 197, 94, 0.25);
         }
 
         .status.error {
-            background: rgba(239, 68, 68, 0.2);
-            border: 2px solid #ef4444;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
+            border: 2px solid rgba(239, 68, 68, 0.6);
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.25);
         }
 
         button {
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(139, 92, 246, 0.4);
             color: white;
-            padding: 15px 40px;
-            border-radius: 10px;
-            font-size: 18px;
+            padding: 16px 40px;
+            border-radius: 12px;
+            font-size: 17px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             margin: 10px;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.15);
         }
 
         button:hover {
-            transform: translateY(-2px);
-            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-3px);
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(139, 92, 246, 0.6);
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.25);
+        }
+
+        button:active {
+            transform: translateY(-1px);
         }
 
         .hidden {
