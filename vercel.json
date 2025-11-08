@@ -11,6 +11,10 @@
     {
       "source": "/checkout.html",
       "destination": "/frontend/checkout.html"
+    },
+    {
+      "source": "/scanner.html",
+      "destination": "/frontend/scanner.html"
     }
   ],
   "redirects": [
