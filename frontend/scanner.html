@@ -489,36 +489,69 @@
 
         async function toggleFlash() {
             try {
-                const track = videoStream.getVideoTracks()[0];
-                flashEnabled = !flashEnabled;
+                if (!videoStream) {
+                    log('No video stream available', 'error');
+                    return;
+                }
 
-                // Try to enable torch
+                const track = videoStream.getVideoTracks()[0];
+                if (!track) {
+                    log('No video track found', 'error');
+                    return;
+                }
+
+                flashEnabled = !flashEnabled;
+                log(`Attempting to ${flashEnabled ? 'enable' : 'disable'} flash...`);
+
+                // Method 1: Try ImageCapture API
                 try {
-                    await track.applyConstraints({
-                        advanced: [{ torch: flashEnabled }]
-                    });
-                } catch (torchError) {
-                    // If advanced constraints fail, try direct constraint
-                    log(`Advanced torch failed, trying direct: ${torchError.message}`, 'warn');
-                    await track.applyConstraints({
-                        torch: flashEnabled
-                    });
+                    const imageCapture = new ImageCapture(track);
+                    const capabilities = await imageCapture.getPhotoCapabilities();
+
+                    if (capabilities.fillLightMode && capabilities.fillLightMode.includes('flash')) {
+                        await track.applyConstraints({
+                            advanced: [{ fillLightMode: flashEnabled ? 'flash' : 'off' }]
+                        });
+                        log('Flash toggled via fillLightMode');
+                    } else {
+                        throw new Error('fillLightMode not supported');
+                    }
+                } catch (imageCaptureError) {
+                    log(`ImageCapture method failed: ${imageCaptureError.message}`, 'warn');
+
+                    // Method 2: Try advanced torch constraint
+                    try {
+                        await track.applyConstraints({
+                            advanced: [{ torch: flashEnabled }]
+                        });
+                        log('Flash toggled via advanced torch');
+                    } catch (advancedError) {
+                        log(`Advanced torch failed: ${advancedError.message}`, 'warn');
+
+                        // Method 3: Try direct torch constraint
+                        const constraints = track.getConstraints();
+                        constraints.torch = flashEnabled;
+                        await track.applyConstraints(constraints);
+                        log('Flash toggled via direct constraint');
+                    }
                 }
 
                 const flashButton = document.getElementById('flashButton');
                 if (flashEnabled) {
                     flashButton.classList.add('active');
                     flashButton.textContent = '🔦';
-                    log('Flash enabled');
+                    log('Flash enabled successfully');
                 } else {
                     flashButton.classList.remove('active');
                     flashButton.textContent = '💡';
-                    log('Flash disabled');
+                    log('Flash disabled successfully');
                 }
             } catch (error) {
                 log(`Flash toggle error: ${error.message}`, 'error');
-                // Keep button state for next attempt
-                flashEnabled = !flashEnabled; // Revert
+                console.error('Full flash error:', error);
+                updateStatus(`⚠️ Flash not supported on this device`, 'error');
+                // Revert state
+                flashEnabled = !flashEnabled;
             }
         }
 
@@ -574,10 +607,22 @@
                 document.getElementById('flashButton').style.display = 'flex';
                 const track = videoStream.getVideoTracks()[0];
                 const capabilities = track.getCapabilities();
+
+                log(`Camera capabilities: ${JSON.stringify(capabilities)}`);
+
                 if (capabilities.torch) {
-                    log('Flash/torch available');
+                    log('✅ Torch capability detected');
                 } else {
-                    log('Flash/torch detection failed, but button shown anyway');
+                    log('⚠️ Torch not in capabilities, will try anyway');
+                }
+
+                // Check ImageCapture API
+                try {
+                    const imageCapture = new ImageCapture(track);
+                    const photoCapabilities = await imageCapture.getPhotoCapabilities();
+                    log(`Photo capabilities: ${JSON.stringify(photoCapabilities.fillLightMode)}`);
+                } catch (e) {
+                    log(`ImageCapture check failed: ${e.message}`, 'warn');
                 }
 
                 // Initialize Dynamsoft barcode reader
