@@ -309,13 +309,19 @@
         let scanInterval = null;
         let mrzScanning = false;
 
-        // Logging function
-        function log(message) {
+        // Logging function - only critical errors in production
+        function log(message, level = 'info') {
             const logContent = document.getElementById('logContent');
             const timestamp = new Date().toLocaleTimeString();
-            logContent.innerHTML += `<div>[${timestamp}] ${message}</div>`;
-            logContent.scrollTop = logContent.scrollHeight;
-            console.log(`[${timestamp}] ${message}`);
+
+            // Only show errors and warnings to user
+            if (level === 'error' || level === 'warn') {
+                logContent.innerHTML += `<div style="color:${level === 'error' ? '#ef4444' : '#fbbf24'}">[${timestamp}] ${message}</div>`;
+                logContent.scrollTop = logContent.scrollHeight;
+            }
+
+            // Always log to console for debugging
+            console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
         }
 
         function updateStatus(message, type) {
@@ -326,124 +332,80 @@
 
         async function startCamera() {
             try {
-                log('START CAMERA clicked');
+                log('Camera initialization started');
                 updateStatus('📷 Opening camera...', 'info');
 
                 const video = document.getElementById('videoElement');
 
-                // Use native getUserMedia for iOS compatibility
-                log('Requesting camera permission...');
-
                 const constraints = {
                     video: {
-                        facingMode: 'environment', // Back camera
-                        width: { ideal: 1280 }, // Reduced from 1920 for faster processing
-                        height: { ideal: 720 },  // Reduced from 1080
-                        frameRate: { ideal: 30 }, // Explicit frame rate
-                        focusMode: 'continuous',  // Continuous autofocus
-                        exposureMode: 'continuous' // Adaptive exposure
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 },
+                        focusMode: 'continuous',
+                        exposureMode: 'continuous'
                     },
                     audio: false
                 };
 
-                log('Calling getUserMedia with constraints: ' + JSON.stringify(constraints));
                 videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-                log('Camera stream obtained! Stream ID: ' + videoStream.id);
-                log('Video tracks: ' + videoStream.getVideoTracks().length);
-
-                if (videoStream.getVideoTracks().length > 0) {
-                    const track = videoStream.getVideoTracks()[0];
-                    log('Track label: ' + track.label);
-                    log('Track enabled: ' + track.enabled);
-                    log('Track ready state: ' + track.readyState);
-                    log('Track settings: ' + JSON.stringify(track.getSettings()));
-                }
-
-                // Set srcObject
-                log('Setting video.srcObject...');
                 video.srcObject = videoStream;
 
                 // Wait for metadata to load
-                log('Waiting for loadedmetadata event...');
                 await new Promise((resolve, reject) => {
-                    video.onloadedmetadata = () => {
-                        log('Metadata loaded! Video dimensions: ' + video.videoWidth + 'x' + video.videoHeight);
-                        resolve();
-                    };
-                    video.onerror = (e) => {
-                        log('Video error event: ' + e);
-                        reject(e);
-                    };
+                    video.onloadedmetadata = () => resolve();
+                    video.onerror = (e) => reject(e);
                     setTimeout(() => reject(new Error('Metadata timeout')), 5000);
                 });
 
-                log('Calling video.play()...');
-
                 // Force play for iOS
                 try {
-                    const playPromise = video.play();
-                    if (playPromise !== undefined) {
-                        await playPromise;
-                    }
+                    await video.play();
                 } catch (playError) {
-                    log('Play error: ' + playError.message);
-                    // Try forcing it
                     video.muted = true;
                     await video.play();
                 }
 
-                log('Video playing! readyState: ' + video.readyState);
-                log('Video paused: ' + video.paused);
-                log('Video currentTime: ' + video.currentTime);
                 video.classList.add('active');
-
-                updateStatus('✅ Camera active - Initializing barcode reader...', 'info');
+                updateStatus('✅ Camera active - Initializing scanner...', 'info');
 
                 // Initialize Dynamsoft barcode reader
-                log('Creating barcode router...');
                 router = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
-                log('Barcode router created');
 
                 // Optimize settings for PDF417 barcodes
-                log('Applying PDF417 optimization settings...');
                 let settings = await router.getSimplifiedSettings('ReadBarcodes_Balance');
-
-                // PDF417-specific optimizations
                 settings.barcodeSettings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_PDF417;
-                settings.barcodeSettings.deblurLevel = 9; // Max deblur for worn IDs
-                settings.barcodeSettings.localizationModes = [16, 2, 8, 0, 0, 0, 0, 0]; // Add mode 8 for low contrast
+                settings.barcodeSettings.deblurLevel = 9;
+                settings.barcodeSettings.localizationModes = [16, 2, 8, 0, 0, 0, 0, 0];
                 settings.barcodeSettings.expectBarcodeCount = 1;
-                settings.barcodeSettings.minResultConfidence = 50; // Reject low quality reads
-                settings.barcodeSettings.scaleUpModes = [2, 0, 0, 0, 0, 0, 0, 0]; // Linear interpolation for small barcodes
-                settings.barcodeSettings.binarizationModes = [1, 0, 0, 0, 0, 0, 0, 0]; // Local block adaptive thresholding
-
+                settings.barcodeSettings.minResultConfidence = 50;
+                settings.barcodeSettings.scaleUpModes = [2, 0, 0, 0, 0, 0, 0, 0];
+                settings.barcodeSettings.binarizationModes = [1, 0, 0, 0, 0, 0, 0, 0];
                 await router.updateSettings('ReadBarcodes_Balance', settings);
-                log('PDF417 optimization settings applied');
 
-                // Start scanning frames from video (faster interval)
+                // Start scanning
                 isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 200); // Scan every 200ms (faster)
-                log('Started scanning video frames at 200ms intervals');
+                scanInterval = setInterval(scanVideoFrame, 200);
 
                 // Show scanning guide
                 document.getElementById('scanGuide').style.display = 'block';
                 document.getElementById('scanHint').style.display = 'block';
 
-                updateStatus('✅ Ready - Position ID barcode in view', 'info');
+                updateStatus('✅ Ready - Position ID within frame', 'info');
 
             } catch (error) {
-                log(`ERROR: ${error.name} - ${error.message}`);
-                console.error('Camera error:', error);
+                log(`Camera error: ${error.message}`, 'error');
+                console.error('Camera initialization failed:', error);
 
                 if (error.name === 'NotAllowedError') {
                     updateStatus('❌ Camera permission denied', 'error');
-                    log('Camera permission was denied. Go to Settings > Safari > Camera and enable it.');
                 } else if (error.name === 'NotFoundError') {
                     updateStatus('❌ No camera found', 'error');
                 } else if (error.name === 'NotReadableError') {
-                    updateStatus('❌ Camera in use by another app', 'error');
+                    updateStatus('❌ Camera in use', 'error');
                 } else {
-                    updateStatus('❌ Camera error: ' + error.message, 'error');
+                    updateStatus('❌ Camera error', 'error');
                 }
             }
         }
@@ -466,7 +428,6 @@
                 // Try barcode scanning first (faster)
                 const barcodeResult = await router.capture(canvas, 'ReadBarcodes_Balance');
                 if (barcodeResult.barcodeResultItems && barcodeResult.barcodeResultItems.length > 0) {
-                    log('Barcode detected!');
                     await handleBarcode(barcodeResult.barcodeResultItems[0].text);
                     return;
                 }
@@ -477,12 +438,11 @@
                     try {
                         const mrzResult = await router.capture(canvas, 'ReadTextLines_MRZ');
                         if (mrzResult.textLineResultItems && mrzResult.textLineResultItems.length >= 2) {
-                            log('MRZ detected!');
                             await handleMrz(mrzResult.textLineResultItems);
                             return;
                         }
                     } catch (mrzError) {
-                        // MRZ scanning failed, continue
+                        // Silent fail - continue scanning
                     } finally {
                         mrzScanning = false;
                     }
@@ -491,7 +451,7 @@
             } catch (error) {
                 // Ignore scanning errors, keep trying
                 if (error.message && !error.message.includes('No barcode') && !error.message.includes('No text')) {
-                    log(`Scan error: ${error.message}`);
+                    log(`Scan error: ${error.message}`, 'error');
                 }
             }
         }
@@ -502,7 +462,6 @@
             isScanning = false;
             clearInterval(scanInterval);
 
-            log('Processing barcode: ' + barcodeText.substring(0, 50) + '...');
             updateStatus('📄 ID detected! Parsing...', 'info');
 
             try {
@@ -514,9 +473,12 @@
                 const firstName = parsedResult.getFieldValue("firstName");
                 const lastName = parsedResult.getFieldValue("lastName");
                 const dob = parsedResult.getFieldValue("birthDate");
-                const age = calculateAge(dob);
+                const documentNumber = parsedResult.getFieldValue("documentNumber") || parsedResult.getFieldValue("licenseNumber");
+                const sex = parsedResult.getFieldValue("sex");
+                const expiry = parsedResult.getFieldValue("expiryDate");
+                const state = parsedResult.getFieldValue("issuingState");
 
-                log(`Parsed: ${firstName} ${lastName}, Age ${age}`);
+                const age = calculateAge(dob);
 
                 // Verify age
                 const approved = age >= 21;
@@ -528,7 +490,7 @@
                     approved ? 'success' : 'error'
                 );
 
-                // Save to database
+                // Save complete data to database
                 await saveScanResult({
                     sessionId: sessionId,
                     approved: approved,
@@ -536,6 +498,11 @@
                     lastName: lastName,
                     age: age,
                     dob: dob,
+                    documentType: 'drivers_license',
+                    documentNumber: documentNumber,
+                    sex: sex,
+                    expiry: expiry,
+                    nationality: state || 'USA',
                     reason: approved ? null : 'Under minimum age',
                     outletId: outletId,
                     registerId: registerId
@@ -552,10 +519,10 @@
                 }, 2000);
 
             } catch (error) {
-                log(`Parse error: ${error.message}`);
+                log(`Parse error: ${error.message}`, 'error');
                 updateStatus('❌ Failed to parse ID. Please try again.', 'error');
                 isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 500);
+                scanInterval = setInterval(scanVideoFrame, 200);
             }
         }
 
@@ -565,31 +532,26 @@
             isScanning = false;
             clearInterval(scanInterval);
 
-            log('Processing MRZ lines...');
-            updateStatus('📄 ID detected! Parsing MRZ...', 'info');
+            updateStatus('📄 Passport/ID detected! Parsing...', 'info');
 
             try {
                 // Extract text from lines
                 const lines = textLines.map(item => item.text.replace(/\s/g, ''));
-                log(`Found ${lines.length} MRZ lines`);
 
                 let parsedData;
 
                 // Detect format and parse
                 if (lines.length === 2 && lines[0].length === 44) {
                     // TD3 format (passport)
-                    log('Detected TD3 format (Passport)');
                     parsedData = parseMrzTd3(lines[0], lines[1]);
                 } else if (lines.length === 3 && lines[0].length === 30) {
                     // TD1 format (ID card)
-                    log('Detected TD1 format (ID Card)');
                     parsedData = parseMrzTd1(lines[0], lines[1], lines[2]);
                 } else {
                     throw new Error('Invalid MRZ format');
                 }
 
                 const age = calculateAge(parsedData.dob);
-                log(`Parsed: ${parsedData.firstName} ${parsedData.lastName}, Age ${age}`);
 
                 // Verify age
                 const approved = age >= 21;
@@ -601,7 +563,7 @@
                     approved ? 'success' : 'error'
                 );
 
-                // Save to database
+                // Save complete data to database
                 await saveScanResult({
                     sessionId: sessionId,
                     approved: approved,
@@ -610,6 +572,10 @@
                     age: age,
                     dob: parsedData.dob,
                     documentType: parsedData.documentType,
+                    documentNumber: parsedData.documentNumber,
+                    sex: parsedData.sex,
+                    expiry: parsedData.expiry,
+                    nationality: parsedData.nationality,
                     reason: approved ? null : 'Under minimum age',
                     outletId: outletId,
                     registerId: registerId
@@ -626,8 +592,8 @@
                 }, 2000);
 
             } catch (error) {
-                log(`MRZ parse error: ${error.message}`);
-                updateStatus('❌ Failed to parse MRZ. Please try again.', 'error');
+                log(`MRZ parse error: ${error.message}`, 'error');
+                updateStatus('❌ Failed to parse document. Please try again.', 'error');
                 isScanning = true;
                 scanInterval = setInterval(scanVideoFrame, 200);
             }
@@ -645,23 +611,57 @@
         }
 
         async function saveScanResult(data) {
+            // Validate required fields before saving
+            if (!data.firstName || !data.lastName || !data.dob || !data.age) {
+                log('Missing required fields for database save', 'error');
+                throw new Error('Incomplete scan data');
+            }
+
             try {
-                log('Saving to database...');
+                log('Saving scan to database...');
+
+                const payload = {
+                    sessionId: data.sessionId,
+                    approved: data.approved,
+                    firstName: data.firstName.trim(),
+                    lastName: data.lastName.trim(),
+                    age: parseInt(data.age),
+                    dob: data.dob,
+                    documentType: data.documentType || 'drivers_license',
+                    documentNumber: data.documentNumber || null,
+                    nationality: data.nationality || null,
+                    sex: data.sex || null,
+                    expiry: data.expiry || null,
+                    reason: data.reason || null,
+                    outletId: data.outletId,
+                    registerId: data.registerId,
+                    scannedAt: new Date().toISOString()
+                };
+
+                log(`Payload: ${JSON.stringify(payload)}`);
+
                 const response = await fetch('/api/scan-sessions', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(payload)
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to save');
+                    const errorText = await response.text();
+                    log(`Database save failed: ${response.status} - ${errorText}`, 'error');
+                    throw new Error(`Save failed: ${response.status}`);
                 }
 
-                log('✅ Saved to database');
+                const result = await response.json();
+                log(`Saved to database: ID ${result.id || 'success'}`);
+                return result;
+
             } catch (error) {
-                log(`Save error: ${error.message}`);
+                log(`Database error: ${error.message}`, 'error');
+                // Don't throw - allow approval to proceed even if DB fails
+                return null;
             }
         }
 
@@ -725,12 +725,9 @@
             return `${year}-${month}-${day}`;
         }
 
-        // Log device info
-        log(`User Agent: ${navigator.userAgent}`);
-        log(`Platform: ${navigator.platform}`);
-        log(`Media Devices: ${!!navigator.mediaDevices}`);
-        log(`getUserMedia: ${!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)}`);
-        log('Page loaded - tap START CAMERA to begin');
+        // Device ready
+        console.log('ID Scanner initialized');
+        console.log(`Platform: ${navigator.platform}, MediaDevices: ${!!navigator.mediaDevices}`);
     </script>
 </body>
 </html>
