@@ -278,6 +278,32 @@
             padding: 20px 50px;
         }
 
+        #flashButton {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 15;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            margin: 0;
+        }
+
+        #flashButton.active {
+            background: rgba(16, 185, 129, 0.8);
+            border-color: #10b981;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+        }
+
         #logs {
             background: rgba(0,0,0,0.3);
             padding: 15px;
@@ -326,6 +352,7 @@
         <div id="camera-container">
             <video id="videoElement" playsinline autoplay muted webkit-playsinline></video>
             <canvas id="canvas"></canvas>
+            <button id="flashButton" onclick="toggleFlash()">💡</button>
             <div id="scanGuide" style="display:none;">
                 <div class="corner top-left"></div>
                 <div class="corner top-right"></div>
@@ -364,6 +391,7 @@
         let isScanning = false;
         let scanInterval = null;
         let mrzScanning = false;
+        let flashEnabled = false;
 
         // Logging function - show all logs for debugging
         function log(message, level = 'info') {
@@ -457,6 +485,35 @@
             setTimeout(() => indicator.remove(), 500);
         }
 
+        async function toggleFlash() {
+            try {
+                const track = videoStream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+
+                if (!capabilities.torch) {
+                    log('Flash not supported on this device', 'warn');
+                    return;
+                }
+
+                flashEnabled = !flashEnabled;
+
+                await track.applyConstraints({
+                    advanced: [{ torch: flashEnabled }]
+                });
+
+                const flashButton = document.getElementById('flashButton');
+                if (flashEnabled) {
+                    flashButton.classList.add('active');
+                    log('Flash enabled');
+                } else {
+                    flashButton.classList.remove('active');
+                    log('Flash disabled');
+                }
+            } catch (error) {
+                log(`Flash toggle error: ${error.message}`, 'error');
+            }
+        }
+
         async function startCamera() {
             try {
                 log('Camera initialization started');
@@ -504,6 +561,14 @@
 
                 // Enable tap-to-focus
                 setupTapToFocus(video);
+
+                // Show flash button if supported
+                const track = videoStream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                if (capabilities.torch) {
+                    document.getElementById('flashButton').style.display = 'flex';
+                    log('Flash/torch available');
+                }
 
                 // Initialize Dynamsoft barcode reader
                 log('Creating CaptureVisionRouter instance...');
