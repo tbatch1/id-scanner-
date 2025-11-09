@@ -1,0 +1,53 @@
+BEGIN;
+
+ALTER TABLE verifications
+  ADD COLUMN IF NOT EXISTS middle_name VARCHAR(100);
+
+ALTER TABLE verifications
+  ADD COLUMN IF NOT EXISTS document_type VARCHAR(50);
+
+ALTER TABLE verifications
+  ADD COLUMN IF NOT EXISTS document_number VARCHAR(150);
+
+ALTER TABLE verifications
+  ADD COLUMN IF NOT EXISTS issuing_country VARCHAR(120);
+
+ALTER TABLE verifications
+  ADD COLUMN IF NOT EXISTS source VARCHAR(50);
+
+DROP VIEW IF EXISTS compliance_report;
+
+CREATE OR REPLACE VIEW compliance_report AS
+SELECT
+  v.verification_id,
+  v.sale_id,
+  v.clerk_id,
+  v.first_name,
+  v.last_name,
+  v.middle_name,
+  v.age,
+  v.status AS verification_status,
+  v.reason AS rejection_reason,
+  v.document_type,
+  v.document_number,
+  v.issuing_country,
+  v.source,
+  v.ip_address,
+  v.user_agent,
+  v.location_id,
+  v.created_at AS verified_at,
+  sc.payment_type,
+  sc.amount AS sale_amount,
+  sc.completed_at,
+  CASE
+    WHEN sc.completed_at IS NOT NULL THEN 'completed'
+    WHEN v.status = 'rejected' THEN 'rejected'
+    ELSE 'pending'
+  END AS sale_status
+FROM verifications v
+LEFT JOIN sales_completions sc ON v.verification_id = sc.verification_id
+ORDER BY v.created_at DESC;
+
+COMMENT ON VIEW compliance_report IS 'TABC Inspection Ready: Complete audit trail of all verifications and sales.';
+
+COMMIT;

@@ -4,17 +4,33 @@
   "private": true,
   "scripts": {
     "dev": "node backend/src/server.js",
-    "start": "node backend/src/server.js"
+    "start": "node backend/src/server.js",
+    "test": "jest --runInBand",
+    "smoke": "node scripts/runSmoke.js",
+    "banned:list": "node scripts/banned.js list",
+    "banned:add": "node scripts/banned.js add",
+    "banned:remove": "node scripts/banned.js remove",
+    "migrate": "node scripts/runMigrations.js",
+    "oauth:status": "node scripts/inspectOAuth.js",
+    "oauth:refresh": "node scripts/inspectOAuth.js --refresh"
   },
   "dependencies": {
-    "dotenv": "^16.4.5",
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.2.0",
+    "express-validator": "^7.3.0",
+    "helmet": "^8.1.0",
+    "pg": "^8.16.3",
     "pino": "^9.1.0",
     "pino-http": "^10.0.0",
     "pino-pretty": "^10.3.1",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
     "vercel": "^48.6.6"
   }
 }

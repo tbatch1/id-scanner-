@@ -1,4 +1,6 @@
-const { v4: uuidv4 } = require('uuid');
+// Mock Lightspeed Client - Used when API credentials are not configured
+
+const config = require('./config');
 
 const saleStore = new Map();
 const verificationStore = new Map();
@@ -46,6 +48,12 @@ function seedSales() {
           description: 'Premium Flower 3.5g',
           quantity: 1,
           price: 47.98
+        },
+        {
+          saleLineID: 'LINE-3',
+          description: 'Vape Cartridge 1g',
+          quantity: 1,
+          price: 0.00
         }
       ],
       customer: {
@@ -76,21 +84,53 @@ function getSaleById(saleId) {
   const verification = sale.lastVerificationId
     ? verificationStore.get(sale.lastVerificationId) || null
     : null;
+  const verificationExpired =
+    verification && verification.createdAt
+      ? Date.now() - new Date(verification.createdAt).getTime() >
+        config.verificationExpiryMinutes * 60 * 1000
+      : null;
+
+  const outletId = sale.outletId || config.lightspeed?.defaultOutletId || null;
+  let outletDescriptor = null;
+  if (outletId) {
+    outletDescriptor =
+      (config.lightspeed?.outletsById && config.lightspeed.outletsById[outletId]) || {
+        id: outletId,
+        code: null,
+        label: outletId === config.lightspeed?.defaultOutletId ? 'Default Outlet' : null
+      };
+  }
 
   return {
-    ...sale,
-    verification
+    saleId: sale.saleID,
+    reference: sale.reference,
+    total: sale.total,
+    currency: sale.currency,
+    items: sale.items,
+    verification,
+    completed: sale.status === 'completed',
+    status: sale.status,
+    verificationExpired,
+    registerId: sale.registerId || null,
+    outletId,
+    outlet: outletDescriptor
   };
 }
 
-function recordVerification({ saleId, clerkId, verificationData }) {
-  const sale = saleStore.get(saleId);
-  if (!sale) {
+function recordVerification({ saleId, clerkId, verificationData, sale: saleContext, locationId }) {
+  const storedSale = saleStore.get(saleId);
+  if (!storedSale) {
     throw new Error('SALE_NOT_FOUND');
   }
 
-  const verificationId = uuidv4();
+  const verificationId = `VER-${Date.now()}`;
   const timestamp = new Date().toISOString();
+  const effectiveLocationId =
+    locationId ||
+    saleContext?.outletId ||
+    storedSale.outletId ||
+    config.lightspeed?.defaultOutletId ||
+    null;
 
   const record = {
     verificationId,
@@ -98,30 +138,38 @@ function recordVerification({ saleId, clerkId, verificationData }) {
     clerkId,
     status: verificationData.approved ? 'approved' : 'rejected',
     reason: verificationData.approved ? null : verificationData.reason || 'Underage or invalid ID',
-    payload: {
-      firstName: verificationData.firstName || null,
-      lastName: verificationData.lastName || null,
-      dob: verificationData.dob || null,
-      rawAge: verificationData.age || null
-    },
+    firstName: verificationData.firstName || null,
+    lastName: verificationData.lastName || null,
+    middleName: verificationData.middleName || null,
+    dob: verificationData.dob || null,
+    age: verificationData.age || null,
+    documentType: verificationData.documentType || null,
+    documentNumber: verificationData.documentNumber || null,
+    issuingCountry: verificationData.issuingCountry || null,
+    nationality: verificationData.nationality || null,
+    documentExpiry: verificationData.documentExpiry || null,
+    sex: verificationData.sex || null,
+    source: verificationData.source || 'pdf417',
+    locationId: effectiveLocationId,
+    registerId: saleContext?.registerId || storedSale.registerId || null,
     createdAt: timestamp,
     updatedAt: timestamp
   };
 
   verificationStore.set(verificationId, record);
 
-  sale.lastVerificationId = verificationId;
-  sale.status = verificationData.approved ? 'verified' : 'awaiting_verification';
-  sale.updatedAt = timestamp;
+  storedSale.lastVerificationId = verificationId;
+  storedSale.status = verificationData.approved ? 'verified' : 'awaiting_verification';
+  storedSale.updatedAt = timestamp;
 
-  saleStore.set(saleId, sale);
+  saleStore.set(saleId, storedSale);
 
   return record;
 }
 
-function completeSale({ saleId, verificationId }) {
-  const sale = saleStore.get(saleId);
-  if (!sale) {
+function completeSale({ saleId, verificationId, paymentType, sale: saleContext, locationId }) {
+  const storedSale = saleStore.get(saleId);
+  if (!storedSale) {
     throw new Error('SALE_NOT_FOUND');
   }
 
@@ -134,38 +182,103 @@ function completeSale({ saleId, verificationId }) {
     throw new Error('VERIFICATION_NOT_APPROVED');
   }
 
-  const completionId = uuidv4();
   const timestamp = new Date().toISOString();
+  const effectiveLocationId =
+    locationId ||
+    saleContext?.outletId ||
+    storedSale.outletId ||
+    config.lightspeed?.defaultOutletId ||
+    null;
 
-  sale.status = 'completed';
-  sale.updatedAt = timestamp;
-  sale.completion = {
-    completionId,
+  storedSale.status = 'completed';
+  storedSale.updatedAt = timestamp;
+  storedSale.completion = {
     verificationId,
-    completedAt: timestamp
+    completedAt: timestamp,
+    paymentType: paymentType || 'cash'
   };
 
-  saleStore.set(saleId, sale);
+  saleStore.set(saleId, storedSale);
 
   return {
     saleId,
-    completionId,
+    completedAt: timestamp,
+    paymentType: paymentType || 'cash',
+    amount: storedSale.total,
     verificationId,
-    status: sale.status,
-    completedAt: timestamp
+    locationId: effectiveLocationId
   };
 }
 
 function listSales() {
-  return Array.from(saleStore.values()).map((sale) => ({
-    ...sale,
-    verification: sale.lastVerificationId ? verificationStore.get(sale.lastVerificationId) || null : null
-  }));
+  return Array.from(saleStore.values()).map((sale) => getSaleById(sale.saleID));
+}
+
+function getComplianceReport() {
+  const allSales = listSales();
+  const totalSales = allSales.length;
+  const awaitingVerification = allSales.filter((sale) => sale.status === 'awaiting_verification').length;
+  const verified = allSales.filter((sale) => sale.status === 'verified').length;
+  const completed = allSales.filter((sale) => sale.status === 'completed').length;
+  const allVerifications = Array.from(verificationStore.values());
+  const approved = allVerifications.filter((v) => v.status === 'approved').length;
+  const rejected = allVerifications.filter((v) => v.status === 'rejected').length;
+  const rejectionReasons = allVerifications
+    .filter((v) => v.status === 'rejected')
+    .reduce((acc, v) => {
+      const reason = v.reason || 'Unspecified';
+      acc[reason] = (acc[reason] || 0) + 1;
+      return acc;
+    }, {});
+
+  return Promise.resolve({
+    summary: {
+      totalSales,
+      awaitingVerification,
+      verified,
+      completed
+    },
+    verifications: {
+      total: allVerifications.length,
+      approved,
+      rejected,
+      withinRange: allVerifications.length
+    },
+    rejectionReasons: Object.entries(rejectionReasons).map(([reason, count]) => ({
+      reason,
+      count
+    })),
+    recentVerifications: allVerifications
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 10)
+      .map((v) => ({
+        verificationId: v.verificationId,
+        saleId: v.saleId,
+        clerkId: v.clerkId,
+        status: v.status,
+        reason: v.reason,
+        firstName: v.firstName,
+        lastName: v.lastName,
+        dob: v.dob,
+        age: v.age,
+        createdAt: v.createdAt
+      }))
+  });
+}
+
+function getAuthState() {
+  return {
+    status: 'mock',
+    hasRefreshToken: true,
+    accessTokenExpiresAt: null
+  };
 }
 
 module.exports = {
   getSaleById,
   recordVerification,
   completeSale,
-  listSales
+  listSales,
+  getComplianceReport,
+  getAuthState
 };

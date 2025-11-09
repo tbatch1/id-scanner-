@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THC Club | ID Verification</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+
+        .amount {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #4ecdc4;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            font-size: 22px;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 16px;
+            background: rgba(78, 205, 196, 0.2);
+            border: 2px solid #4ecdc4;
+        }
+
+        button {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            padding: 18px 40px;
+            border-radius: 10px;
+            font-size: 20px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 Age Verification Required</h1>
+
+        <div class="amount">
+            Transaction: $<span id="amount">0.00</span>
+        </div>
+
+        <div id="status" class="status">
+            Initializing...
+        </div>
+
+        <div id="controls">
+            <button onclick="openScanner()">📷 Scan ID in Safari</button>
+            <button class="secondary" onclick="cancelPayment()">Cancel Payment</button>
+        </div>
+    </div>
+
+    <script>
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const origin = urlParams.get('origin');
+        const registerId = urlParams.get('register_id');
+        const amount = urlParams.get('amount') || '0.00';
+        const outletId = urlParams.get('outlet_id') || '02f4a1bc-ae66-11f0-f174-8d8eeff9231e';
+
+        // Session ID for tracking
+        const sessionId = `SCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        let pollInterval = null;
+
+        // Display amount
+        document.getElementById('amount').textContent = parseFloat(amount).toFixed(2);
+        document.getElementById('status').textContent = 'Ready to scan ID';
+
+        function openScanner() {
+            const scannerUrl = `/scanner.html?session_id=${sessionId}&register_id=${registerId}&amount=${amount}&outlet_id=${outletId}`;
+
+            document.getElementById('status').textContent = 'Opening scanner in Safari...';
+
+            // Open scanner in new window
+            window.open(scannerUrl, '_blank');
+
+            // Start polling for results
+            document.getElementById('status').textContent = 'Waiting for ID scan...';
+            startPolling();
+        }
+
+        function startPolling() {
+            let attempts = 0;
+            const maxAttempts = 120; // 2 minutes
+
+            pollInterval = setInterval(async () => {
+                attempts++;
+
+                try {
+                    const response = await fetch(`/api/scan-sessions/${sessionId}`);
+
+                    if (response.ok) {
+                        const data = await response.json();
+
+                        if (data.data && data.data.completed_at) {
+                            clearInterval(pollInterval);
+
+                            if (data.data.approved) {
+                                document.getElementById('status').textContent =
+                                    `✅ APPROVED: ${data.data.first_name} ${data.data.last_name} (Age ${data.data.age})`;
+                                setTimeout(() => sendApproval(), 1000);
+                            } else {
+                                document.getElementById('status').textContent =
+                                    `❌ REJECTED: ${data.data.reason || 'Under 21'}`;
+                                setTimeout(() => sendDecline(), 1000);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Poll error:', error);
+                }
+
+                if (attempts >= maxAttempts) {
+                    clearInterval(pollInterval);
+                    document.getElementById('status').textContent = 'Timeout - Please try again';
+                }
+            }, 1000);
+        }
+
+        function sendApproval() {
+            if (origin && window.parent) {
+                window.parent.postMessage({
+                    status: 'ACCEPT',
+                    message: 'ID verified - customer is 21+'
+                }, `https://${origin}`);
+            }
+            document.getElementById('status').textContent = 'Payment approved!';
+        }
+
+        function sendDecline() {
+            if (origin && window.parent) {
+                window.parent.postMessage({
+                    status: 'DECLINE',
+                    message: 'Customer under 21 - payment declined'
+                }, `https://${origin}`);
+            }
+            document.getElementById('status').textContent = 'Payment declined';
+        }
+
+        function cancelPayment() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+            sendDecline();
+        }
+
+        console.log('Payment gateway loaded');
+        console.log('Session ID:', sessionId);
+    </script>
+</body>
+</html>

@@ -3,7 +3,21 @@
     "allow": [
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npx kill-port 4000)",
+      "Bash(cat:*)",
+      "Bash(npm run dev:*)",
+      "Bash(node backend/test-lightspeed.js:*)",
+      "Bash(vercel --version:*)",
+      "Bash(node run-migration.js:*)",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_HTvjn0FrEZ7D@ep-holy-brook-a4hgmwaj-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require\" node:*)",
+      "Bash(npm install:*)",
+      "Bash(npx vercel:*)",
+      "Bash(curl:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(node:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []

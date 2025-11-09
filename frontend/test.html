@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+        }
+        .box {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Payment Gateway Test</h1>
+
+    <div class="box">
+        <h2>URL Parameters:</h2>
+        <p id="params">Loading...</p>
+    </div>
+
+    <div class="box">
+        <h2>Browser Info:</h2>
+        <p id="browser">Loading...</p>
+    </div>
+
+    <div class="box">
+        <button onclick="testScanner()">Test Scanner Button</button>
+        <p id="result"></p>
+    </div>
+
+    <script>
+        // Display URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const origin = urlParams.get('origin');
+        const registerId = urlParams.get('register_id');
+        const amount = urlParams.get('amount');
+
+        document.getElementById('params').innerHTML = `
+            Origin: ${origin || 'Not set'}<br>
+            Register ID: ${registerId || 'Not set'}<br>
+            Amount: ${amount || 'Not set'}
+        `;
+
+        // Display browser info
+        document.getElementById('browser').innerHTML = `
+            User Agent: ${navigator.userAgent}<br>
+            Platform: ${navigator.platform}<br>
+            Screen: ${window.screen.width}x${window.screen.height}
+        `;
+
+        function testScanner() {
+            const sessionId = `TEST-${Date.now()}`;
+            const scannerUrl = `/scanner.html?session_id=${sessionId}&register_id=${registerId}&amount=${amount || '10.00'}`;
+
+            document.getElementById('result').innerHTML = `Opening scanner...<br>Session ID: ${sessionId}`;
+
+            window.open(scannerUrl, '_blank');
+        }
+
+        console.log('Test page loaded successfully!');
+        console.log('Origin:', origin);
+        console.log('Register ID:', registerId);
+        console.log('Amount:', amount);
+    </script>
+</body>
+</html>

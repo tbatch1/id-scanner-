@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Redirecting...</title>
+    <script>
+        // Get the target URL from query parameter
+        var params = new URLSearchParams(window.location.search);
+        var target = params.get('target');
+
+        if (target) {
+            // Force navigation to break out of iframe
+            if (window.top !== window.self) {
+                // We're in an iframe, break out
+                window.top.location.href = target;
+            } else {
+                // Not in iframe, just redirect
+                window.location.href = target;
+            }
+        }
+    </script>
+</head>
+<body style="margin:0; padding:40px; font-family:Arial; background:#1a1a2e; color:white; text-align:center;">
+    <h1>Redirecting to scanner...</h1>
+    <p>If you're not redirected, <a href="#" onclick="window.location.href=new URLSearchParams(window.location.search).get('target'); return false;" style="color:#4ecdc4;">click here</a></p>
+</body>
+</html>

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta http-equiv="Permissions-Policy" content="camera=*, microphone=*, geolocation=*">
+    <title>THC Club | ID Verification Payment</title>
+    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-barcode-reader-bundle@10.4.3100/dist/dbr.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-code-parser@2.4.32/dist/dcp.js"></script>
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #a8dadc;
+            margin-bottom: 30px;
+        }
+
+        .amount-display {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #4ecdc4;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        #camera-container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .dce-video-container {
+            width: 100%;
+            height: 400px;
+            position: relative;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .status.info {
+            background: rgba(78, 205, 196, 0.2);
+            border: 2px solid #4ecdc4;
+        }
+
+        .status.success {
+            background: rgba(34, 197, 94, 0.2);
+            border: 2px solid #22c55e;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid #ef4444;
+        }
+
+        .status.warning {
+            background: rgba(251, 191, 36, 0.2);
+            border: 2px solid #fbbf24;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        button.primary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            font-size: 20px;
+            padding: 20px 50px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 Age Verification Required</h1>
+        <p class="subtitle">Scan customer's ID to complete payment</p>
+
+        <div id="amount-display" class="amount-display">
+            Transaction Amount: <span id="amount">Loading...</span>
+        </div>
+
+        <div id="status" class="status info">
+            Initializing scanner...
+        </div>
+
+        <div id="camera-container" class="hidden">
+            <div id="scanner-view" class="dce-video-container"></div>
+        </div>
+
+        <div id="fallback-controls" class="hidden">
+            <p style="margin-bottom: 20px;">Camera blocked in app. Please use Safari to scan ID.</p>
+            <button class="primary" onclick="openScannerInSafari()">📷 Open ID Scanner</button>
+            <button class="secondary" onclick="cancelPayment()">Cancel Payment</button>
+        </div>
+
+        <div id="manual-controls" class="hidden">
+            <button onclick="retryVerification()">Retry Scan</button>
+            <button class="secondary" onclick="cancelPayment()">Cancel Payment</button>
+        </div>
+    </div>
+
+    <script>
+        // Parse query parameters from Lightspeed
+        const urlParams = new URLSearchParams(window.location.search);
+        const origin = urlParams.get('origin');
+        const registerId = urlParams.get('register_id');
+        const amount = urlParams.get('amount');
+        const outletId = urlParams.get('outlet_id') || '02f4a1bc-ae66-11f0-f174-8d8eeff9231e';
+
+        // Generate unique session ID for this scan session
+        const sessionId = `SCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        // Display amount
+        document.getElementById('amount').textContent = `$${parseFloat(amount).toFixed(2)}`;
+
+        // Dynamsoft license
+        Dynamsoft.License.LicenseManager.initLicense("DLS2eyJoYW5kc2hha2VDb2RlIjoiMTA0MDM4NjcxLVRYbFhaV0pRY205cVgyUmljZyIsIm1haW5TZXJ2ZXJVUkwiOiJodHRwczovL21kbHMuZHluYW1zb2Z0b25saW5lLmNvbSIsIm9yZ2FuaXphdGlvbklEIjoiMTA0MDM4NjcxIiwic3RhbmRieVNlcnZlclVSTCI6Imh0dHBzOi8vc2Rscy5keW5hbXNvZnRvbmxpbmUuY29tIiwiY2hlY2tDb2RlIjotNjgyNDc2OTE3fQ==");
+
+        let cameraEnhancer;
+        let router;
+        let isScanning = false;
+        let pollInterval = null;
+        let cameraFailed = false;
+
+        async function initScanner() {
+            try {
+                updateStatus('Initializing camera...', 'info');
+
+                // Initialize camera
+                const view = await Dynamsoft.DCE.CameraView.createInstance(document.getElementById('scanner-view'));
+                cameraEnhancer = await Dynamsoft.DCE.CameraEnhancer.createInstance(view);
+
+                // Initialize barcode reader
+                router = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
+                router.setInput(cameraEnhancer);
+
+                // Set up result receiver
+                const resultReceiver = new Dynamsoft.CVR.CapturedResultReceiver();
+                resultReceiver.onDecodedBarcodesReceived = handleBarcode;
+                router.addResultReceiver(resultReceiver);
+
+                // Start camera
+                await cameraEnhancer.open();
+                await router.startCapturing("ReadBarcodes_Balance");
+                isScanning = true;
+
+                document.getElementById('camera-container').classList.remove('hidden');
+                updateStatus('Ready to scan ID - Position barcode in view', 'info');
+
+            } catch (error) {
+                console.error('Scanner initialization error:', error);
+                cameraFailed = true;
+
+                // Show fallback option to open scanner in Safari
+                document.getElementById('camera-container').classList.add('hidden');
+                document.getElementById('fallback-controls').classList.remove('hidden');
+                updateStatus('Camera blocked in iframe. Click button below to open scanner.', 'warning');
+            }
+        }
+
+        function openScannerInSafari() {
+            // Build URL for standalone scanner page
+            const scannerUrl = `/scanner.html?session_id=${sessionId}&register_id=${registerId}&amount=${amount}&outlet_id=${outletId}`;
+
+            // Open in new tab
+            window.open(scannerUrl, '_blank');
+
+            // Start polling for scan result
+            updateStatus('Scanner opened in Safari. Scan ID in the new tab...', 'info');
+            startPollingForResult();
+        }
+
+        function startPollingForResult() {
+            let pollCount = 0;
+            const maxPolls = 120; // Poll for 2 minutes max (120 * 1 second)
+
+            pollInterval = setInterval(async () => {
+                pollCount++;
+
+                try {
+                    const response = await fetch(`/api/scan-sessions/${sessionId}`);
+
+                    if (response.ok) {
+                        const data = await response.json();
+
+                        if (data.data.completed_at) {
+                            // Scan completed!
+                            clearInterval(pollInterval);
+
+                            if (data.data.approved) {
+                                updateStatus(`✅ APPROVED: ${data.data.first_name} ${data.data.last_name} (Age ${data.data.age})`, 'success');
+                                sendApprovalToLightspeed();
+                            } else {
+                                updateStatus(`❌ REJECTED: ${data.data.reason || 'Under 21'}`, 'error');
+                                sendDeclineToLightspeed();
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Poll error:', error);
+                }
+
+                // Stop polling after max attempts
+                if (pollCount >= maxPolls) {
+                    clearInterval(pollInterval);
+                    updateStatus('Scan timeout. Please try again.', 'error');
+                    document.getElementById('fallback-controls').classList.remove('hidden');
+                }
+            }, 1000); // Poll every second
+        }
+
+        async function handleBarcode(result) {
+            if (!isScanning) return;
+
+            const barcodes = result.barcodeResultItems;
+            if (!barcodes || barcodes.length === 0) return;
+
+            isScanning = false;
+            await router.stopCapturing();
+
+            const barcodeText = barcodes[0].text;
+            updateStatus('ID detected! Parsing...', 'info');
+
+            try {
+                // Parse ID
+                await Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID");
+                const parser = await Dynamsoft.DCP.CodeParser.createInstance();
+                const parsedResult = await parser.parse(barcodeText);
+
+                const firstName = parsedResult.getFieldValue("firstName");
+                const lastName = parsedResult.getFieldValue("lastName");
+                const dob = parsedResult.getFieldValue("birthDate");
+                const age = calculateAge(dob);
+
+                // Verify age
+                if (age >= 21) {
+                    updateStatus(`✅ APPROVED: ${firstName} ${lastName} (Age ${age})`, 'success');
+                    sendApprovalToLightspeed();
+                } else {
+                    updateStatus(`❌ REJECTED: Customer under 21 (Age ${age})`, 'error');
+                    sendDeclineToLightspeed();
+                }
+
+            } catch (error) {
+                console.error('Parsing error:', error);
+                updateStatus('Failed to parse ID. Please try again.', 'error');
+                document.getElementById('manual-controls').classList.remove('hidden');
+            }
+        }
+
+        function calculateAge(birthDate) {
+            const birth = new Date(birthDate);
+            const today = new Date();
+            let age = today.getFullYear() - birth.getFullYear();
+            const monthDiff = today.getMonth() - birth.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+                age--;
+            }
+            return age;
+        }
+
+        function sendApprovalToLightspeed() {
+            if (!origin) {
+                console.error('No origin specified - cannot send message to Lightspeed');
+                return;
+            }
+
+            // Send ACCEPT message to Lightspeed X-Series via postMessage
+            window.parent.postMessage({
+                status: 'ACCEPT',
+                message: 'ID verified - customer is 21+'
+            }, `https://${origin}`);
+
+            setTimeout(() => {
+                updateStatus('Payment approved! Closing in 2 seconds...', 'success');
+            }, 1000);
+        }
+
+        function sendDeclineToLightspeed() {
+            if (!origin) {
+                console.error('No origin specified - cannot send message to Lightspeed');
+                return;
+            }
+
+            // Send DECLINE message to Lightspeed X-Series via postMessage
+            window.parent.postMessage({
+                status: 'DECLINE',
+                message: 'Customer under 21 - payment declined'
+            }, `https://${origin}`);
+
+            setTimeout(() => {
+                updateStatus('Payment declined. Closing in 3 seconds...', 'error');
+            }, 1000);
+        }
+
+        function updateStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        async function retryVerification() {
+            document.getElementById('manual-controls').classList.add('hidden');
+            updateStatus('Restarting scanner...', 'info');
+            isScanning = true;
+            await router.startCapturing("ReadBarcodes_Balance");
+            updateStatus('Ready to scan ID - Position barcode in view', 'info');
+        }
+
+        function cancelPayment() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+            sendDeclineToLightspeed();
+        }
+
+        // Initialize on page load
+        initScanner();
+    </script>
+</body>
+</html>

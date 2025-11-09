@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ID Verification</title>
+</head>
+<body style="margin:0; padding:40px; font-family:Arial; background:#1a1a2e; color:white; text-align:center;">
+    <h1 style="font-size:24px; margin-bottom:20px;">🔒 Age Verification</h1>
+
+    <div style="background:rgba(255,255,255,0.1); padding:20px; border-radius:10px; margin-bottom:30px;">
+        <div style="font-size:20px;">Transaction Amount</div>
+        <div id="amt" style="font-size:28px; font-weight:bold; margin-top:10px;">$0.00</div>
+    </div>
+
+    <div id="msg" style="padding:15px; background:rgba(78,205,196,0.2); border:2px solid #4ecdc4; border-radius:8px; margin-bottom:20px;">
+        Loading...
+    </div>
+
+    <a id="scanLink" href="#" target="_blank" onclick="startPoll(); return true;" style="display:block; width:100%; max-width:400px; padding:18px; font-size:18px; background:#10b981; color:white; border:none; border-radius:8px; cursor:pointer; margin:10px auto; text-decoration:none;">
+        📷 Tap to Open Scanner
+    </a>
+
+    <button onclick="cancel()" style="width:100%; max-width:400px; padding:18px; font-size:18px; background:rgba(255,255,255,0.1); color:white; border:2px solid rgba(255,255,255,0.3); border-radius:8px; cursor:pointer; margin:10px auto; display:block;">
+        Cancel Payment
+    </button>
+
+    <script>
+        var params = new URLSearchParams(window.location.search);
+        var origin = params.get('origin');
+        var regId = params.get('register_id');
+        var amt = params.get('amount') || '0.00';
+        var outlet = params.get('outlet_id') || '02f4a1bc-ae66-11f0-f174-8d8eeff9231e';
+        var sessId = 'SCAN-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        var poll = null;
+
+        document.getElementById('amt').textContent = '$' + parseFloat(amt).toFixed(2);
+        document.getElementById('msg').textContent = 'Tap button below to open scanner';
+
+        // Set up the scanner link via redirect to break out of iframe
+        var scannerUrl = '/scanner.html?session_id=' + sessId + '&register_id=' + regId + '&amount=' + amt + '&outlet_id=' + outlet;
+        var redirectUrl = '/redirect.html?target=' + encodeURIComponent(window.location.origin + scannerUrl);
+        document.getElementById('scanLink').href = redirectUrl;
+
+        function startPoll() {
+            document.getElementById('msg').textContent = 'Waiting for scan...';
+            document.getElementById('scanLink').style.display = 'none';
+            var tries = 0;
+            poll = setInterval(function() {
+                tries++;
+                fetch('/api/scan-sessions/' + sessId)
+                    .then(function(res) { return res.json(); })
+                    .then(function(data) {
+                        if (data.data && data.data.completed_at) {
+                            clearInterval(poll);
+                            if (data.data.approved) {
+                                document.getElementById('msg').textContent = 'APPROVED: ' + data.data.first_name + ' ' + data.data.last_name;
+                                setTimeout(approve, 1000);
+                            } else {
+                                document.getElementById('msg').textContent = 'REJECTED: ' + (data.data.reason || 'Under 21');
+                                setTimeout(decline, 1000);
+                            }
+                        }
+                    })
+                    .catch(function(err) {
+                        console.log('Poll error:', err);
+                    });
+
+                if (tries > 120) {
+                    clearInterval(poll);
+                    document.getElementById('msg').textContent = 'Timeout - try again';
+                }
+            }, 1000);
+        }
+
+        function approve() {
+            if (origin && window.parent) {
+                window.parent.postMessage({ status: 'ACCEPT', message: 'ID verified' }, 'https://' + origin);
+            }
+        }
+
+        function decline() {
+            if (origin && window.parent) {
+                window.parent.postMessage({ status: 'DECLINE', message: 'Under 21' }, 'https://' + origin);
+            }
+        }
+
+        function cancel() {
+            if (poll) clearInterval(poll);
+            decline();
+        }
+
+        console.log('Minimal gateway loaded!');
+    </script>
+</body>
+</html>
