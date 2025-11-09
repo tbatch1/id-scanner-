@@ -487,9 +487,15 @@
 
             try {
                 // Parse ID
+                log('Loading AAMVA_DL_ID spec...');
                 await Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID");
+
+                log('Creating parser instance...');
                 const parser = await Dynamsoft.DCP.CodeParser.createInstance();
+
+                log(`Parsing barcode text (length: ${barcodeText.length})...`);
                 const parsedResult = await parser.parse(barcodeText);
+                log('Parse successful!');
 
                 const firstName = parsedResult.getFieldValue("firstName");
                 const lastName = parsedResult.getFieldValue("lastName");
@@ -499,6 +505,7 @@
                 const expiry = parsedResult.getFieldValue("expiryDate");
                 const state = parsedResult.getFieldValue("issuingState");
 
+                log(`Parsed: ${firstName} ${lastName}, DOB: ${dob}`);
                 const age = calculateAge(dob);
 
                 // Verify age
@@ -541,7 +548,11 @@
 
             } catch (error) {
                 log(`Parse error: ${error.message}`, 'error');
-                updateStatus('❌ Failed to parse ID. Please try again.', 'error');
+                log(`Error stack: ${error.stack}`, 'error');
+                console.error('Full parse error:', error);
+                updateStatus(`❌ Parse failed: ${error.message}`, 'error');
+
+                // Resume scanning
                 isScanning = true;
                 scanInterval = setInterval(scanVideoFrame, 200);
             }
