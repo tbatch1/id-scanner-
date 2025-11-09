@@ -340,13 +340,11 @@
                 const constraints = {
                     video: {
                         facingMode: 'environment',
-                        width: { ideal: 1920, max: 1920 },
-                        height: { ideal: 1080, max: 1080 },
-                        frameRate: { ideal: 60, min: 30 },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 },
                         focusMode: 'continuous',
-                        exposureMode: 'continuous',
-                        whiteBalanceMode: 'continuous',
-                        zoom: { ideal: 1.0 }
+                        exposureMode: 'continuous'
                     },
                     audio: false
                 };
@@ -375,32 +373,20 @@
                 // Initialize Dynamsoft barcode reader
                 router = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
 
-                // Optimize settings for PDF417 barcodes with advanced capture enhancements
+                // Optimize settings for PDF417 barcodes
                 let settings = await router.getSimplifiedSettings('ReadBarcodes_Balance');
                 settings.barcodeSettings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_PDF417;
-
-                // Core optimization settings
                 settings.barcodeSettings.deblurLevel = 9; // Max deblur for worn/damaged IDs
                 settings.barcodeSettings.localizationModes = [16, 2, 8, 0, 0, 0, 0, 0]; // Mode 8 for low contrast
                 settings.barcodeSettings.expectBarcodeCount = 1;
                 settings.barcodeSettings.minResultConfidence = 50; // Reject low quality reads
                 settings.barcodeSettings.scaleUpModes = [2, 0, 0, 0, 0, 0, 0, 0]; // Linear interpolation
                 settings.barcodeSettings.binarizationModes = [1, 0, 0, 0, 0, 0, 0, 0]; // Adaptive thresholding
-
-                // Advanced capture enhancements - texture detection for patterned backgrounds
-                settings.barcodeSettings.textureDetectionModes = [2, 0, 0, 0, 0, 0, 0, 0]; // Mode 2: TDM_GENERAL_WIDTH_CONCENTRATION
-
-                // Grayscale transformation - handle both normal and inverted barcodes
-                settings.barcodeSettings.grayscaleTransformationModes = [1, 2, 0, 0, 0, 0, 0, 0]; // GTM_ORIGINAL + GTM_INVERTED
-
-                // Region predetection - speed up by detecting barcode area first
-                settings.barcodeSettings.regionPredetectionModes = [1, 0, 0, 0, 0, 0, 0, 0]; // RPM_GENERAL_RGB_CONTRAST
-
                 await router.updateSettings('ReadBarcodes_Balance', settings);
 
-                // Start scanning with optimized interval (100ms for faster capture)
+                // Start scanning
                 isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 100);
+                scanInterval = setInterval(scanVideoFrame, 200);
 
                 // Show scanning guide
                 document.getElementById('scanGuide').style.display = 'block';
