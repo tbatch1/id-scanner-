@@ -77,6 +77,11 @@
             height: 400px;
             object-fit: cover;
             display: block;
+            background: #000;
+        }
+
+        #videoElement.active {
+            background: transparent;
         }
 
         canvas {
@@ -225,6 +230,8 @@
                 log('START CAMERA clicked');
                 updateStatus('📷 Opening camera...', 'info');
 
+                const video = document.getElementById('videoElement');
+
                 // Use native getUserMedia for iOS compatibility
                 log('Requesting camera permission...');
 
@@ -239,14 +246,39 @@
 
                 log('Calling getUserMedia with constraints: ' + JSON.stringify(constraints));
                 videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-                log('Camera stream obtained!');
+                log('Camera stream obtained! Stream ID: ' + videoStream.id);
+                log('Video tracks: ' + videoStream.getVideoTracks().length);
 
-                const video = document.getElementById('videoElement');
+                if (videoStream.getVideoTracks().length > 0) {
+                    const track = videoStream.getVideoTracks()[0];
+                    log('Track label: ' + track.label);
+                    log('Track enabled: ' + track.enabled);
+                    log('Track ready state: ' + track.readyState);
+                    log('Track settings: ' + JSON.stringify(track.getSettings()));
+                }
+
+                // Set srcObject
+                log('Setting video.srcObject...');
                 video.srcObject = videoStream;
 
-                log('Waiting for video to play...');
+                // Wait for metadata to load
+                log('Waiting for loadedmetadata event...');
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = () => {
+                        log('Metadata loaded! Video dimensions: ' + video.videoWidth + 'x' + video.videoHeight);
+                        resolve();
+                    };
+                    video.onerror = (e) => {
+                        log('Video error event: ' + e);
+                        reject(e);
+                    };
+                    setTimeout(() => reject(new Error('Metadata timeout')), 5000);
+                });
+
+                log('Calling video.play()...');
                 await video.play();
-                log('Video playing!');
+                log('Video playing! readyState: ' + video.readyState);
+                video.classList.add('active');
 
                 updateStatus('✅ Camera active - Initializing barcode reader...', 'info');
 
