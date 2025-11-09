@@ -76,8 +76,12 @@
             width: 100%;
             height: 400px;
             object-fit: cover;
-            display: block;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
             background: #000;
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
         }
 
         #videoElement.active {
@@ -184,7 +188,7 @@
         </button>
 
         <div id="camera-container">
-            <video id="videoElement" playsinline autoplay></video>
+            <video id="videoElement" playsinline autoplay muted webkit-playsinline></video>
             <canvas id="canvas"></canvas>
         </div>
 
@@ -276,8 +280,23 @@
                 });
 
                 log('Calling video.play()...');
-                await video.play();
+
+                // Force play for iOS
+                try {
+                    const playPromise = video.play();
+                    if (playPromise !== undefined) {
+                        await playPromise;
+                    }
+                } catch (playError) {
+                    log('Play error: ' + playError.message);
+                    // Try forcing it
+                    video.muted = true;
+                    await video.play();
+                }
+
                 log('Video playing! readyState: ' + video.readyState);
+                log('Video paused: ' + video.paused);
+                log('Video currentTime: ' + video.currentTime);
                 video.classList.add('active');
 
                 updateStatus('✅ Camera active - Initializing barcode reader...', 'info');
