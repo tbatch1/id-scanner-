@@ -155,27 +155,31 @@
             position: absolute;
             left: 0;
             right: 0;
-            height: 3px;
+            top: 50%;
+            height: 2px;
             background: linear-gradient(90deg,
                 transparent 0%,
-                #10b981 20%,
-                #10b981 80%,
+                rgba(16, 185, 129, 0.3) 10%,
+                #10b981 50%,
+                rgba(16, 185, 129, 0.3) 90%,
                 transparent 100%);
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.8);
-            animation: scanMove 2s linear infinite;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.6),
+                        0 0 20px rgba(16, 185, 129, 0.3);
+            transform: translateY(-50%);
             z-index: 12;
         }
 
-        @keyframes scanMove {
-            0% {
-                top: 0%;
-            }
-            50% {
-                top: 100%;
-            }
-            100% {
-                top: 0%;
-            }
+        #scanLine::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 4px;
+            height: 4px;
+            background: #10b981;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #10b981;
         }
 
         @keyframes focusPulse {
@@ -329,7 +333,7 @@
                 <div class="corner bottom-right"></div>
                 <div id="scanLine"></div>
             </div>
-            <div id="scanHint" style="display:none;">Position ID within frame</div>
+            <div id="scanHint" style="display:none;">Align barcode with center line</div>
         </div>
 
         <button onclick="window.close()">Close Scanner</button>
