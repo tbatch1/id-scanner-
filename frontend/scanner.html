@@ -178,6 +178,17 @@
             }
         }
 
+        @keyframes focusPulse {
+            0% {
+                transform: translate(-50%, -50%) scale(0.5);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1.2);
+                opacity: 0;
+            }
+        }
+
         #scanHint {
             position: absolute;
             bottom: 15px;
@@ -370,6 +381,78 @@
             statusEl.className = `status ${type}`;
         }
 
+        function setupTapToFocus(video) {
+            const videoContainer = document.getElementById('camera-container');
+
+            videoContainer.addEventListener('click', async (e) => {
+                try {
+                    const rect = videoContainer.getBoundingClientRect();
+                    const x = (e.clientX - rect.left) / rect.width;
+                    const y = (e.clientY - rect.top) / rect.height;
+
+                    log(`Tap to focus at (${(x * 100).toFixed(1)}%, ${(y * 100).toFixed(1)}%)`);
+
+                    // Get video track
+                    const track = videoStream.getVideoTracks()[0];
+                    const capabilities = track.getCapabilities();
+
+                    // Try to focus at the tapped point
+                    if (capabilities.focusMode && capabilities.focusMode.includes('manual')) {
+                        await track.applyConstraints({
+                            advanced: [{
+                                focusMode: 'manual',
+                                pointsOfInterest: [{ x, y }]
+                            }]
+                        });
+
+                        // Return to continuous focus after 2 seconds
+                        setTimeout(async () => {
+                            try {
+                                await track.applyConstraints({
+                                    advanced: [{ focusMode: 'continuous' }]
+                                });
+                            } catch (e) {
+                                // Ignore errors
+                            }
+                        }, 2000);
+                    }
+
+                    // Visual feedback
+                    showFocusPoint(e.clientX - rect.left, e.clientY - rect.top);
+                } catch (error) {
+                    log(`Tap to focus error: ${error.message}`, 'warn');
+                }
+            });
+        }
+
+        function showFocusPoint(x, y) {
+            // Remove existing focus indicator
+            const existing = document.getElementById('focusIndicator');
+            if (existing) existing.remove();
+
+            // Create focus indicator
+            const indicator = document.createElement('div');
+            indicator.id = 'focusIndicator';
+            indicator.style.cssText = `
+                position: absolute;
+                left: ${x}px;
+                top: ${y}px;
+                width: 60px;
+                height: 60px;
+                border: 2px solid #10b981;
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+                pointer-events: none;
+                z-index: 100;
+                animation: focusPulse 0.5s ease-out;
+            `;
+
+            document.getElementById('camera-container').appendChild(indicator);
+
+            // Remove after animation
+            setTimeout(() => indicator.remove(), 500);
+        }
+
         async function startCamera() {
             try {
                 log('Camera initialization started');
@@ -384,7 +467,11 @@
                         height: { ideal: 720 },
                         frameRate: { ideal: 30 },
                         focusMode: 'continuous',
-                        exposureMode: 'continuous'
+                        exposureMode: 'continuous',
+                        whiteBalanceMode: 'continuous',
+                        brightness: { ideal: 1.2 },
+                        contrast: { ideal: 1.3 },
+                        torch: false
                     },
                     audio: false
                 };
@@ -411,6 +498,9 @@
                 updateStatus('✅ Camera active - Initializing scanner...', 'info');
                 log('Camera active, video playing');
 
+                // Enable tap-to-focus
+                setupTapToFocus(video);
+
                 // Initialize Dynamsoft barcode reader
                 log('Creating CaptureVisionRouter instance...');
                 router = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
@@ -425,9 +515,10 @@
                 settings.barcodeSettings.deblurLevel = 9;
                 settings.barcodeSettings.localizationModes = [16, 2, 8, 0, 0, 0, 0, 0];
                 settings.barcodeSettings.expectBarcodeCount = 1;
-                settings.barcodeSettings.minResultConfidence = 50;
-                settings.barcodeSettings.scaleUpModes = [2, 0, 0, 0, 0, 0, 0, 0];
-                settings.barcodeSettings.binarizationModes = [1, 0, 0, 0, 0, 0, 0, 0];
+                settings.barcodeSettings.minResultConfidence = 40; // Lower for low light
+                settings.barcodeSettings.scaleUpModes = [2, 1, 0, 0, 0, 0, 0, 0]; // More aggressive scaling
+                settings.barcodeSettings.binarizationModes = [1, 2, 0, 0, 0, 0, 0, 0]; // Multiple modes for low light
+                settings.barcodeSettings.timeout = 5000; // Give more time in low light
 
                 log('Updating router settings...');
                 await router.updateSettings('ReadBarcodes_Balance', settings);
