@@ -309,18 +309,17 @@
         let scanInterval = null;
         let mrzScanning = false;
 
-        // Logging function - only critical errors in production
+        // Logging function - show all logs for debugging
         function log(message, level = 'info') {
             const logContent = document.getElementById('logContent');
             const timestamp = new Date().toLocaleTimeString();
 
-            // Only show errors and warnings to user
-            if (level === 'error' || level === 'warn') {
-                logContent.innerHTML += `<div style="color:${level === 'error' ? '#ef4444' : '#fbbf24'}">[${timestamp}] ${message}</div>`;
-                logContent.scrollTop = logContent.scrollHeight;
-            }
+            // Show all logs to user for debugging
+            const color = level === 'error' ? '#ef4444' : level === 'warn' ? '#fbbf24' : '#4ecdc4';
+            logContent.innerHTML += `<div style="color:${color}">[${timestamp}] ${message}</div>`;
+            logContent.scrollTop = logContent.scrollHeight;
 
-            // Always log to console for debugging
+            // Always log to console
             console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
         }
 
@@ -369,24 +368,34 @@
 
                 video.classList.add('active');
                 updateStatus('✅ Camera active - Initializing scanner...', 'info');
+                log('Camera active, video playing');
 
                 // Initialize Dynamsoft barcode reader
+                log('Creating CaptureVisionRouter instance...');
                 router = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
+                log('Router created successfully');
 
                 // Optimize settings for PDF417 barcodes
+                log('Getting simplified settings...');
                 let settings = await router.getSimplifiedSettings('ReadBarcodes_Balance');
+                log('Got settings, configuring PDF417...');
+
                 settings.barcodeSettings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_PDF417;
-                settings.barcodeSettings.deblurLevel = 9; // Max deblur for worn/damaged IDs
-                settings.barcodeSettings.localizationModes = [16, 2, 8, 0, 0, 0, 0, 0]; // Mode 8 for low contrast
+                settings.barcodeSettings.deblurLevel = 9;
+                settings.barcodeSettings.localizationModes = [16, 2, 8, 0, 0, 0, 0, 0];
                 settings.barcodeSettings.expectBarcodeCount = 1;
-                settings.barcodeSettings.minResultConfidence = 50; // Reject low quality reads
-                settings.barcodeSettings.scaleUpModes = [2, 0, 0, 0, 0, 0, 0, 0]; // Linear interpolation
-                settings.barcodeSettings.binarizationModes = [1, 0, 0, 0, 0, 0, 0, 0]; // Adaptive thresholding
+                settings.barcodeSettings.minResultConfidence = 50;
+                settings.barcodeSettings.scaleUpModes = [2, 0, 0, 0, 0, 0, 0, 0];
+                settings.barcodeSettings.binarizationModes = [1, 0, 0, 0, 0, 0, 0, 0];
+
+                log('Updating router settings...');
                 await router.updateSettings('ReadBarcodes_Balance', settings);
+                log('Settings updated successfully');
 
                 // Start scanning
                 isScanning = true;
                 scanInterval = setInterval(scanVideoFrame, 200);
+                log('Scanning started - interval set to 200ms');
 
                 // Show scanning guide
                 document.getElementById('scanGuide').style.display = 'block';
@@ -411,7 +420,10 @@
         }
 
         async function scanVideoFrame() {
-            if (!isScanning || !router) return;
+            if (!isScanning || !router) {
+                log(`Scan frame skipped - isScanning: ${isScanning}, router: ${!!router}`, 'warn');
+                return;
+            }
 
             try {
                 const video = document.getElementById('videoElement');
@@ -422,12 +434,21 @@
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
 
+                if (canvas.width === 0 || canvas.height === 0) {
+                    log('Video not ready - width/height is 0', 'warn');
+                    return;
+                }
+
                 // Draw current video frame to canvas
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                log(`Scanning frame ${canvas.width}x${canvas.height}...`);
 
                 // Try barcode scanning first (faster)
                 const barcodeResult = await router.capture(canvas, 'ReadBarcodes_Balance');
+                log(`Barcode scan result: ${barcodeResult.barcodeResultItems?.length || 0} items found`);
+
                 if (barcodeResult.barcodeResultItems && barcodeResult.barcodeResultItems.length > 0) {
+                    log('Barcode detected!', 'info');
                     await handleBarcode(barcodeResult.barcodeResultItems[0].text);
                     return;
                 }
