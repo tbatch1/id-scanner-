@@ -83,7 +83,20 @@
             border-radius: 12px;
             pointer-events: none;
             z-index: 10;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4),
+                        0 0 30px rgba(16, 185, 129, 0.4);
+            animation: guidePulse 2s ease-in-out infinite;
+        }
+
+        @keyframes guidePulse {
+            0%, 100% {
+                box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4),
+                            0 0 30px rgba(16, 185, 129, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4),
+                            0 0 50px rgba(16, 185, 129, 0.8);
+            }
         }
 
         #scanGuide::before {
@@ -136,6 +149,33 @@
             right: -3px;
             border-left: none;
             border-top: none;
+        }
+
+        #scanLine {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                #10b981 20%,
+                #10b981 80%,
+                transparent 100%);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.8);
+            animation: scanMove 2s linear infinite;
+            z-index: 12;
+        }
+
+        @keyframes scanMove {
+            0% {
+                top: 0%;
+            }
+            50% {
+                top: 100%;
+            }
+            100% {
+                top: 0%;
+            }
         }
 
         #scanHint {
@@ -276,6 +316,7 @@
                 <div class="corner top-right"></div>
                 <div class="corner bottom-left"></div>
                 <div class="corner bottom-right"></div>
+                <div id="scanLine"></div>
             </div>
             <div id="scanHint" style="display:none;">Position ID within frame</div>
         </div>
@@ -392,10 +433,10 @@
                 await router.updateSettings('ReadBarcodes_Balance', settings);
                 log('Settings updated successfully');
 
-                // Start scanning
+                // Start scanning - faster interval for better detection
                 isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 200);
-                log('Scanning started - interval set to 200ms');
+                scanInterval = setInterval(scanVideoFrame, 150);
+                log('Scanning started - interval set to 150ms');
 
                 // Show scanning guide
                 document.getElementById('scanGuide').style.display = 'block';
@@ -565,7 +606,7 @@
 
                 // Resume scanning
                 isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 200);
+                scanInterval = setInterval(scanVideoFrame, 150);
             }
         }
 
@@ -638,7 +679,7 @@
                 log(`MRZ parse error: ${error.message}`, 'error');
                 updateStatus('❌ Failed to parse document. Please try again.', 'error');
                 isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 200);
+                scanInterval = setInterval(scanVideoFrame, 150);
             }
         }
 
@@ -648,8 +689,21 @@
                 return null;
             }
 
-            log(`calculateAge: input birthDate = "${birthDate}"`);
+            // Trim and clean the input
+            birthDate = String(birthDate).trim();
+            log(`calculateAge: input birthDate = "${birthDate}" (length: ${birthDate.length})`);
+
+            // Handle MMDDYYYY format from Dynamsoft parser (e.g., "06221995")
+            if (/^\d{8}$/.test(birthDate)) {
+                const month = birthDate.substring(0, 2);
+                const day = birthDate.substring(2, 4);
+                const year = birthDate.substring(4, 8);
+                birthDate = `${year}-${month}-${day}`;
+                log(`calculateAge: converted MMDDYYYY to ${birthDate}`);
+            }
+
             const birth = new Date(birthDate);
+            log(`calculateAge: Date object created, valid: ${!isNaN(birth.getTime())}`);
 
             if (isNaN(birth.getTime())) {
                 log(`calculateAge: Invalid date format: ${birthDate}`, 'error');
