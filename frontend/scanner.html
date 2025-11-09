@@ -69,12 +69,18 @@
             overflow: hidden;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(139, 92, 246, 0.3);
             background: rgba(15, 23, 42, 0.6);
+            position: relative;
         }
 
-        .dce-video-container {
+        #videoElement {
             width: 100%;
             height: 400px;
-            position: relative;
+            object-fit: cover;
+            display: block;
+        }
+
+        canvas {
+            display: none;
         }
 
         .status {
@@ -119,6 +125,36 @@
         button:active {
             transform: scale(0.98);
         }
+
+        button.primary {
+            background: #10b981;
+            border-color: #10b981;
+            font-size: 20px;
+            padding: 20px 50px;
+        }
+
+        #logs {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 11px;
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+
+        #logs .log-title {
+            color: #4ecdc4;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        #logContent div {
+            color: #a8dadc;
+            margin: 2px 0;
+        }
     </style>
 </head>
 <body>
@@ -130,20 +166,21 @@
         </div>
 
         <div id="status" class="status info">
-            Opening camera...
+            Ready to scan
         </div>
 
-        <div id="logs" style="background:rgba(0,0,0,0.3); padding:15px; border-radius:10px; margin-bottom:20px; font-size:12px; text-align:left; max-height:150px; overflow-y:auto; font-family:monospace;">
-            <div style="color:#4ecdc4; font-weight:bold; margin-bottom:5px;">Debug Logs:</div>
+        <div id="logs">
+            <div class="log-title">Debug Logs:</div>
             <div id="logContent"></div>
         </div>
 
-        <button onclick="startCamera()" style="margin-bottom:20px; background:#10b981; font-size:20px; padding:20px 50px;">
+        <button class="primary" onclick="startCamera()">
             📷 START CAMERA
         </button>
 
         <div id="camera-container">
-            <div id="scanner-view" class="dce-video-container"></div>
+            <video id="videoElement" playsinline autoplay></video>
+            <canvas id="canvas"></canvas>
         </div>
 
         <button onclick="window.close()">Close Scanner</button>
@@ -160,115 +197,129 @@
         // Display amount
         document.getElementById('amount').textContent = `$${parseFloat(amount).toFixed(2)}`;
 
-        // Dynamsoft license (public trial)
+        // Dynamsoft license
         Dynamsoft.License.LicenseManager.initLicense("DLS2eyJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSJ9");
 
-        let cameraEnhancer;
-        let router;
+        let videoStream = null;
+        let router = null;
         let isScanning = false;
+        let scanInterval = null;
 
-        // Logging function to show on screen
+        // Logging function
         function log(message) {
             const logContent = document.getElementById('logContent');
             const timestamp = new Date().toLocaleTimeString();
-            logContent.innerHTML += `<div style="color:#a8dadc; margin:2px 0;">[${timestamp}] ${message}</div>`;
+            logContent.innerHTML += `<div>[${timestamp}] ${message}</div>`;
             logContent.scrollTop = logContent.scrollHeight;
             console.log(`[${timestamp}] ${message}`);
         }
 
-        async function startCamera() {
-            log('START CAMERA button clicked');
-            await initScanner();
+        function updateStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
         }
 
-        async function initScanner() {
+        async function startCamera() {
             try {
-                log('initScanner() started');
+                log('START CAMERA clicked');
                 updateStatus('📷 Opening camera...', 'info');
 
-                log('Creating camera view...');
-                const view = await Dynamsoft.DCE.CameraView.createInstance(document.getElementById('scanner-view'));
-                log('Camera view created');
+                // Use native getUserMedia for iOS compatibility
+                log('Requesting camera permission...');
 
-                log('Creating camera enhancer...');
-                cameraEnhancer = await Dynamsoft.DCE.CameraEnhancer.createInstance(view);
-                log('Camera enhancer created');
+                const constraints = {
+                    video: {
+                        facingMode: 'environment', // Back camera
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
+                    audio: false
+                };
 
-                // Set camera to use back camera (better for iOS)
-                try {
-                    log('Getting available cameras...');
-                    const cameras = await cameraEnhancer.getAllCameras();
-                    log(`Found ${cameras.length} cameras: ${cameras.map(c => c.label).join(', ')}`);
+                log('Calling getUserMedia with constraints: ' + JSON.stringify(constraints));
+                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                log('Camera stream obtained!');
 
-                    // Try to select back camera first (better for scanning)
-                    const backCamera = cameras.find(camera =>
-                        camera.label.toLowerCase().includes('back') ||
-                        camera.label.toLowerCase().includes('rear') ||
-                        camera.label.toLowerCase().includes('environment')
-                    );
+                const video = document.getElementById('videoElement');
+                video.srcObject = videoStream;
 
-                    if (backCamera) {
-                        log(`Selecting back camera: ${backCamera.label}`);
-                        await cameraEnhancer.selectCamera(backCamera);
-                        log('Back camera selected');
-                    } else {
-                        log('No back camera found, using default');
-                    }
-                } catch (e) {
-                    log(`Warning selecting camera: ${e.message}`);
-                }
+                log('Waiting for video to play...');
+                await video.play();
+                log('Video playing!');
 
+                updateStatus('✅ Camera active - Initializing barcode reader...', 'info');
+
+                // Initialize Dynamsoft barcode reader
                 log('Creating barcode router...');
                 router = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
-                router.setInput(cameraEnhancer);
                 log('Barcode router created');
 
-                log('Setting up result receiver...');
-                const resultReceiver = new Dynamsoft.CVR.CapturedResultReceiver();
-                resultReceiver.onDecodedBarcodesReceived = handleBarcode;
-                router.addResultReceiver(resultReceiver);
-                log('Result receiver configured');
-
-                log('Opening camera...');
-                await cameraEnhancer.open();
-                log('Camera opened!');
-
-                log('Starting barcode capture...');
-                await router.startCapturing("ReadBarcodes_Balance");
+                // Start scanning frames from video
                 isScanning = true;
-                log('Barcode capture started');
+                scanInterval = setInterval(scanVideoFrame, 500); // Scan every 500ms
+                log('Started scanning video frames');
 
-                updateStatus('✅ Camera ready - Position ID barcode in view', 'info');
+                updateStatus('✅ Ready - Position ID barcode in view', 'info');
 
             } catch (error) {
                 log(`ERROR: ${error.name} - ${error.message}`);
-                log(`Error stack: ${error.stack}`);
-                console.error('Scanner initialization error:', error);
-                updateStatus('❌ Camera error: ' + error.message, 'error');
+                console.error('Camera error:', error);
 
-                // Show more detailed error for debugging
                 if (error.name === 'NotAllowedError') {
-                    updateStatus('❌ Camera permission denied. Please allow camera access in Safari settings.', 'error');
+                    updateStatus('❌ Camera permission denied', 'error');
+                    log('Camera permission was denied. Go to Settings > Safari > Camera and enable it.');
                 } else if (error.name === 'NotFoundError') {
-                    updateStatus('❌ No camera found on this device.', 'error');
+                    updateStatus('❌ No camera found', 'error');
                 } else if (error.name === 'NotReadableError') {
-                    updateStatus('❌ Camera is already in use by another app. Please close other apps using the camera.', 'error');
+                    updateStatus('❌ Camera in use by another app', 'error');
                 } else {
                     updateStatus('❌ Camera error: ' + error.message, 'error');
                 }
             }
         }
 
-        async function handleBarcode(result) {
+        async function scanVideoFrame() {
+            if (!isScanning || !router) return;
+
+            try {
+                const video = document.getElementById('videoElement');
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext('2d');
+
+                // Set canvas size to match video
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                // Draw current video frame to canvas
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // Convert canvas to image for Dynamsoft
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                // Scan the frame
+                const result = await router.capture(canvas, 'ReadBarcodes_Balance');
+
+                if (result.barcodeResultItems && result.barcodeResultItems.length > 0) {
+                    log('Barcode detected!');
+                    await handleBarcode(result.barcodeResultItems[0].text);
+                }
+
+            } catch (error) {
+                // Ignore scanning errors, keep trying
+                if (error.message && !error.message.includes('No barcode')) {
+                    log(`Scan error: ${error.message}`);
+                }
+            }
+        }
+
+        async function handleBarcode(barcodeText) {
             if (!isScanning) return;
 
-            const barcodes = result.barcodeResultItems;
-            if (!barcodes || barcodes.length === 0) return;
-
             isScanning = false;
-            await router.stopCapturing();
+            clearInterval(scanInterval);
 
-            const barcodeText = barcodes[0].text;
+            log('Processing barcode: ' + barcodeText.substring(0, 50) + '...');
             updateStatus('📄 ID detected! Parsing...', 'info');
 
             try {
@@ -281,6 +332,8 @@
                 const lastName = parsedResult.getFieldValue("lastName");
                 const dob = parsedResult.getFieldValue("birthDate");
                 const age = calculateAge(dob);
+
+                log(`Parsed: ${firstName} ${lastName}, Age ${age}`);
 
                 // Verify age
                 const approved = age >= 21;
@@ -305,16 +358,21 @@
                     registerId: registerId
                 });
 
+                // Stop camera
+                if (videoStream) {
+                    videoStream.getTracks().forEach(track => track.stop());
+                }
+
                 // Auto-close after 2 seconds
                 setTimeout(() => {
                     window.close();
                 }, 2000);
 
             } catch (error) {
-                console.error('Parsing error:', error);
+                log(`Parse error: ${error.message}`);
                 updateStatus('❌ Failed to parse ID. Please try again.', 'error');
                 isScanning = true;
-                await router.startCapturing("ReadBarcodes_Balance");
+                scanInterval = setInterval(scanVideoFrame, 500);
             }
         }
 
@@ -331,6 +389,7 @@
 
         async function saveScanResult(data) {
             try {
+                log('Saving to database...');
                 const response = await fetch('/api/scan-sessions', {
                     method: 'POST',
                     headers: {
@@ -340,29 +399,21 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to save scan result');
+                    throw new Error('Failed to save');
                 }
 
-                console.log('✅ Scan result saved to database');
+                log('✅ Saved to database');
             } catch (error) {
-                console.error('Failed to save scan result:', error);
+                log(`Save error: ${error.message}`);
             }
         }
 
-        function updateStatus(message, type) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = message;
-            statusEl.className = `status ${type}`;
-        }
-
-        // Add debugging info
+        // Log device info
         log(`User Agent: ${navigator.userAgent}`);
         log(`Platform: ${navigator.platform}`);
-        log(`Media Devices supported: ${!!navigator.mediaDevices}`);
-        log(`getUserMedia available: ${!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)}`);
-
-        // Don't auto-start - wait for user to click START CAMERA button
-        log('Page loaded - tap START CAMERA button to begin');
+        log(`Media Devices: ${!!navigator.mediaDevices}`);
+        log(`getUserMedia: ${!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)}`);
+        log('Page loaded - tap START CAMERA to begin');
     </script>
 </body>
 </html>
