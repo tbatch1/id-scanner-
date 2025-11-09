@@ -280,15 +280,15 @@
 
         #flashButton {
             position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 50px;
-            height: 50px;
+            top: 15px;
+            right: 15px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.7);
+            border: 3px solid rgba(255, 255, 255, 0.5);
             color: white;
-            font-size: 24px;
+            font-size: 28px;
             cursor: pointer;
             z-index: 15;
             display: none;
@@ -296,12 +296,14 @@
             justify-content: center;
             padding: 0;
             margin: 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
         }
 
         #flashButton.active {
-            background: rgba(16, 185, 129, 0.8);
-            border-color: #10b981;
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+            background: rgba(255, 215, 0, 0.9);
+            border-color: #ffd700;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+            color: #000;
         }
 
         #logs {
@@ -488,29 +490,35 @@
         async function toggleFlash() {
             try {
                 const track = videoStream.getVideoTracks()[0];
-                const capabilities = track.getCapabilities();
-
-                if (!capabilities.torch) {
-                    log('Flash not supported on this device', 'warn');
-                    return;
-                }
-
                 flashEnabled = !flashEnabled;
 
-                await track.applyConstraints({
-                    advanced: [{ torch: flashEnabled }]
-                });
+                // Try to enable torch
+                try {
+                    await track.applyConstraints({
+                        advanced: [{ torch: flashEnabled }]
+                    });
+                } catch (torchError) {
+                    // If advanced constraints fail, try direct constraint
+                    log(`Advanced torch failed, trying direct: ${torchError.message}`, 'warn');
+                    await track.applyConstraints({
+                        torch: flashEnabled
+                    });
+                }
 
                 const flashButton = document.getElementById('flashButton');
                 if (flashEnabled) {
                     flashButton.classList.add('active');
+                    flashButton.textContent = '🔦';
                     log('Flash enabled');
                 } else {
                     flashButton.classList.remove('active');
+                    flashButton.textContent = '💡';
                     log('Flash disabled');
                 }
             } catch (error) {
                 log(`Flash toggle error: ${error.message}`, 'error');
+                // Keep button state for next attempt
+                flashEnabled = !flashEnabled; // Revert
             }
         }
 
@@ -562,12 +570,14 @@
                 // Enable tap-to-focus
                 setupTapToFocus(video);
 
-                // Show flash button if supported
+                // Always show flash button - will try to enable torch
+                document.getElementById('flashButton').style.display = 'flex';
                 const track = videoStream.getVideoTracks()[0];
                 const capabilities = track.getCapabilities();
                 if (capabilities.torch) {
-                    document.getElementById('flashButton').style.display = 'flex';
                     log('Flash/torch available');
+                } else {
+                    log('Flash/torch detection failed, but button shown anyway');
                 }
 
                 // Initialize Dynamsoft barcode reader
@@ -582,21 +592,22 @@
 
                 settings.barcodeSettings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_PDF417;
                 settings.barcodeSettings.deblurLevel = 9;
-                settings.barcodeSettings.localizationModes = [16, 2, 8, 0, 0, 0, 0, 0];
+                settings.barcodeSettings.localizationModes = [16, 8, 2, 0, 0, 0, 0, 0];
                 settings.barcodeSettings.expectBarcodeCount = 1;
-                settings.barcodeSettings.minResultConfidence = 40; // Lower for low light
-                settings.barcodeSettings.scaleUpModes = [2, 1, 0, 0, 0, 0, 0, 0]; // More aggressive scaling
-                settings.barcodeSettings.binarizationModes = [1, 2, 0, 0, 0, 0, 0, 0]; // Multiple modes for low light
-                settings.barcodeSettings.timeout = 5000; // Give more time in low light
+                settings.barcodeSettings.minResultConfidence = 30; // Even lower for faster detection
+                settings.barcodeSettings.scaleUpModes = [2, 1, 8, 0, 0, 0, 0, 0]; // More aggressive
+                settings.barcodeSettings.binarizationModes = [1, 0, 0, 0, 0, 0, 0, 0]; // Single mode for speed
+                settings.barcodeSettings.timeout = 10000; // More time
+                settings.barcodeSettings.returnPartialBarcodeValue = 1; // Accept partial reads
 
                 log('Updating router settings...');
                 await router.updateSettings('ReadBarcodes_Balance', settings);
                 log('Settings updated successfully');
 
-                // Start scanning - faster interval for better detection
+                // Start scanning - very fast interval for better detection
                 isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 150);
-                log('Scanning started - interval set to 150ms');
+                scanInterval = setInterval(scanVideoFrame, 100);
+                log('Scanning started - interval set to 100ms');
 
                 // Show scanning guide
                 document.getElementById('scanGuide').style.display = 'block';
@@ -766,7 +777,7 @@
 
                 // Resume scanning
                 isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 150);
+                scanInterval = setInterval(scanVideoFrame, 100);
             }
         }
 
@@ -839,7 +850,7 @@
                 log(`MRZ parse error: ${error.message}`, 'error');
                 updateStatus('❌ Failed to parse document. Please try again.', 'error');
                 isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 150);
+                scanInterval = setInterval(scanVideoFrame, 100);
             }
         }
 
