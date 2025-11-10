@@ -568,6 +568,83 @@
             return sum / (pixels.length / (step * 4)); // Returns 0-255
         }
 
+        // Histogram equalization for low-light enhancement
+        function applyHistogramEqualization(imageData) {
+            const pixels = imageData.data;
+            const histogram = new Array(256).fill(0);
+
+            // Build histogram (grayscale)
+            for (let i = 0; i < pixels.length; i += 4) {
+                const gray = Math.floor(pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114);
+                histogram[gray]++;
+            }
+
+            // Calculate cumulative distribution
+            const cdf = new Array(256).fill(0);
+            cdf[0] = histogram[0];
+            for (let i = 1; i < 256; i++) {
+                cdf[i] = cdf[i - 1] + histogram[i];
+            }
+
+            // Normalize CDF
+            const totalPixels = pixels.length / 4;
+            const cdfMin = cdf.find(val => val > 0);
+            const lookupTable = new Array(256);
+            for (let i = 0; i < 256; i++) {
+                lookupTable[i] = Math.round(((cdf[i] - cdfMin) / (totalPixels - cdfMin)) * 255);
+            }
+
+            // Apply equalization
+            for (let i = 0; i < pixels.length; i += 4) {
+                const gray = Math.floor(pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114);
+                const newVal = lookupTable[gray];
+                pixels[i] = newVal;
+                pixels[i + 1] = newVal;
+                pixels[i + 2] = newVal;
+            }
+
+            return imageData;
+        }
+
+        // Sharpen filter for low-light frames
+        function applySharpenFilter(imageData, canvas) {
+            const pixels = imageData.data;
+            const width = canvas.width;
+            const height = canvas.height;
+            const output = new Uint8ClampedArray(pixels);
+
+            // Sharpen kernel (3x3)
+            const kernel = [
+                0, -1, 0,
+                -1, 5, -1,
+                0, -1, 0
+            ];
+
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    for (let c = 0; c < 3; c++) { // RGB channels only
+                        let sum = 0;
+                        for (let ky = -1; ky <= 1; ky++) {
+                            for (let kx = -1; kx <= 1; kx++) {
+                                const idx = ((y + ky) * width + (x + kx)) * 4 + c;
+                                const kernelIdx = (ky + 1) * 3 + (kx + 1);
+                                sum += pixels[idx] * kernel[kernelIdx];
+                            }
+                        }
+                        const idx = (y * width + x) * 4 + c;
+                        output[idx] = Math.max(0, Math.min(255, sum));
+                    }
+                }
+            }
+
+            // Copy sharpened data back
+            for (let i = 0; i < pixels.length; i++) {
+                pixels[i] = output[i];
+            }
+
+            return imageData;
+        }
+
         async function toggleFlash() {
             try {
                 if (!videoStream) {
@@ -792,13 +869,13 @@
 
                 settings.barcodeSettings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_PDF417;
 
-                // Optimized for poor quality cameras (maximum robustness)
+                // Optimized for poor quality cameras AND low-light (no-flash iPads)
                 settings.barcodeSettings.deblurLevel = 9; // Maximum deblur for poor cameras
                 settings.barcodeSettings.localizationModes = [16, 8, 2, 0, 0, 0, 0, 0]; // Add LM_LINES (2) for better detection
-                settings.barcodeSettings.deblurModes = [1, 2, 4, 0, 0, 0, 0, 0]; // Add gray equalization (4)
+                settings.barcodeSettings.deblurModes = [1, 2, 4, 0, 0, 0, 0, 0]; // Direct + threshold + gray equalization
 
-                // Add grayscale enhancement for low contrast/blur
-                settings.barcodeSettings.grayscaleEnhancementModes = [2, 8, 0, 0, 0, 0, 0, 0]; // GEM_GRAY_EQUALIZE (2) + GEM_SHARPEN_SMOOTH (8)
+                // Enhanced grayscale processing for low-light + low contrast
+                settings.barcodeSettings.grayscaleEnhancementModes = [2, 4, 8, 0, 0, 0, 0, 0]; // GEM_GRAY_EQUALIZE (2) + GEM_GRAY_SMOOTH (4) + GEM_SHARPEN_SMOOTH (8)
 
                 // Support both normal and inverted barcodes
                 settings.barcodeSettings.grayscaleTransformationModes = [1, 2, 0, 0, 0, 0, 0, 0]; // Original + Inverted
@@ -887,7 +964,7 @@
 
                 // Check image quality thresholds
                 const SHARPNESS_THRESHOLD = 12; // Minimum sharpness for scanning
-                const MIN_BRIGHTNESS = 40; // Too dark
+                const MIN_BRIGHTNESS = 22; // Lowered for no-flash iPads (was 40)
                 const MAX_BRIGHTNESS = 220; // Too bright/washed out
 
                 // Provide real-time guidance based on quality
@@ -898,11 +975,11 @@
                     document.getElementById('scanHint').style.color = 'white';
                     return; // Skip this blurry frame
                 } else if (brightness < MIN_BRIGHTNESS) {
-                    updateStatus('⚠️ Too dark - add more light', 'error');
-                    document.getElementById('scanHint').textContent = 'Move to brighter area';
-                    document.getElementById('scanHint').style.background = 'rgba(255, 107, 53, 0.9)';
+                    updateStatus('⚠️ Very dark - hold steady while enhancing...', 'info');
+                    document.getElementById('scanHint').textContent = 'Enhancing low-light image...';
+                    document.getElementById('scanHint').style.background = 'rgba(93, 173, 226, 0.9)';
                     document.getElementById('scanHint').style.color = 'white';
-                    return; // Skip dark frame
+                    // Don't skip - we'll process with aggressive enhancement
                 } else if (brightness > MAX_BRIGHTNESS) {
                     updateStatus('⚠️ Too bright - reduce glare', 'error');
                     document.getElementById('scanHint').textContent = 'Tilt to reduce glare';
@@ -917,13 +994,44 @@
                     document.getElementById('scanHint').style.color = '#7ed956';
                 }
 
-                log(`Scanning high-quality frame ${canvas.width}x${canvas.height}...`);
+                log(`Scanning frame ${canvas.width}x${canvas.height} (brightness: ${brightness.toFixed(0)})...`);
 
-                // Apply canvas preprocessing for better barcode detection
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                // Apply adaptive preprocessing based on brightness level
+                let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const pixels = imageData.data;
 
-                // Apply contrast (1.3x), brightness (1.1x), and convert to grayscale
+                // Determine adaptive enhancement parameters
+                let brightnessBoost, contrastBoost;
+                let applyHistEq = false;
+                let applySharpen = false;
+
+                if (brightness < 50) {
+                    // Very dark - aggressive enhancement
+                    brightnessBoost = 2.0;
+                    contrastBoost = 1.5;
+                    applyHistEq = true;
+                    applySharpen = true;
+                    log('Applying aggressive low-light enhancement (histogram equalization + sharpen)');
+                } else if (brightness < 100) {
+                    // Dark - moderate enhancement
+                    brightnessBoost = 1.5;
+                    contrastBoost = 1.4;
+                    applySharpen = true;
+                    log('Applying moderate low-light enhancement');
+                } else {
+                    // Normal/bright - light enhancement
+                    brightnessBoost = 1.2;
+                    contrastBoost = 1.3;
+                    log('Applying standard enhancement');
+                }
+
+                // Apply histogram equalization for very dark frames
+                if (applyHistEq) {
+                    imageData = applyHistogramEqualization(imageData);
+                    log('Histogram equalization applied');
+                }
+
+                // Convert to grayscale and apply brightness/contrast
                 for (let i = 0; i < pixels.length; i += 4) {
                     // Get RGB values
                     let r = pixels[i];
@@ -933,11 +1041,11 @@
                     // Convert to grayscale (weighted average)
                     let gray = r * 0.299 + g * 0.587 + b * 0.114;
 
-                    // Apply brightness boost
-                    gray = gray * 1.1;
+                    // Apply adaptive brightness boost
+                    gray = gray * brightnessBoost;
 
-                    // Apply contrast enhancement
-                    gray = ((gray - 128) * 1.3) + 128;
+                    // Apply adaptive contrast enhancement
+                    gray = ((gray - 128) * contrastBoost) + 128;
 
                     // Clamp to 0-255
                     gray = Math.max(0, Math.min(255, gray));
@@ -949,9 +1057,16 @@
                     // Alpha channel (i+3) stays unchanged
                 }
 
-                // Put processed image data back to canvas
+                // Put processed image data back
                 ctx.putImageData(imageData, 0, 0);
-                log('Canvas preprocessing applied: grayscale + contrast + brightness');
+
+                // Apply sharpen filter for low-light frames
+                if (applySharpen) {
+                    imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    imageData = applySharpenFilter(imageData, canvas);
+                    ctx.putImageData(imageData, 0, 0);
+                    log('Sharpen filter applied');
+                }
 
                 // Try barcode scanning (only on good quality frames)
                 const barcodeResult = await router.capture(canvas, 'ReadBarcodes_Balance');
