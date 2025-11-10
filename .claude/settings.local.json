@@ -17,7 +17,9 @@
       "Bash(python -m json.tool:*)",
       "Bash(node:*)",
       "Bash(git ls-tree:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

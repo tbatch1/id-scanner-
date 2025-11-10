@@ -482,6 +482,23 @@
         let mrzScanning = false;
         let flashEnabled = false;
 
+        // Send timing data to database for analysis
+        async function sendTimingData(timingData) {
+            try {
+                await fetch('/api/scanner-logs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        timing_data: timingData,
+                        user_agent: navigator.userAgent
+                    })
+                }).catch(() => {}); // Fail silently if endpoint unreachable
+            } catch (e) {
+                // Ignore timing log errors
+            }
+        }
+
         // Remote logging to help debug iPad issues
         async function sendRemoteLog(message, level) {
             try {
@@ -1118,6 +1135,9 @@
             const totalStartTime = performance.now();
             updateStatus('📄 ID detected! Parsing...', 'info');
 
+            // Timing data collection
+            const timingData = {};
+
             try {
                 // Parse ID
                 log('⏱️ [TIMING] Starting barcode processing...');
@@ -1125,17 +1145,20 @@
                 let stepStart = performance.now();
                 log('Loading AAMVA_DL_ID spec...');
                 await Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID");
-                log(`⏱️ [TIMING] Spec loaded in ${(performance.now() - stepStart).toFixed(0)}ms`);
+                timingData.spec_load = Math.round(performance.now() - stepStart);
+                log(`⏱️ [TIMING] Spec loaded in ${timingData.spec_load}ms`);
 
                 stepStart = performance.now();
                 log('Creating parser instance...');
                 const parser = await Dynamsoft.DCP.CodeParser.createInstance();
-                log(`⏱️ [TIMING] Parser created in ${(performance.now() - stepStart).toFixed(0)}ms`);
+                timingData.parser_create = Math.round(performance.now() - stepStart);
+                log(`⏱️ [TIMING] Parser created in ${timingData.parser_create}ms`);
 
                 stepStart = performance.now();
                 log(`Parsing barcode text (length: ${barcodeText.length})...`);
                 const parsedResult = await parser.parse(barcodeText);
-                log(`⏱️ [TIMING] Parse completed in ${(performance.now() - stepStart).toFixed(0)}ms`);
+                timingData.parse = Math.round(performance.now() - stepStart);
+                log(`⏱️ [TIMING] Parse completed in ${timingData.parse}ms`);
 
                 const firstName = parsedResult.getFieldValue("firstName");
                 const lastName = parsedResult.getFieldValue("lastName");
@@ -1154,7 +1177,8 @@
 
                 stepStart = performance.now();
                 const age = calculateAge(dob);
-                log(`⏱️ [TIMING] Age calculated in ${(performance.now() - stepStart).toFixed(0)}ms - Age: ${age}`);
+                timingData.age_calc = Math.round(performance.now() - stepStart);
+                log(`⏱️ [TIMING] Age calculated in ${timingData.age_calc}ms - Age: ${age}`);
 
                 if (!age || age < 0) {
                     throw new Error(`Invalid age calculated from DOB: ${dob}`);
@@ -1189,9 +1213,14 @@
                     outletId: outletId,
                     registerId: registerId
                 });
-                log(`⏱️ [TIMING] Database save completed in ${(performance.now() - stepStart).toFixed(0)}ms`);
+                timingData.db_save = Math.round(performance.now() - stepStart);
+                log(`⏱️ [TIMING] Database save completed in ${timingData.db_save}ms`);
 
-                log(`⏱️ [TIMING] ✅ TOTAL PROCESSING TIME: ${(performance.now() - totalStartTime).toFixed(0)}ms`);
+                timingData.total = Math.round(performance.now() - totalStartTime);
+                log(`⏱️ [TIMING] ✅ TOTAL PROCESSING TIME: ${timingData.total}ms`);
+
+                // Send timing data to database for analysis
+                sendTimingData(timingData);
 
                 // Stop camera
                 stepStart = performance.now();
