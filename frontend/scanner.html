@@ -910,16 +910,16 @@
                 settings.barcodeSettings.returnPartialBarcodeValue = 1;
                 settings.barcodeSettings.maxAlgorithmThreadCount = 2; // Limit CPU usage on mobile
 
-                // Configure ROI to match scan guide (85% width, 55% height, centered)
-                settings.roi = {
-                    points: [
-                        { x: 7.5, y: 22.5 },   // top-left (7.5% from left, 22.5% from top)
-                        { x: 92.5, y: 22.5 },  // top-right
-                        { x: 92.5, y: 77.5 },  // bottom-right
-                        { x: 7.5, y: 77.5 }    // bottom-left
-                    ],
-                    measuredByPercentage: 1 // Use percentages (0-100)
-                };
+                // TEMPORARILY DISABLED ROI - scan full frame
+                // settings.roi = {
+                //     points: [
+                //         { x: 7.5, y: 22.5 },
+                //         { x: 92.5, y: 22.5 },
+                //         { x: 92.5, y: 77.5 },
+                //         { x: 7.5, y: 77.5 }
+                //     ],
+                //     measuredByPercentage: 1
+                // };
 
                 log('Updating router settings with ROI...');
                 await router.updateSettings('ReadBarcodes_Balance', settings);
@@ -993,22 +993,10 @@
 
                 log(`Scanning frame ${canvas.width}x${canvas.height} (brightness: ${brightness.toFixed(0)})...`);
 
-                // Apply lightweight preprocessing - just grayscale conversion
-                // Dynamsoft handles the heavy lifting with its own enhancement modes
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const pixels = imageData.data;
+                // TEMPORARILY DISABLED - scan raw color image without preprocessing
+                // Let Dynamsoft handle all processing with its enhancement modes
 
-                // Simple grayscale conversion only
-                for (let i = 0; i < pixels.length; i += 4) {
-                    const gray = pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114;
-                    pixels[i] = gray;
-                    pixels[i + 1] = gray;
-                    pixels[i + 2] = gray;
-                }
-
-                ctx.putImageData(imageData, 0, 0);
-
-                // Try barcode scanning (only on good quality frames)
+                // Try barcode scanning on RAW color frame
                 const barcodeResult = await router.capture(canvas, 'ReadBarcodes_Balance');
                 log(`Barcode scan result: ${barcodeResult.barcodeResultItems?.length || 0} items found`);
 
