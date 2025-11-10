@@ -1115,19 +1115,27 @@
             isScanning = false;
             clearInterval(scanInterval);
 
+            const totalStartTime = performance.now();
             updateStatus('📄 ID detected! Parsing...', 'info');
 
             try {
                 // Parse ID
+                log('⏱️ [TIMING] Starting barcode processing...');
+
+                let stepStart = performance.now();
                 log('Loading AAMVA_DL_ID spec...');
                 await Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID");
+                log(`⏱️ [TIMING] Spec loaded in ${(performance.now() - stepStart).toFixed(0)}ms`);
 
+                stepStart = performance.now();
                 log('Creating parser instance...');
                 const parser = await Dynamsoft.DCP.CodeParser.createInstance();
+                log(`⏱️ [TIMING] Parser created in ${(performance.now() - stepStart).toFixed(0)}ms`);
 
+                stepStart = performance.now();
                 log(`Parsing barcode text (length: ${barcodeText.length})...`);
                 const parsedResult = await parser.parse(barcodeText);
-                log('Parse successful!');
+                log(`⏱️ [TIMING] Parse completed in ${(performance.now() - stepStart).toFixed(0)}ms`);
 
                 const firstName = parsedResult.getFieldValue("firstName");
                 const lastName = parsedResult.getFieldValue("lastName");
@@ -1144,8 +1152,9 @@
                     throw new Error(`Missing required fields - firstName: ${!!firstName}, lastName: ${!!lastName}, dob: ${!!dob}`);
                 }
 
+                stepStart = performance.now();
                 const age = calculateAge(dob);
-                log(`Calculated age: ${age}`);
+                log(`⏱️ [TIMING] Age calculated in ${(performance.now() - stepStart).toFixed(0)}ms - Age: ${age}`);
 
                 if (!age || age < 0) {
                     throw new Error(`Invalid age calculated from DOB: ${dob}`);
@@ -1162,6 +1171,8 @@
                 );
 
                 // Save complete data to database
+                stepStart = performance.now();
+                log('Saving to database...');
                 await saveScanResult({
                     sessionId: sessionId,
                     approved: approved,
@@ -1178,13 +1189,19 @@
                     outletId: outletId,
                     registerId: registerId
                 });
+                log(`⏱️ [TIMING] Database save completed in ${(performance.now() - stepStart).toFixed(0)}ms`);
+
+                log(`⏱️ [TIMING] ✅ TOTAL PROCESSING TIME: ${(performance.now() - totalStartTime).toFixed(0)}ms`);
 
                 // Stop camera
+                stepStart = performance.now();
                 if (videoStream) {
                     videoStream.getTracks().forEach(track => track.stop());
                 }
+                log(`⏱️ [TIMING] Camera stopped in ${(performance.now() - stepStart).toFixed(0)}ms`);
 
                 // Auto-close after 2 seconds
+                log('Auto-closing window in 2 seconds...');
                 setTimeout(() => {
                     window.close();
                 }, 2000);
@@ -1314,6 +1331,8 @@
         }
 
         async function saveScanResult(data) {
+            const dbStartTime = performance.now();
+
             // Validate required fields before saving
             if (!data.firstName || !data.lastName || !data.dob || !data.age) {
                 log('Missing required fields for database save', 'error');
@@ -1321,7 +1340,8 @@
             }
 
             try {
-                log('Saving scan to database...');
+                log('Building payload...');
+                let dbStep = performance.now();
 
                 const payload = {
                     sessionId: data.sessionId,
@@ -1341,8 +1361,11 @@
                     scannedAt: new Date().toISOString()
                 };
 
+                log(`⏱️ [DB TIMING] Payload built in ${(performance.now() - dbStep).toFixed(0)}ms`);
                 log(`Payload: ${JSON.stringify(payload)}`);
 
+                dbStep = performance.now();
+                log('Sending POST request to /api/scan-sessions...');
                 const response = await fetch('/api/scan-sessions', {
                     method: 'POST',
                     headers: {
@@ -1350,18 +1373,25 @@
                     },
                     body: JSON.stringify(payload)
                 });
+                log(`⏱️ [DB TIMING] HTTP request completed in ${(performance.now() - dbStep).toFixed(0)}ms - Status: ${response.status}`);
 
                 if (!response.ok) {
+                    dbStep = performance.now();
                     const errorText = await response.text();
+                    log(`⏱️ [DB TIMING] Error text read in ${(performance.now() - dbStep).toFixed(0)}ms`);
                     log(`Database save failed: ${response.status} - ${errorText}`, 'error');
                     throw new Error(`Save failed: ${response.status}`);
                 }
 
+                dbStep = performance.now();
                 const result = await response.json();
+                log(`⏱️ [DB TIMING] Response parsed in ${(performance.now() - dbStep).toFixed(0)}ms`);
+                log(`⏱️ [DB TIMING] ✅ Total DB operation: ${(performance.now() - dbStartTime).toFixed(0)}ms`);
                 log(`Saved to database: ID ${result.id || 'success'}`);
                 return result;
 
             } catch (error) {
+                log(`⏱️ [DB TIMING] ❌ DB operation failed after ${(performance.now() - dbStartTime).toFixed(0)}ms`);
                 log(`Database error: ${error.message}`, 'error');
                 // Don't throw - allow approval to proceed even if DB fails
                 return null;
