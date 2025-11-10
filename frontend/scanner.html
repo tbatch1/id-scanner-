@@ -996,77 +996,20 @@
 
                 log(`Scanning frame ${canvas.width}x${canvas.height} (brightness: ${brightness.toFixed(0)})...`);
 
-                // Apply adaptive preprocessing based on brightness level
-                let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                // Apply lightweight preprocessing - just grayscale conversion
+                // Dynamsoft handles the heavy lifting with its own enhancement modes
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const pixels = imageData.data;
 
-                // Determine adaptive enhancement parameters
-                let brightnessBoost, contrastBoost;
-                let applyHistEq = false;
-                let applySharpen = false;
-
-                if (brightness < 50) {
-                    // Very dark - aggressive enhancement
-                    brightnessBoost = 2.0;
-                    contrastBoost = 1.5;
-                    applyHistEq = true;
-                    applySharpen = true;
-                    log('Applying aggressive low-light enhancement (histogram equalization + sharpen)');
-                } else if (brightness < 100) {
-                    // Dark - moderate enhancement
-                    brightnessBoost = 1.5;
-                    contrastBoost = 1.4;
-                    applySharpen = true;
-                    log('Applying moderate low-light enhancement');
-                } else {
-                    // Normal/bright - light enhancement
-                    brightnessBoost = 1.2;
-                    contrastBoost = 1.3;
-                    log('Applying standard enhancement');
-                }
-
-                // Apply histogram equalization for very dark frames
-                if (applyHistEq) {
-                    applyHistogramEqualization(imageData);
-                    log('Histogram equalization applied');
-                }
-
-                // Convert to grayscale and apply brightness/contrast
+                // Simple grayscale conversion only
                 for (let i = 0; i < pixels.length; i += 4) {
-                    // Get RGB values
-                    let r = pixels[i];
-                    let g = pixels[i + 1];
-                    let b = pixels[i + 2];
-
-                    // Convert to grayscale (weighted average)
-                    let gray = r * 0.299 + g * 0.587 + b * 0.114;
-
-                    // Apply adaptive brightness boost
-                    gray = gray * brightnessBoost;
-
-                    // Apply adaptive contrast enhancement
-                    gray = ((gray - 128) * contrastBoost) + 128;
-
-                    // Clamp to 0-255
-                    gray = Math.max(0, Math.min(255, gray));
-
-                    // Set all channels to grayscale value
+                    const gray = pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114;
                     pixels[i] = gray;
                     pixels[i + 1] = gray;
                     pixels[i + 2] = gray;
-                    // Alpha channel (i+3) stays unchanged
                 }
 
-                // Put processed image data back
                 ctx.putImageData(imageData, 0, 0);
-
-                // Apply sharpen filter for low-light frames
-                if (applySharpen) {
-                    const sharpData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    applySharpenFilter(sharpData, canvas);
-                    ctx.putImageData(sharpData, 0, 0);
-                    log('Sharpen filter applied');
-                }
 
                 // Try barcode scanning (only on good quality frames)
                 const barcodeResult = await router.capture(canvas, 'ReadBarcodes_Balance');
