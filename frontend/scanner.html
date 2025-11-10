@@ -962,37 +962,12 @@
 
                 log(`Frame quality - Sharpness: ${sharpness.toFixed(2)}, Brightness: ${brightness.toFixed(0)}`);
 
-                // Check image quality thresholds
-                const SHARPNESS_THRESHOLD = 12; // Minimum sharpness for scanning
-                const MIN_BRIGHTNESS = 22; // Lowered for no-flash iPads (was 40)
-                const MAX_BRIGHTNESS = 220; // Too bright/washed out
-
-                // Provide real-time guidance based on quality
-                if (sharpness < SHARPNESS_THRESHOLD) {
-                    updateStatus('⚠️ Image too blurry - hold camera steady', 'error');
-                    document.getElementById('scanHint').textContent = 'Hold camera still!';
-                    document.getElementById('scanHint').style.background = 'rgba(255, 107, 53, 0.9)';
-                    document.getElementById('scanHint').style.color = 'white';
-                    return; // Skip this blurry frame
-                } else if (brightness < MIN_BRIGHTNESS) {
-                    updateStatus('⚠️ Very dark - hold steady while enhancing...', 'info');
-                    document.getElementById('scanHint').textContent = 'Enhancing low-light image...';
-                    document.getElementById('scanHint').style.background = 'rgba(93, 173, 226, 0.9)';
-                    document.getElementById('scanHint').style.color = 'white';
-                    // Don't skip - we'll process with aggressive enhancement
-                } else if (brightness > MAX_BRIGHTNESS) {
-                    updateStatus('⚠️ Too bright - reduce glare', 'error');
-                    document.getElementById('scanHint').textContent = 'Tilt to reduce glare';
-                    document.getElementById('scanHint').style.background = 'rgba(255, 107, 53, 0.9)';
-                    document.getElementById('scanHint').style.color = 'white';
-                    return; // Skip overexposed frame
-                } else {
-                    // Good quality - proceed with scanning
-                    updateStatus('✅ Good focus - scanning...', 'info');
-                    document.getElementById('scanHint').textContent = 'Align barcode with center line';
-                    document.getElementById('scanHint').style.background = 'rgba(0, 0, 0, 0.7)';
-                    document.getElementById('scanHint').style.color = '#7ed956';
-                }
+                // TEMPORARILY DISABLED quality checks to test scanning
+                // Just provide guidance without blocking
+                updateStatus('✅ Scanning...', 'info');
+                document.getElementById('scanHint').textContent = `Sharp: ${sharpness.toFixed(0)} Bright: ${brightness.toFixed(0)}`;
+                document.getElementById('scanHint').style.background = 'rgba(0, 0, 0, 0.7)';
+                document.getElementById('scanHint').style.color = '#7ed956';
 
                 log(`Scanning frame ${canvas.width}x${canvas.height} (brightness: ${brightness.toFixed(0)})...`);
 
