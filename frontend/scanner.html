@@ -1027,7 +1027,7 @@
 
                 // Apply histogram equalization for very dark frames
                 if (applyHistEq) {
-                    imageData = applyHistogramEqualization(imageData);
+                    applyHistogramEqualization(imageData);
                     log('Histogram equalization applied');
                 }
 
@@ -1062,9 +1062,9 @@
 
                 // Apply sharpen filter for low-light frames
                 if (applySharpen) {
-                    imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    imageData = applySharpenFilter(imageData, canvas);
-                    ctx.putImageData(imageData, 0, 0);
+                    const sharpData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    applySharpenFilter(sharpData, canvas);
+                    ctx.putImageData(sharpData, 0, 0);
                     log('Sharpen filter applied');
                 }
 
