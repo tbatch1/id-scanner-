@@ -507,6 +507,63 @@
             setTimeout(() => indicator.remove(), 500);
         }
 
+        // Calculate image sharpness using Laplacian variance
+        function calculateSharpness(canvas, ctx) {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+
+            // Sample center region for faster calculation (where barcode should be)
+            const startX = Math.floor(canvas.width * 0.1);
+            const endX = Math.floor(canvas.width * 0.9);
+            const startY = Math.floor(canvas.height * 0.225);
+            const endY = Math.floor(canvas.height * 0.775);
+
+            let sum = 0;
+            let count = 0;
+
+            for (let y = startY; y < endY - 1; y++) {
+                for (let x = startX; x < endX - 1; x++) {
+                    const idx = (y * canvas.width + x) * 4;
+
+                    // Convert to grayscale
+                    const gray = pixels[idx] * 0.299 + pixels[idx + 1] * 0.587 + pixels[idx + 2] * 0.114;
+
+                    // Get neighboring pixels
+                    const leftIdx = (y * canvas.width + (x - 1)) * 4;
+                    const rightIdx = (y * canvas.width + (x + 1)) * 4;
+                    const topIdx = ((y - 1) * canvas.width + x) * 4;
+                    const bottomIdx = ((y + 1) * canvas.width + x) * 4;
+
+                    const left = pixels[leftIdx] * 0.299 + pixels[leftIdx + 1] * 0.587 + pixels[leftIdx + 2] * 0.114;
+                    const right = pixels[rightIdx] * 0.299 + pixels[rightIdx + 1] * 0.587 + pixels[rightIdx + 2] * 0.114;
+                    const top = pixels[topIdx] * 0.299 + pixels[topIdx + 1] * 0.587 + pixels[topIdx + 2] * 0.114;
+                    const bottom = pixels[bottomIdx] * 0.299 + pixels[bottomIdx + 1] * 0.587 + pixels[bottomIdx + 2] * 0.114;
+
+                    // Laplacian operator (edge detection)
+                    const laplacian = Math.abs(4 * gray - left - right - top - bottom);
+                    sum += laplacian * laplacian;
+                    count++;
+                }
+            }
+
+            return Math.sqrt(sum / count); // Higher value = sharper image
+        }
+
+        // Calculate average brightness
+        function calculateBrightness(canvas, ctx) {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+            let sum = 0;
+            const step = 4; // Sample every 4th pixel for speed
+
+            for (let i = 0; i < pixels.length; i += step * 4) {
+                // Average RGB for grayscale brightness
+                sum += (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+            }
+
+            return sum / (pixels.length / (step * 4)); // Returns 0-255
+        }
+
         async function toggleFlash() {
             try {
                 if (!videoStream) {
@@ -664,21 +721,40 @@
                 log('Got settings, configuring PDF417...');
 
                 settings.barcodeSettings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_PDF417;
-                settings.barcodeSettings.deblurLevel = 5; // Optimized for speed (was 9)
-                settings.barcodeSettings.localizationModes = [16, 8, 0, 0, 0, 0, 0, 0]; // Removed slow mode 2
-                settings.barcodeSettings.deblurModes = [1, 2, 0, 0, 0, 0, 0, 0]; // Direct binarization + gray equalization
-                settings.barcodeSettings.grayscaleTransformationModes = [1, 0, 0, 0, 0, 0, 0, 0]; // Inverted grayscale
+
+                // Optimized for poor quality cameras (maximum robustness)
+                settings.barcodeSettings.deblurLevel = 9; // Maximum deblur for poor cameras
+                settings.barcodeSettings.localizationModes = [16, 8, 2, 0, 0, 0, 0, 0]; // Add LM_LINES (2) for better detection
+                settings.barcodeSettings.deblurModes = [1, 2, 4, 0, 0, 0, 0, 0]; // Add gray equalization (4)
+
+                // Add grayscale enhancement for low contrast/blur
+                settings.barcodeSettings.grayscaleEnhancementModes = [2, 8, 0, 0, 0, 0, 0, 0]; // GEM_GRAY_EQUALIZE (2) + GEM_SHARPEN_SMOOTH (8)
+
+                // Support both normal and inverted barcodes
+                settings.barcodeSettings.grayscaleTransformationModes = [1, 2, 0, 0, 0, 0, 0, 0]; // Original + Inverted
+
                 settings.barcodeSettings.expectBarcodeCount = 1;
-                settings.barcodeSettings.minResultConfidence = 30;
-                settings.barcodeSettings.scaleUpModes = [2, 1, 8, 0, 0, 0, 0, 0];
-                settings.barcodeSettings.binarizationModes = [1, 0, 0, 0, 0, 0, 0, 0];
-                settings.barcodeSettings.timeout = 1500; // Fast fail for continuous scanning (was 10000)
+                settings.barcodeSettings.minResultConfidence = 20; // Lower threshold for difficult barcodes
+                settings.barcodeSettings.scaleUpModes = [2, 1, 0, 0, 0, 0, 0, 0]; // Linear interpolation + auto
+                settings.barcodeSettings.binarizationModes = [1, 0, 0, 0, 0, 0, 0, 0]; // Local block (adaptive)
+                settings.barcodeSettings.timeout = 3000; // Longer timeout for complex processing
                 settings.barcodeSettings.returnPartialBarcodeValue = 1;
                 settings.barcodeSettings.maxAlgorithmThreadCount = 2; // Limit CPU usage on mobile
 
-                log('Updating router settings...');
+                // Configure ROI to match scan guide (85% width, 55% height, centered)
+                settings.roi = {
+                    points: [
+                        { x: 7.5, y: 22.5 },   // top-left (7.5% from left, 22.5% from top)
+                        { x: 92.5, y: 22.5 },  // top-right
+                        { x: 92.5, y: 77.5 },  // bottom-right
+                        { x: 7.5, y: 77.5 }    // bottom-left
+                    ],
+                    measuredByPercentage: 1 // Use percentages (0-100)
+                };
+
+                log('Updating router settings with ROI...');
                 await router.updateSettings('ReadBarcodes_Balance', settings);
-                log('Settings updated successfully');
+                log('Settings updated successfully - ROI configured to scan guide area');
 
                 // Start scanning - optimized interval for speed and CPU efficiency
                 isScanning = true;
@@ -729,9 +805,48 @@
 
                 // Draw current video frame to canvas
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                log(`Scanning frame ${canvas.width}x${canvas.height}...`);
 
-                // Try barcode scanning first (faster)
+                // Calculate image quality metrics
+                const sharpness = calculateSharpness(canvas, ctx);
+                const brightness = calculateBrightness(canvas, ctx);
+
+                log(`Frame quality - Sharpness: ${sharpness.toFixed(2)}, Brightness: ${brightness.toFixed(0)}`);
+
+                // Check image quality thresholds
+                const SHARPNESS_THRESHOLD = 12; // Minimum sharpness for scanning
+                const MIN_BRIGHTNESS = 40; // Too dark
+                const MAX_BRIGHTNESS = 220; // Too bright/washed out
+
+                // Provide real-time guidance based on quality
+                if (sharpness < SHARPNESS_THRESHOLD) {
+                    updateStatus('⚠️ Image too blurry - hold camera steady', 'error');
+                    document.getElementById('scanHint').textContent = 'Hold camera still!';
+                    document.getElementById('scanHint').style.background = 'rgba(255, 107, 53, 0.9)';
+                    document.getElementById('scanHint').style.color = 'white';
+                    return; // Skip this blurry frame
+                } else if (brightness < MIN_BRIGHTNESS) {
+                    updateStatus('⚠️ Too dark - add more light', 'error');
+                    document.getElementById('scanHint').textContent = 'Move to brighter area';
+                    document.getElementById('scanHint').style.background = 'rgba(255, 107, 53, 0.9)';
+                    document.getElementById('scanHint').style.color = 'white';
+                    return; // Skip dark frame
+                } else if (brightness > MAX_BRIGHTNESS) {
+                    updateStatus('⚠️ Too bright - reduce glare', 'error');
+                    document.getElementById('scanHint').textContent = 'Tilt to reduce glare';
+                    document.getElementById('scanHint').style.background = 'rgba(255, 107, 53, 0.9)';
+                    document.getElementById('scanHint').style.color = 'white';
+                    return; // Skip overexposed frame
+                } else {
+                    // Good quality - proceed with scanning
+                    updateStatus('✅ Good focus - scanning...', 'info');
+                    document.getElementById('scanHint').textContent = 'Align barcode with center line';
+                    document.getElementById('scanHint').style.background = 'rgba(0, 0, 0, 0.7)';
+                    document.getElementById('scanHint').style.color = '#7ed956';
+                }
+
+                log(`Scanning high-quality frame ${canvas.width}x${canvas.height}...`);
+
+                // Try barcode scanning (only on good quality frames)
                 const barcodeResult = await router.capture(canvas, 'ReadBarcodes_Balance');
                 log(`Barcode scan result: ${barcodeResult.barcodeResultItems?.length || 0} items found`);
 
