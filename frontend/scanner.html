@@ -385,6 +385,10 @@
             <div id="scanHint" style="display:none;">Align barcode with center line</div>
         </div>
 
+        <button id="captureButton" class="primary" onclick="captureHighResPhoto()" style="display:none;">
+            📸 CAPTURE HIGH-RES PHOTO
+        </button>
+
         <button onclick="window.close()">Close Scanner</button>
     </div>
 
@@ -632,6 +636,72 @@
             }
         }
 
+        async function captureHighResPhoto() {
+            try {
+                if (!videoStream) {
+                    updateStatus('❌ Camera not started', 'error');
+                    log('Cannot capture - camera not started', 'error');
+                    return;
+                }
+
+                updateStatus('📸 Capturing high-resolution photo...', 'info');
+                log('Starting high-res photo capture...');
+
+                const track = videoStream.getVideoTracks()[0];
+                const imageCapture = new ImageCapture(track);
+
+                // Get max resolution capabilities
+                const capabilities = await imageCapture.getPhotoCapabilities();
+                log(`Max photo resolution: ${capabilities.imageWidth?.max}x${capabilities.imageHeight?.max}`);
+
+                // Capture at maximum resolution
+                const photoSettings = {};
+                if (capabilities.imageWidth && capabilities.imageWidth.max) {
+                    photoSettings.imageWidth = capabilities.imageWidth.max;
+                }
+                if (capabilities.imageHeight && capabilities.imageHeight.max) {
+                    photoSettings.imageHeight = capabilities.imageHeight.max;
+                }
+
+                const photoBlob = await imageCapture.takePhoto(photoSettings);
+                log(`Photo captured, size: ${photoBlob.size} bytes`);
+
+                // Convert blob to canvas for Dynamsoft
+                const img = await createImageBitmap(photoBlob);
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext('2d');
+
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+
+                log(`High-res image ready: ${canvas.width}x${canvas.height}`);
+                updateStatus('🔍 Scanning high-resolution image...', 'info');
+
+                // Scan the high-res image
+                const barcodeResult = await router.capture(canvas, 'ReadBarcodes_Balance');
+                log(`High-res scan result: ${barcodeResult.barcodeResultItems?.length || 0} items found`);
+
+                if (barcodeResult.barcodeResultItems && barcodeResult.barcodeResultItems.length > 0) {
+                    log('✅ Barcode detected in high-res photo!', 'info');
+                    await handleBarcode(barcodeResult.barcodeResultItems[0].text);
+                } else {
+                    updateStatus('❌ No barcode found - try again or reposition', 'error');
+                    log('No barcode detected in high-res photo', 'warn');
+                }
+
+            } catch (error) {
+                log(`High-res capture error: ${error.message}`, 'error');
+                console.error('Full high-res capture error:', error);
+
+                if (error.name === 'NotSupportedError') {
+                    updateStatus('❌ High-res capture not supported on this device', 'error');
+                } else {
+                    updateStatus('❌ Photo capture failed - try again', 'error');
+                }
+            }
+        }
+
         async function startCamera() {
             try {
                 log('Camera initialization started');
@@ -642,8 +712,8 @@
                 const constraints = {
                     video: {
                         facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
+                        width: { ideal: 1920 },  // Increased from 1280 for better detail
+                        height: { ideal: 1080 }, // Increased from 720 for better detail
                         frameRate: { ideal: 30 },
                         advanced: [
                             { focusMode: 'continuous' },
@@ -765,6 +835,9 @@
                 document.getElementById('scanGuide').style.display = 'block';
                 document.getElementById('scanHint').style.display = 'block';
 
+                // Show high-res capture button
+                document.getElementById('captureButton').style.display = 'inline-block';
+
                 updateStatus('✅ Ready - Position ID within frame', 'info');
 
             } catch (error) {
@@ -845,6 +918,40 @@
                 }
 
                 log(`Scanning high-quality frame ${canvas.width}x${canvas.height}...`);
+
+                // Apply canvas preprocessing for better barcode detection
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const pixels = imageData.data;
+
+                // Apply contrast (1.3x), brightness (1.1x), and convert to grayscale
+                for (let i = 0; i < pixels.length; i += 4) {
+                    // Get RGB values
+                    let r = pixels[i];
+                    let g = pixels[i + 1];
+                    let b = pixels[i + 2];
+
+                    // Convert to grayscale (weighted average)
+                    let gray = r * 0.299 + g * 0.587 + b * 0.114;
+
+                    // Apply brightness boost
+                    gray = gray * 1.1;
+
+                    // Apply contrast enhancement
+                    gray = ((gray - 128) * 1.3) + 128;
+
+                    // Clamp to 0-255
+                    gray = Math.max(0, Math.min(255, gray));
+
+                    // Set all channels to grayscale value
+                    pixels[i] = gray;
+                    pixels[i + 1] = gray;
+                    pixels[i + 2] = gray;
+                    // Alpha channel (i+3) stays unchanged
+                }
+
+                // Put processed image data back to canvas
+                ctx.putImageData(imageData, 0, 0);
+                log('Canvas preprocessing applied: grayscale + contrast + brightness');
 
                 // Try barcode scanning (only on good quality frames)
                 const barcodeResult = await router.capture(canvas, 'ReadBarcodes_Balance');
