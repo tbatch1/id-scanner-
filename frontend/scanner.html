@@ -477,6 +477,7 @@
 
         let videoStream = null;
         let router = null;
+        let parser = null; // Global parser instance - created once at startup
         let isScanning = false;
         let scanInterval = null;
         let mrzScanning = false;
@@ -1005,6 +1006,15 @@
                 await router.updateSettings('ReadBarcodes_Balance', settings);
                 log('Settings updated successfully - ROI configured to scan guide area');
 
+                // Create parser instance once at startup (NOT on every scan!)
+                updateStatus('⏳ Loading ID parser (one-time setup)...', 'info');
+                log('Creating CodeParser instance (one-time)...');
+                const parserStart = performance.now();
+                await Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID");
+                parser = await Dynamsoft.DCP.CodeParser.createInstance();
+                const parserTime = Math.round(performance.now() - parserStart);
+                log(`✅ Parser created in ${parserTime}ms (will be reused for all scans)`);
+
                 // Start scanning - optimized interval for speed and CPU efficiency
                 isScanning = true;
                 scanInterval = setInterval(scanVideoFrame, 150);
@@ -1139,23 +1149,15 @@
             const timingData = {};
 
             try {
-                // Parse ID
+                // Parse ID using pre-created global parser instance
                 log('⏱️ [TIMING] Starting barcode processing...');
 
+                // Spec already loaded and parser already created at startup
+                timingData.spec_load = 0; // Already loaded at startup
+                timingData.parser_create = 0; // Already created at startup
+
                 let stepStart = performance.now();
-                log('Loading AAMVA_DL_ID spec...');
-                await Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID");
-                timingData.spec_load = Math.round(performance.now() - stepStart);
-                log(`⏱️ [TIMING] Spec loaded in ${timingData.spec_load}ms`);
-
-                stepStart = performance.now();
-                log('Creating parser instance...');
-                const parser = await Dynamsoft.DCP.CodeParser.createInstance();
-                timingData.parser_create = Math.round(performance.now() - stepStart);
-                log(`⏱️ [TIMING] Parser created in ${timingData.parser_create}ms`);
-
-                stepStart = performance.now();
-                log(`Parsing barcode text (length: ${barcodeText.length})...`);
+                log(`Parsing barcode text (length: ${barcodeText.length}) with pre-loaded parser...`);
                 const parsedResult = await parser.parse(barcodeText);
                 timingData.parse = Math.round(performance.now() - stepStart);
                 log(`⏱️ [TIMING] Parse completed in ${timingData.parse}ms`);
