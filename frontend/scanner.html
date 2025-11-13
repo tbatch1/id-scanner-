@@ -1157,24 +1157,48 @@
                 timingData.parser_create = 0; // Already created at startup
 
                 let stepStart = performance.now();
-                log(`Parsing barcode text (length: ${barcodeText.length}) with pre-loaded parser...`);
-                const parsedResult = await parser.parse(barcodeText);
-                timingData.parse = Math.round(performance.now() - stepStart);
-                log(`⏱️ [TIMING] Parse completed in ${timingData.parse}ms`);
+                log(`Parsing barcode text (length: ${barcodeText.length}) with optimized parser pipeline...`);
 
-                const firstName = parsedResult.getFieldValue("firstName");
-                const lastName = parsedResult.getFieldValue("lastName");
-                const dob = parsedResult.getFieldValue("birthDate");
-                const documentNumber = parsedResult.getFieldValue("documentNumber") || parsedResult.getFieldValue("licenseNumber");
-                const sex = parsedResult.getFieldValue("sex");
-                const expiry = parsedResult.getFieldValue("expiryDate");
-                const state = parsedResult.getFieldValue("issuingState");
+                let parsedData = null;
+                log(`Attempting fast AAMVA parser... barcode preview: ${barcodeText.substring(0, 100)}`);
+                const fastParsed = parseAamvaBarcode(barcodeText);
+                if (fastParsed) {
+                    parsedData = fastParsed;
+                    timingData.parse = Math.round(performance.now() - stepStart);
+                    log(`⚡ Fast AAMVA parser succeeded in ${timingData.parse}ms`);
+                } else {
+                    log(`⚠️ Fast parser returned null, falling back to Dynamsoft WASM parser`);
+                    const parsedResult = await parser.parse(barcodeText);
+                    timingData.parse = Math.round(performance.now() - stepStart);
+                    log(`⏱️ [TIMING] Parse completed in ${timingData.parse}ms`);
 
-                log(`Parsed: ${firstName} ${lastName}, DOB: ${dob}`);
+                    parsedData = {
+                        firstName: parsedResult.getFieldValue("firstName"),
+                        lastName: parsedResult.getFieldValue("lastName"),
+                        dob: parsedResult.getFieldValue("birthDate"),
+                        documentNumber: parsedResult.getFieldValue("documentNumber") || parsedResult.getFieldValue("licenseNumber"),
+                        sex: parsedResult.getFieldValue("sex"),
+                        expiry: parsedResult.getFieldValue("expiryDate"),
+                        issuingState: parsedResult.getFieldValue("issuingState")
+                    };
+                }
+
+                log(`Parsed: ${parsedData.firstName} ${parsedData.lastName}, DOB: ${parsedData.dob}`);
 
                 // Check for missing required fields
-                if (!firstName || !lastName || !dob) {
-                    throw new Error(`Missing required fields - firstName: ${!!firstName}, lastName: ${!!lastName}, dob: ${!!dob}`);
+                if (!parsedData.firstName || !parsedData.lastName || !parsedData.dob) {
+                    throw new Error(`Missing required fields - firstName: ${!!parsedData.firstName}, lastName: ${!!parsedData.lastName}, dob: ${!!parsedData.dob}`);
+                }
+
+                stepStart = performance.now();
+                const age = calculateAge(parsedData.dob);
+                timingData.age_calc = Math.round(performance.now() - stepStart);
+                log(`⏱️ [TIMING] Age calculated in ${timingData.age_calc}ms - Age: ${age}`);
+
+                if (!age || age < 0) {
+                    throw new Error(`Invalid age calculated from DOB: ${parsedData.dob}`);
+                }
+
                 }
 
                 stepStart = performance.now();
@@ -1189,9 +1213,9 @@
                 // Verify age
                 const approved = age >= 21;
 
-                updateStatus(
+                                updateStatus(
                     approved
-                        ? `✅ APPROVED: ${firstName} ${lastName} (Age ${age})`
+                        ? `✅ APPROVED: ${parsedData.firstName} ${parsedData.lastName} (Age ${age})`
                         : `❌ REJECTED: Under 21 (Age ${age})`,
                     approved ? 'success' : 'error'
                 );
@@ -1202,19 +1226,20 @@
                 await saveScanResult({
                     sessionId: sessionId,
                     approved: approved,
-                    firstName: firstName,
-                    lastName: lastName,
+                    firstName: parsedData.firstName,
+                    lastName: parsedData.lastName,
                     age: age,
-                    dob: dob,
+                    dob: parsedData.dob,
                     documentType: 'drivers_license',
-                    documentNumber: documentNumber,
-                    sex: sex,
-                    expiry: expiry,
-                    nationality: state || 'USA',
+                    documentNumber: parsedData.documentNumber,
+                    sex: parsedData.sex,
+                    expiry: parsedData.expiry,
+                    nationality: parsedData.issuingState || 'USA',
                     reason: approved ? null : 'Under minimum age',
                     outletId: outletId,
                     registerId: registerId
                 });
+
                 timingData.db_save = Math.round(performance.now() - stepStart);
                 log(`⏱️ [TIMING] Database save completed in ${timingData.db_save}ms`);
 
@@ -1492,6 +1517,94 @@
         // Device ready
         console.log('ID Scanner initialized');
         console.log(`Platform: ${navigator.platform}, MediaDevices: ${!!navigator.mediaDevices}`);
+                function parseAamvaBarcode(raw = '') {
+            try {
+                if (!raw || raw.length < 40) {
+                    log(`Fast parser: barcode too short (${raw?.length || 0} chars)`);
+                    return null;
+                }
+
+                // Check for ANSI header (case-insensitive and flexible spacing)
+                const hasAnsiHeader = /ANSI\s/i.test(raw);
+                if (!hasAnsiHeader) {
+                    log(`Fast parser: no ANSI header found in barcode`);
+                    return null;
+                }
+
+                const lines = raw.replace(/\r/g, '\n').split(/\n+/);
+                const data = {};
+
+                for (const line of lines) {
+                    if (line.length < 3) continue;
+                    const code = line.substring(0, 3);
+                    const value = line.substring(3).trim();
+                    switch (code) {
+                        case 'DAA':
+                            data.fullName = value;
+                            break;
+                        case 'DAC':
+                        case 'DCT':
+                            data.firstName = value;
+                            break;
+                        case 'DAD':
+                            data.middleName = value;
+                            break;
+                        case 'DCS':
+                            data.lastName = value;
+                            break;
+                        case 'DBB':
+                            data.dob = normalizeAamvaDate(value);
+                            break;
+                        case 'DBA':
+                            data.expiry = normalizeAamvaDate(value);
+                            break;
+                        case 'DAQ':
+                        case 'DBL':
+                            data.documentNumber = value;
+                            break;
+                        case 'DBC':
+                            data.sex = value === '1' ? 'M' : value === '2' ? 'F' : value;
+                            break;
+                        case 'DAJ':
+                        case 'DCJ':
+                            data.issuingState = value;
+                            break;
+                    }
+                }
+
+                if ((!data.firstName || !data.lastName) && data.fullName && data.fullName.includes(',')) {
+                    const parts = data.fullName.split(',');
+                    data.lastName = data.lastName || parts[0].trim();
+                    data.firstName = data.firstName || parts[1].trim();
+                }
+
+                data.dob = normalizeAamvaDate(data.dob);
+                data.expiry = normalizeAamvaDate(data.expiry);
+                data.documentType = 'drivers_license';
+
+                if (!data.firstName || !data.lastName || !data.dob) {
+                    return null;
+                }
+
+                return data;
+            } catch (error) {
+                log(`Fast parser error: ${error.message}`, 'warn');
+                return null;
+            }
+        }
+
+        function normalizeAamvaDate(value) {
+            if (!value) return null;
+            const digits = value.replace(/[^0-9]/g, '');
+            if (digits.length === 8) {
+                const mm = digits.substring(0, 2);
+                const dd = digits.substring(2, 4);
+                const yyyy = digits.substring(4);
+                return `${yyyy}-${mm}-${dd}`;
+            }
+            return null;
+        }
+
     </script>
 </body>
 </html>

@@ -13,9 +13,18 @@ const config = require('./config');
  * - fatal (60): Fatal errors that crash the application
  */
 
-const logger = pino({
+const STANDARD_LEVELS = Object.freeze({
+  trace: 10,
+  debug: 20,
+  info: 30,
+  warn: 40,
+  error: 50,
+  fatal: 60
+});
+
+const baseLoggerOptions = {
   name: 'id-scanner',
-  level: process.env.LOG_LEVEL || (config.env === 'production' ? 'info' : 'debug'),
+  level: (process.env.LOG_LEVEL || '').trim().toLowerCase() || (config.env === 'production' ? 'info' : 'debug'),
 
   // Pretty print in development, JSON in production
   transport: config.env === 'development'
@@ -57,7 +66,62 @@ const logger = pino({
     req: pino.stdSerializers.req,
     res: pino.stdSerializers.res
   }
-});
+};
+
+function buildLogger(overrides = {}) {
+  return pino({
+    ...baseLoggerOptions,
+    ...overrides
+  });
+}
+
+function createConsoleFallback(error) {
+  const shim = {};
+  const consoleMap = {
+    fatal: 'error',
+    error: 'error',
+    warn: 'warn',
+    info: 'info',
+    debug: 'debug',
+    trace: 'trace'
+  };
+
+  if (error) {
+    console.error('Structured logger failed to initialize, using console fallback.', error);
+  }
+
+  Object.entries(consoleMap).forEach(([level, consoleMethod]) => {
+    const target = typeof console[consoleMethod] === 'function' ? console[consoleMethod] : console.log;
+    shim[level] = target.bind(console, `[${level.toUpperCase()}]`);
+  });
+
+  shim.child = () => shim;
+  shim.flush = () => {};
+  return shim;
+}
+
+let logger;
+
+try {
+  logger = buildLogger();
+} catch (error) {
+  if (error && typeof error.message === 'string' && error.message.includes('default level')) {
+    try {
+      logger = buildLogger({
+        customLevels: STANDARD_LEVELS,
+        useOnlyCustomLevels: false
+      });
+    } catch (secondaryError) {
+      logger = createConsoleFallback(secondaryError);
+    }
+  } else {
+    logger = createConsoleFallback(error);
+  }
+}
+
+if (!logger) {
+  logger = createConsoleFallback();
+}
 
 /**
  * Log a verification attempt
