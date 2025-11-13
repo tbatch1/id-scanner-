@@ -1568,11 +1568,17 @@
                     data.firstName = data.firstName || parts[1].trim();
                 }
 
+                // Log all raw data before normalization
+                log(`Fast parser RAW data: ${JSON.stringify(data)}`);
+
                 data.dob = normalizeAamvaDate(data.dob);
                 data.expiry = normalizeAamvaDate(data.expiry);
                 data.documentType = 'drivers_license';
 
+                log(`Fast parser AFTER normalization: DOB=${data.dob}, Expiry=${data.expiry}`);
+
                 if (!data.firstName || !data.lastName || !data.dob) {
+                    log(`Fast parser returning null - missing fields: firstName=${!!data.firstName}, lastName=${!!data.lastName}, dob=${!!data.dob}`);
                     return null;
                 }
 
