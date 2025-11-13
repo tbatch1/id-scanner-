@@ -1527,6 +1527,12 @@
                     if (line.length < 3) continue;
                     const code = line.substring(0, 3);
                     const value = line.substring(3).trim();
+
+                    // Log date fields for debugging
+                    if (code === 'DBB' || code === 'DDB' || code === 'DBA') {
+                        log(`AAMVA field ${code} = "${value}"`);
+                    }
+
                     switch (code) {
                         case 'DAA':
                             data.fullName = value;
@@ -1543,10 +1549,10 @@
                             break;
                         case 'DBB':
                         case 'DDB': // Date of birth (alternative code)
-                            data.dob = normalizeAamvaDate(value);
+                            data.dob = value; // Store raw value, normalize later
                             break;
                         case 'DBA':
-                            data.expiry = normalizeAamvaDate(value);
+                            data.expiry = value; // Store raw value, normalize later
                             break;
                         case 'DAQ':
                         case 'DBL':
