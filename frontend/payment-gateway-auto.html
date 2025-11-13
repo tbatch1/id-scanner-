@@ -25,7 +25,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 50%, #1a1a1a 100%);
             color: #ffffff;
             height: auto;
             max-height: 100vh;
@@ -46,7 +46,7 @@
             left: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(255, 107, 61, 0.08) 0%, rgba(62, 174, 215, 0.08) 50%, transparent 70%);
             animation: pulse 15s ease-in-out infinite;
         }
 
@@ -99,14 +99,14 @@
         }
 
         .amount-display {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-            border: 2px solid rgba(139, 92, 246, 0.5);
+            background: linear-gradient(135deg, rgba(62, 174, 215, 0.15) 0%, rgba(45, 155, 95, 0.15) 100%);
+            border: 2px solid rgba(62, 174, 215, 0.5);
             border-radius: 20px;
             padding: 20px 28px;
             margin-bottom: 0;
             font-size: 18px;
             font-weight: 500;
-            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.2);
+            box-shadow: 0 8px 32px rgba(62, 174, 215, 0.2);
             backdrop-filter: blur(10px);
         }
 
@@ -115,7 +115,7 @@
             font-size: 38px;
             font-weight: 700;
             margin-top: 8px;
-            background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+            background: linear-gradient(135deg, #3EAED7 0%, #2D9B5F 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -149,15 +149,15 @@
         }
 
         .status.info {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
-            border: 2px solid rgba(99, 102, 241, 0.5);
-            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
+            background: linear-gradient(135deg, rgba(62, 174, 215, 0.15) 0%, rgba(255, 107, 61, 0.15) 100%);
+            border: 2px solid rgba(62, 174, 215, 0.5);
+            box-shadow: 0 4px 20px rgba(62, 174, 215, 0.2);
         }
 
         .status.success {
-            background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%);
-            border: 2px solid rgba(34, 197, 94, 0.6);
-            box-shadow: 0 4px 20px rgba(34, 197, 94, 0.25);
+            background: linear-gradient(135deg, rgba(45, 155, 95, 0.15) 0%, rgba(62, 174, 215, 0.15) 100%);
+            border: 2px solid rgba(45, 155, 95, 0.6);
+            box-shadow: 0 4px 20px rgba(45, 155, 95, 0.25);
         }
 
         .status.error {
@@ -198,6 +198,9 @@
 </head>
 <body>
     <div class="container">
+        <div style="margin-bottom: 20px;">
+            <img src="https://i.imgur.com/placeholder-thc-logo.png" alt="THC Club" style="max-width: 200px; height: auto;" onerror="this.style.display='none'">
+        </div>
         <h1>🔒 Age Verification Required</h1>
 
         <div id="status" class="status info">
@@ -209,13 +212,13 @@
         </div>
 
         <div id="fallback-controls" style="margin: 20px 0;">
-            <div style="background:rgba(255,193,7,0.2); border:2px solid #ffc107; border-radius:10px; padding:15px; margin:15px auto; max-width:500px;">
-                <div style="font-size:18px; font-weight:600; margin-bottom:8px;">📱 iPad Workaround:</div>
+            <div style="background:rgba(255,107,61,0.2); border:2px solid #FF6B3D; border-radius:10px; padding:15px; margin:15px auto; max-width:500px;">
+                <div style="font-size:18px; font-weight:600; margin-bottom:8px; color:#FF6B3D;">📱 iPad Workaround:</div>
                 <div style="font-size:16px; line-height:1.5;">
                     <strong>Long-press</strong> button below → Tap <strong>"Open"</strong> to launch scanner in Safari
                 </div>
             </div>
-            <a id="scannerLink" href="#" target="_blank" rel="noopener noreferrer" onclick="startPolling(); return true;" style="display:inline-block; padding:20px 40px; background:#10b981; color:white; text-decoration:none; border-radius:12px; font-size:20px; font-weight:700; margin:15px; box-shadow: 0 4px 15px rgba(16,185,129,0.4);">
+            <a id="scannerLink" href="#" target="_blank" rel="noopener noreferrer" onclick="startPolling(); return true;" style="display:inline-block; padding:20px 40px; background:#2D9B5F; color:white; text-decoration:none; border-radius:12px; font-size:20px; font-weight:700; margin:15px; box-shadow: 0 4px 15px rgba(45,155,95,0.4);">
                 📷 LONG-PRESS HERE → Open Scanner
             </a>
         </div>
