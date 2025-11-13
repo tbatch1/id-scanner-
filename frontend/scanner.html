@@ -1548,8 +1548,10 @@
                             data.lastName = value;
                             break;
                         case 'DBB':
-                        case 'DDB': // Date of birth (alternative code)
-                            data.dob = value; // Store raw value, normalize later
+                            data.dob = value; // Store raw value, normalize later (DBB = primary DOB field)
+                            break;
+                        case 'DDB': // Alternative/secondary date field
+                            if (!data.dob) data.dob = value; // Only use if DBB wasn't found
                             break;
                         case 'DBA':
                             data.expiry = value; // Store raw value, normalize later
