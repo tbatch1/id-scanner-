@@ -503,17 +503,17 @@
         // Remote logging to help debug iPad issues
         async function sendRemoteLog(message, level) {
             try {
-                // Send to webhook.site for debugging
-                await fetch('https://webhook.site/d4c8e5f1-7a6f-4d3e-9c2a-1b3e4f5a6b7c', {
+                // Send to backend database for debugging
+                await fetch('/api/debug-logs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        timestamp: new Date().toISOString(),
+                        session_id: sessionId,
                         level,
                         message,
-                        userAgent: navigator.userAgent
+                        user_agent: navigator.userAgent
                     })
-                }).catch(() => {}); // Fail silently if webhook unreachable
+                }).catch(() => {}); // Fail silently if endpoint unreachable
             } catch (e) {
                 // Ignore remote logging errors
             }
@@ -1197,17 +1197,6 @@
 
                 if (!age || age < 0) {
                     throw new Error(`Invalid age calculated from DOB: ${parsedData.dob}`);
-                }
-
-                }
-
-                stepStart = performance.now();
-                const age = calculateAge(dob);
-                timingData.age_calc = Math.round(performance.now() - stepStart);
-                log(`⏱️ [TIMING] Age calculated in ${timingData.age_calc}ms - Age: ${age}`);
-
-                if (!age || age < 0) {
-                    throw new Error(`Invalid age calculated from DOB: ${dob}`);
                 }
 
                 // Verify age
