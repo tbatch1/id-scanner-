@@ -1542,6 +1542,7 @@
                             data.lastName = value;
                             break;
                         case 'DBB':
+                        case 'DDB': // Date of birth (alternative code)
                             data.dob = normalizeAamvaDate(value);
                             break;
                         case 'DBA':
@@ -1585,12 +1586,16 @@
         function normalizeAamvaDate(value) {
             if (!value) return null;
             const digits = value.replace(/[^0-9]/g, '');
+            log(`normalizeAamvaDate: input="${value}", digits="${digits}", length=${digits.length}`);
             if (digits.length === 8) {
                 const mm = digits.substring(0, 2);
                 const dd = digits.substring(2, 4);
                 const yyyy = digits.substring(4);
-                return `${yyyy}-${mm}-${dd}`;
+                const normalized = `${yyyy}-${mm}-${dd}`;
+                log(`normalizeAamvaDate: output="${normalized}"`);
+                return normalized;
             }
+            log(`normalizeAamvaDate: returned null (length mismatch)`);
             return null;
         }
 
