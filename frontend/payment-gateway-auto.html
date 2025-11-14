@@ -199,9 +199,42 @@
 <body>
     <div class="container">
         <div style="margin-bottom: 20px;">
-            <img src="https://i.imgur.com/placeholder-thc-logo.png" alt="THC Club" style="max-width: 200px; height: auto;" onerror="this.style.display='none'">
+            <svg width="320" height="120" viewBox="0 0 1000 300" xmlns="http://www.w3.org/2000/svg">
+                <!-- T (Orange) -->
+                <ellipse cx="150" cy="120" rx="95" ry="115" fill="#FF6B3D" transform="rotate(-8 150 120)"/>
+                <rect x="100" y="60" width="100" height="24" fill="white" rx="8"/>
+                <rect x="138" y="78" width="24" height="104" fill="white" rx="8"/>
+
+                <!-- H (Blue) -->
+                <ellipse cx="390" cy="120" rx="95" ry="115" fill="#3EAED7" transform="rotate(6 390 120)"/>
+                <rect x="348" y="60" width="20" height="104" fill="white" rx="6"/>
+                <rect x="412" y="60" width="20" height="104" fill="white" rx="6"/>
+                <rect x="348" y="104" width="84" height="20" fill="white" rx="6"/>
+
+                <!-- C (Black) -->
+                <ellipse cx="640" cy="120" rx="95" ry="115" fill="#1a1a1a" transform="rotate(-6 640 120)"/>
+                <path d="M 640 60 A 60 60 0 0 1 700 120 A 60 60 0 0 1 640 180" stroke="white" stroke-width="26" fill="none" stroke-linecap="round"/>
+
+                <!-- club (Green underline and text) -->
+                <path d="M 120 240 Q 390 255 660 240" stroke="#2D9B5F" stroke-width="14" fill="none" stroke-linecap="round"/>
+                <text x="720" y="280" font-family="Arial, sans-serif" font-size="60" font-style="italic" font-weight="bold" fill="#2D9B5F">club</text>
+            </svg>
         </div>
-        <h1>🔒 Age Verification Required</h1>
+        <h1>
+            <svg style="display:inline-block; width:32px; height:32px; vertical-align:middle;" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="lockGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#FF6B3D;stop-opacity:1" />
+                        <stop offset="50%" style="stop-color:#3EAED7;stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:#2D9B5F;stop-opacity:1" />
+                    </linearGradient>
+                </defs>
+                <rect x="6" y="10" width="12" height="10" rx="2" fill="url(#lockGradient)"/>
+                <path d="M 8 10 L 8 7 A 4 4 0 0 1 16 7 L 16 10" stroke="url(#lockGradient)" stroke-width="2" fill="none"/>
+                <circle cx="12" cy="15" r="1.5" fill="white"/>
+            </svg>
+            Age Verification Required
+        </h1>
 
         <div id="status" class="status info">
             Initializing camera...
