@@ -219,19 +219,7 @@
                 <text x="420" y="195" font-family="Brush Script MT, cursive" font-size="48" font-style="italic" fill="#2D9B5F" stroke="white" stroke-width="1">club</text>
             </svg>
         </div>
-        <h1>
-            <svg style="display:inline-block; width:32px; height:32px; vertical-align:middle;" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="lockGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color:#FF6B3D;stop-opacity:1" />
-                        <stop offset="50%" style="stop-color:#3EAED7;stop-opacity:1" />
-                        <stop offset="100%" style="stop-color:#2D9B5F;stop-opacity:1" />
-                    </linearGradient>
-                </defs>
-                <rect x="6" y="10" width="12" height="10" rx="2" fill="url(#lockGradient)"/>
-                <path d="M 8 10 L 8 7 A 4 4 0 0 1 16 7 L 16 10" stroke="url(#lockGradient)" stroke-width="2" fill="none"/>
-                <circle cx="12" cy="15" r="1.5" fill="white"/>
-            </svg>
+        <h1 style="font-family: Brush Script MT, cursive; font-style: italic; font-size: 42px; background: linear-gradient(135deg, #FF6B3D 0%, #3EAED7 50%, #2D9B5F 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-fill-color: transparent;">
             Age Verification Required
         </h1>
 
@@ -450,6 +438,19 @@
             const statusEl = document.getElementById('status');
             statusEl.textContent = message;
             statusEl.className = `status ${type}`;
+        }
+
+        async function handlePersistenceFailure(error) {
+            console.error('Unable to persist scan result:', error);
+            updateStatus('⚠️ Unable to lock sale. Check the connection and rescan the ID.', 'error');
+            if (router) {
+                try {
+                    await router.startCapturing("ReadBarcodes_Balance");
+                } catch (restartError) {
+                    console.error('Failed to restart scanner after persistence error:', restartError);
+                }
+            }
+            isScanning = true;
         }
 
         function approvePayment() {
