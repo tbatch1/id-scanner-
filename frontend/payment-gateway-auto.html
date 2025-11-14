@@ -199,24 +199,24 @@
 <body>
     <div class="container">
         <div style="margin-bottom: 20px;">
-            <svg width="400" height="140" viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg">
+            <svg width="400" height="150" viewBox="0 0 600 220" xmlns="http://www.w3.org/2000/svg">
                 <!-- T blob with white border -->
-                <ellipse cx="100" cy="80" rx="70" ry="85" fill="#FF6B3D" stroke="white" stroke-width="8"/>
-                <text x="100" y="110" font-family="Arial, sans-serif" font-size="90" font-weight="900" fill="white" text-anchor="middle">T</text>
+                <ellipse cx="100" cy="90" rx="70" ry="85" fill="#FF6B3D" stroke="white" stroke-width="8"/>
+                <text x="100" y="120" font-family="Arial, sans-serif" font-size="90" font-weight="900" fill="white" text-anchor="middle">T</text>
 
                 <!-- H blob with white border -->
-                <ellipse cx="250" cy="80" rx="70" ry="85" fill="#3EAED7" stroke="white" stroke-width="8"/>
-                <text x="250" y="110" font-family="Arial, sans-serif" font-size="90" font-weight="900" fill="white" text-anchor="middle">H</text>
+                <ellipse cx="250" cy="90" rx="70" ry="85" fill="#3EAED7" stroke="white" stroke-width="8"/>
+                <text x="250" y="120" font-family="Arial, sans-serif" font-size="90" font-weight="900" fill="white" text-anchor="middle">H</text>
 
                 <!-- C blob with white border -->
-                <ellipse cx="400" cy="80" rx="70" ry="85" fill="#1a1a1a" stroke="white" stroke-width="8"/>
-                <text x="400" y="110" font-family="Arial, sans-serif" font-size="90" font-weight="900" fill="white" text-anchor="middle">C</text>
+                <ellipse cx="400" cy="90" rx="70" ry="85" fill="#1a1a1a" stroke="white" stroke-width="8"/>
+                <text x="400" y="120" font-family="Arial, sans-serif" font-size="90" font-weight="900" fill="white" text-anchor="middle">C</text>
 
                 <!-- Green underline -->
-                <rect x="50" y="155" width="350" height="15" rx="8" fill="#2D9B5F" stroke="white" stroke-width="4"/>
+                <rect x="50" y="170" width="350" height="15" rx="8" fill="#2D9B5F" stroke="white" stroke-width="4"/>
 
                 <!-- club text -->
-                <text x="420" y="180" font-family="Brush Script MT, cursive" font-size="48" font-style="italic" fill="#2D9B5F" stroke="white" stroke-width="1">club</text>
+                <text x="420" y="195" font-family="Brush Script MT, cursive" font-size="48" font-style="italic" fill="#2D9B5F" stroke="white" stroke-width="1">club</text>
             </svg>
         </div>
         <h1>
@@ -408,7 +408,6 @@
 
         async function saveScanResult(data) {
             try {
-                // Save to database with session ID
                 const response = await fetch('/api/scan-sessions', {
                     method: 'POST',
                     headers: {
@@ -427,13 +426,23 @@
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error('Failed to save scan result');
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch (_) {
+                    payload = null;
                 }
 
-                console.log('✅ Scan result saved to database');
+                if (!response.ok) {
+                    const message = (payload && payload.message) || 'Failed to save scan result';
+                    throw new Error(message);
+                }
+
+                console.log('Scan result saved to database');
+                return payload && payload.data ? payload.data : null;
             } catch (error) {
                 console.error('Failed to save scan result:', error);
+                throw error;
             }
         }
 
