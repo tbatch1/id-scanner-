@@ -199,25 +199,24 @@
 <body>
     <div class="container">
         <div style="margin-bottom: 20px;">
-            <svg width="320" height="120" viewBox="0 0 1000 300" xmlns="http://www.w3.org/2000/svg">
-                <!-- T (Orange organic blob) -->
-                <ellipse cx="150" cy="115" rx="80" ry="95" fill="#FF6B3D" transform="rotate(-12 150 115)"/>
-                <rect x="98" y="75" width="104" height="22" fill="white" rx="8"/>
-                <rect x="136" y="92" width="28" height="75" fill="white" rx="8"/>
+            <svg width="400" height="140" viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg">
+                <!-- T blob with white border -->
+                <ellipse cx="100" cy="80" rx="70" ry="85" fill="#FF6B3D" stroke="white" stroke-width="8"/>
+                <text x="100" y="110" font-family="Arial, sans-serif" font-size="90" font-weight="900" fill="white" text-anchor="middle">T</text>
 
-                <!-- H (Blue organic blob) -->
-                <ellipse cx="390" cy="118" rx="82" ry="98" fill="#3EAED7" transform="rotate(8 390 118)"/>
-                <rect x="353" y="75" width="20" height="86" fill="white" rx="6"/>
-                <rect x="417" y="75" width="20" height="86" fill="white" rx="6"/>
-                <rect x="353" y="112" width="84" height="18" fill="white" rx="6"/>
+                <!-- H blob with white border -->
+                <ellipse cx="250" cy="80" rx="70" ry="85" fill="#3EAED7" stroke="white" stroke-width="8"/>
+                <text x="250" y="110" font-family="Arial, sans-serif" font-size="90" font-weight="900" fill="white" text-anchor="middle">H</text>
 
-                <!-- C (Black organic blob) -->
-                <ellipse cx="640" cy="120" rx="85" ry="100" fill="#1a1a1a" transform="rotate(-5 640 120)"/>
-                <path d="M 640 65 A 55 55 0 0 0 585 120 A 55 55 0 0 0 640 175" stroke="white" stroke-width="24" fill="none" stroke-linecap="round"/>
+                <!-- C blob with white border -->
+                <ellipse cx="400" cy="80" rx="70" ry="85" fill="#1a1a1a" stroke="white" stroke-width="8"/>
+                <text x="400" y="110" font-family="Arial, sans-serif" font-size="90" font-weight="900" fill="white" text-anchor="middle">C</text>
 
-                <!-- club (Green underline and text) -->
-                <path d="M 80 215 Q 390 228 710 215" stroke="#2D9B5F" stroke-width="13" fill="none" stroke-linecap="round"/>
-                <text x="720" y="255" font-family="Arial, sans-serif" font-size="52" font-style="italic" font-weight="bold" fill="#2D9B5F">club</text>
+                <!-- Green underline -->
+                <rect x="50" y="155" width="350" height="15" rx="8" fill="#2D9B5F" stroke="white" stroke-width="4"/>
+
+                <!-- club text -->
+                <text x="420" y="180" font-family="Brush Script MT, cursive" font-size="48" font-style="italic" fill="#2D9B5F" stroke="white" stroke-width="1">club</text>
             </svg>
         </div>
         <h1>
@@ -338,14 +337,18 @@
                 if (age >= 21) {
                     updateStatus(`✅ APPROVED: ${firstName} ${lastName} (Age ${age})`, 'success');
 
-                    // Save scan result to database
-                    await saveScanResult({
-                        approved: true,
-                        firstName,
-                        lastName,
-                        age,
-                        dob
-                    });
+                    try {
+                        await saveScanResult({
+                            approved: true,
+                            firstName,
+                            lastName,
+                            age,
+                            dob
+                        });
+                    } catch (error) {
+                        await handlePersistenceFailure(error);
+                        return;
+                    }
 
                     // Send approval to parent window
                     approvePayment();
@@ -359,15 +362,19 @@
                 } else {
                     updateStatus(`❌ REJECTED: Customer under 21 (Age ${age})`, 'error');
 
-                    // Save rejection
-                    await saveScanResult({
-                        approved: false,
-                        firstName,
-                        lastName,
-                        age,
-                        dob,
-                        reason: 'Under minimum age'
-                    });
+                    try {
+                        await saveScanResult({
+                            approved: false,
+                            firstName,
+                            lastName,
+                            age,
+                            dob,
+                            reason: 'Under minimum age'
+                        });
+                    } catch (error) {
+                        await handlePersistenceFailure(error);
+                        return;
+                    }
 
                     // Send decline to parent window
                     declinePayment();
