@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Scans - THC Club Admin</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --ls-bg: #0d111b;
+            --ls-panel: rgba(15, 18, 30, 0.92);
+            --ls-border: rgba(255, 255, 255, 0.08);
+            --ls-blue: #5a54ff;
+            --ls-green: #1fbf75;
+            --ls-amber: #f97316;
+            --ls-red: #ef4444;
+            --ls-teal: #22d3ee;
+            --ls-text: #f4f6ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: radial-gradient(circle at top, rgba(90, 84, 255, 0.35), transparent 55%),
+                        radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.25), transparent 50%),
+                        var(--ls-bg);
+            color: var(--ls-text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-family: 'Brush Script MT', cursive;
+            font-size: 28px;
+            font-style: italic;
+            background: linear-gradient(135deg, #FF6B3D 0%, #3EAED7 50%, #2D9B5F 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        .filters {
+            background: var(--ls-panel);
+            border: 1px solid var(--ls-border);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .filter-select, .filter-input {
+            flex: 1;
+            min-width: 150px;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--ls-border);
+            border-radius: 10px;
+            color: var(--ls-text);
+            font-size: 14px;
+        }
+
+        .load-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, var(--ls-blue), #4a44d0);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .table-container {
+            background: var(--ls-panel);
+            border: 1px solid var(--ls-border);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: rgba(90, 84, 255, 0.15);
+        }
+
+        th {
+            padding: 14px 12px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(244, 246, 255, 0.9);
+            border-bottom: 1px solid var(--ls-border);
+        }
+
+        td {
+            padding: 12px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-approved {
+            background: rgba(31, 191, 117, 0.2);
+            color: var(--ls-green);
+        }
+
+        .status-rejected {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--ls-red);
+        }
+
+        .status-approved_override {
+            background: rgba(249, 115, 22, 0.2);
+            color: var(--ls-amber);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: rgba(244, 246, 255, 0.5);
+        }
+
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: rgba(244, 246, 255, 0.5);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .nav-link {
+            flex: 1;
+            min-width: 150px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--ls-border);
+            border-radius: 10px;
+            color: var(--ls-text);
+            text-decoration: none;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .table-container {
+                overflow-x: auto;
+            }
+
+            table {
+                min-width: 800px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>All ID Scans</h1>
+    </div>
+
+    <div class="filters">
+        <div class="filter-row">
+            <select id="locationFilter" class="filter-select">
+                <option value="">All Locations</option>
+                <option value="downtown">Downtown</option>
+                <option value="airport">Airport</option>
+                <option value="northside">Northside</option>
+                <option value="southside">Southside</option>
+                <option value="eastside">Eastside</option>
+                <option value="westside">Westside</option>
+                <option value="central">Central</option>
+                <option value="uptown">Uptown</option>
+                <option value="midtown">Midtown</option>
+                <option value="lakeside">Lakeside</option>
+                <option value="riverside">Riverside</option>
+                <option value="hillside">Hillside</option>
+                <option value="parkside">Parkside</option>
+            </select>
+
+            <select id="statusFilter" class="filter-select">
+                <option value="">All Statuses</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="approved_override">Manager Override</option>
+            </select>
+
+            <button class="load-btn" onclick="loadScans()">Load Scans</button>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Name</th>
+                    <th>Age</th>
+                    <th>Status</th>
+                    <th>Reason</th>
+                    <th>Location</th>
+                    <th>Clerk</th>
+                    <th>Sale ID</th>
+                </tr>
+            </thead>
+            <tbody id="scansTableBody">
+                <tr>
+                    <td colspan="8" class="loading">Click "Load Scans" to view data</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="nav-links">
+        <a href="/admin/pending.html" class="nav-link">Pending Approvals</a>
+        <a href="/admin/banned.html" class="nav-link">Banned Customers</a>
+        <a href="/admin/overrides.html" class="nav-link">Override History</a>
+    </div>
+
+    <script>
+        async function loadScans() {
+            const location = document.getElementById('locationFilter').value;
+            const status = document.getElementById('statusFilter').value;
+
+            const tbody = document.getElementById('scansTableBody');
+            tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
+
+            try {
+                const params = new URLSearchParams();
+                if (location) params.append('location', location);
+                if (status) params.append('status', status);
+                params.append('limit', '100');
+
+                const response = await fetch(`/api/admin/scans?${params}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to load scans');
+                }
+
+                if (data.count === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="empty">No scans found</td></tr>';
+                    return;
+                }
+
+                const html = data.scans.map(scan => {
+                    const time = new Date(scan.created_at).toLocaleString();
+                    const name = [scan.first_name, scan.last_name].filter(Boolean).join(' ') || 'Unknown';
+                    const statusClass = `status-${scan.status.replace('_', '-')}`;
+
+                    return `
+                        <tr>
+                            <td>${time}</td>
+                            <td>${name}</td>
+                            <td>${scan.age || 'N/A'}</td>
+                            <td><span class="status-badge ${statusClass}">${scan.status}</span></td>
+                            <td>${scan.reason || '-'}</td>
+                            <td>${scan.location_id || 'N/A'}</td>
+                            <td>${scan.clerk_id || 'N/A'}</td>
+                            <td>${scan.sale_id}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tbody.innerHTML = html;
+
+            } catch (error) {
+                console.error('Failed to load scans:', error);
+                tbody.innerHTML = `<tr><td colspan="8" class="empty">Error: ${error.message}</td></tr>`;
+            }
+        }
+
+        // Auto-load on page load
+        window.addEventListener('load', () => {
+            loadScans();
+        });
+    </script>
+</body>
+</html>

@@ -1,6 +1,8 @@
 const express = require('express');
 const lightspeed = require('./lightspeedClient');
 const config = require('./config');
+const db = require('./db');
+const logger = require('./logger');
 
 const router = express.Router();
 
@@ -42,6 +44,130 @@ router.post('/refresh', async (req, res) => {
     res.status(500).json({
       error: 'REFRESH_FAILED',
       message: error.message
+    });
+  }
+});
+
+// GET /api/admin/pending/:locationId - Get pending/rejected sales for specific location
+router.get('/pending/:locationId', async (req, res) => {
+  if (!db.pool) {
+    return res.status(503).json({
+      error: 'DATABASE_UNAVAILABLE',
+      message: 'Database connection required'
+    });
+  }
+
+  const { locationId } = req.params;
+
+  try {
+    const query = `
+      SELECT
+        v.verification_id,
+        v.sale_id,
+        v.first_name,
+        v.last_name,
+        v.age,
+        v.date_of_birth,
+        v.status,
+        v.reason,
+        v.document_type,
+        v.location_id,
+        v.clerk_id,
+        v.created_at,
+        EXTRACT(EPOCH FROM (NOW() - v.created_at)) AS seconds_ago
+      FROM verifications v
+      LEFT JOIN sales_completions sc ON v.verification_id = sc.verification_id
+      WHERE v.location_id = $1
+        AND v.status = 'rejected'
+        AND sc.id IS NULL
+      ORDER BY v.created_at DESC
+      LIMIT 50
+    `;
+
+    const result = await db.pool.query(query, [locationId]);
+
+    res.status(200).json({
+      success: true,
+      location: locationId,
+      count: result.rows.length,
+      pending: result.rows
+    });
+  } catch (error) {
+    logger.logAPIError('get_pending_sales', error, { locationId });
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to retrieve pending sales'
+    });
+  }
+});
+
+// GET /api/admin/scans - Get all scans with optional filters
+router.get('/scans', async (req, res) => {
+  if (!db.pool) {
+    return res.status(503).json({
+      error: 'DATABASE_UNAVAILABLE',
+      message: 'Database connection required'
+    });
+  }
+
+  const { location, status, limit = 100, offset = 0 } = req.query;
+
+  try {
+    let whereConditions = [];
+    let params = [];
+    let paramIndex = 1;
+
+    if (location) {
+      whereConditions.push(`location_id = $${paramIndex}`);
+      params.push(location);
+      paramIndex++;
+    }
+
+    if (status) {
+      whereConditions.push(`status = $${paramIndex}`);
+      params.push(status);
+      paramIndex++;
+    }
+
+    const whereClause = whereConditions.length > 0
+      ? 'WHERE ' + whereConditions.join(' AND ')
+      : '';
+
+    params.push(parseInt(limit, 10));
+    params.push(parseInt(offset, 10));
+
+    const query = `
+      SELECT
+        verification_id,
+        sale_id,
+        first_name,
+        last_name,
+        age,
+        date_of_birth,
+        status,
+        reason,
+        document_type,
+        location_id,
+        clerk_id,
+        created_at
+      FROM verifications
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    const result = await db.pool.query(query, params);
+
+    res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      scans: result.rows
+    });
+  } catch (error) {
+    logger.logAPIError('get_scans', error, { location, status });
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to retrieve scans'
     });
   }
 });

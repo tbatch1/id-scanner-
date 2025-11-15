@@ -15,6 +15,22 @@
     {
       "source": "/scanner.html",
       "destination": "/frontend/scanner.html"
+    },
+    {
+      "source": "/admin/pending.html",
+      "destination": "/frontend/admin-pending.html"
+    },
+    {
+      "source": "/admin/scans.html",
+      "destination": "/frontend/admin-scans.html"
+    },
+    {
+      "source": "/admin/banned.html",
+      "destination": "/frontend/admin-banned.html"
+    },
+    {
+      "source": "/admin/overrides.html",
+      "destination": "/frontend/admin-overrides.html"
     }
   ],
   "redirects": [

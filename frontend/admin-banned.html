@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banned Customers - THC Club Admin</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --ls-bg: #0d111b;
+            --ls-panel: rgba(15, 18, 30, 0.92);
+            --ls-border: rgba(255, 255, 255, 0.08);
+            --ls-blue: #5a54ff;
+            --ls-green: #1fbf75;
+            --ls-amber: #f97316;
+            --ls-red: #ef4444;
+            --ls-teal: #22d3ee;
+            --ls-text: #f4f6ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: radial-gradient(circle at top, rgba(90, 84, 255, 0.35), transparent 55%),
+                        radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.25), transparent 50%),
+                        var(--ls-bg);
+            color: var(--ls-text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-family: 'Brush Script MT', cursive;
+            font-size: 28px;
+            font-style: italic;
+            background: linear-gradient(135deg, #FF6B3D 0%, #3EAED7 50%, #2D9B5F 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        .add-section {
+            background: var(--ls-panel);
+            border: 1px solid var(--ls-border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        .form-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--ls-amber);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .form-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--ls-border);
+            border-radius: 10px;
+            color: var(--ls-text);
+            font-size: 14px;
+        }
+
+        .form-textarea {
+            width: 100%;
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--ls-border);
+            border-radius: 10px;
+            color: var(--ls-text);
+            font-size: 14px;
+            min-height: 80px;
+            margin-bottom: 12px;
+        }
+
+        .add-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--ls-red), #dc2626);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .refresh-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--ls-blue), #4a44d0);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .table-container {
+            background: var(--ls-panel);
+            border: 1px solid var(--ls-border);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            margin-bottom: 20px;
+        }
+
+        .table-header {
+            padding: 16px 20px;
+            background: rgba(239, 68, 68, 0.15);
+            border-bottom: 1px solid var(--ls-border);
+            font-weight: 600;
+        }
+
+        .banned-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .banned-item {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .banned-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .banned-info {
+            flex: 1;
+        }
+
+        .banned-doc {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--ls-text);
+            margin-bottom: 4px;
+        }
+
+        .banned-details {
+            font-size: 13px;
+            color: rgba(244, 246, 255, 0.6);
+            margin-bottom: 4px;
+        }
+
+        .banned-note {
+            font-size: 13px;
+            color: rgba(244, 246, 255, 0.8);
+            font-style: italic;
+            margin-top: 6px;
+        }
+
+        .remove-btn {
+            padding: 8px 16px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 8px;
+            color: var(--ls-red);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .remove-btn:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: rgba(244, 246, 255, 0.5);
+        }
+
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: rgba(244, 246, 255, 0.5);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav-link {
+            flex: 1;
+            min-width: 150px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--ls-border);
+            border-radius: 10px;
+            color: var(--ls-text);
+            text-decoration: none;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Banned Customers</h1>
+    </div>
+
+    <div class="add-section">
+        <div class="form-title">Add Banned Customer</div>
+
+        <div class="form-row">
+            <select id="documentType" class="form-input">
+                <option value="">Select Document Type</option>
+                <option value="drivers_license">Driver's License</option>
+                <option value="passport">Passport</option>
+                <option value="state_id">State ID</option>
+                <option value="military_id">Military ID</option>
+            </select>
+
+            <input type="text" id="documentNumber" class="form-input" placeholder="Document Number" />
+        </div>
+
+        <div class="form-row">
+            <input type="text" id="issuingCountry" class="form-input" placeholder="Country (e.g., USA)" />
+            <input type="text" id="firstName" class="form-input" placeholder="First Name" />
+            <input type="text" id="lastName" class="form-input" placeholder="Last Name" />
+        </div>
+
+        <textarea id="notes" class="form-textarea" placeholder="Reason for ban (required)"></textarea>
+
+        <button class="add-btn" onclick="addBanned()">Add to Banned List</button>
+        <button class="refresh-btn" onclick="loadBanned()">Refresh List</button>
+    </div>
+
+    <div class="table-container">
+        <div class="table-header">Banned Customer List</div>
+        <div id="bannedList" class="banned-list">
+            <div class="loading">Loading...</div>
+        </div>
+    </div>
+
+    <div class="nav-links">
+        <a href="/admin/pending.html" class="nav-link">Pending Approvals</a>
+        <a href="/admin/scans.html" class="nav-link">View All Scans</a>
+        <a href="/admin/overrides.html" class="nav-link">Override History</a>
+    </div>
+
+    <script>
+        async function loadBanned() {
+            const listContainer = document.getElementById('bannedList');
+            listContainer.innerHTML = '<div class="loading">Loading...</div>';
+
+            try {
+                const response = await fetch('/api/banned');
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to load banned customers');
+                }
+
+                if (!data.banned || data.banned.length === 0) {
+                    listContainer.innerHTML = '<div class="empty">No banned customers</div>';
+                    return;
+                }
+
+                const html = data.banned.map(item => {
+                    const name = [item.first_name, item.last_name].filter(Boolean).join(' ') || 'Unknown';
+                    const country = item.issuing_country || 'N/A';
+                    const created = new Date(item.created_at).toLocaleDateString();
+
+                    return `
+                        <div class="banned-item">
+                            <div class="banned-info">
+                                <div class="banned-doc">${item.document_type} / ${item.document_number}</div>
+                                <div class="banned-details">Name: ${name} | Country: ${country} | Added: ${created}</div>
+                                ${item.notes ? `<div class="banned-note">${item.notes}</div>` : ''}
+                            </div>
+                            <button class="remove-btn" onclick="removeBanned('${item.id}')">Remove</button>
+                        </div>
+                    `;
+                }).join('');
+
+                listContainer.innerHTML = html;
+
+            } catch (error) {
+                console.error('Failed to load banned customers:', error);
+                listContainer.innerHTML = `<div class="empty">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function addBanned() {
+            const documentType = document.getElementById('documentType').value;
+            const documentNumber = document.getElementById('documentNumber').value;
+            const issuingCountry = document.getElementById('issuingCountry').value;
+            const firstName = document.getElementById('firstName').value;
+            const lastName = document.getElementById('lastName').value;
+            const notes = document.getElementById('notes').value;
+
+            if (!documentType) {
+                alert('Please select a document type');
+                return;
+            }
+
+            if (!documentNumber) {
+                alert('Please enter a document number');
+                return;
+            }
+
+            if (!notes) {
+                alert('Please enter a reason for banning this customer');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/banned', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        documentType,
+                        documentNumber,
+                        issuingCountry: issuingCountry || 'USA',
+                        firstName,
+                        lastName,
+                        notes
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to add banned customer');
+                }
+
+                alert('Customer banned successfully');
+
+                // Clear form
+                document.getElementById('documentType').value = '';
+                document.getElementById('documentNumber').value = '';
+                document.getElementById('issuingCountry').value = '';
+                document.getElementById('firstName').value = '';
+                document.getElementById('lastName').value = '';
+                document.getElementById('notes').value = '';
+
+                // Reload list
+                loadBanned();
+
+            } catch (error) {
+                alert('Failed to add banned customer: ' + error.message);
+            }
+        }
+
+        async function removeBanned(id) {
+            if (!confirm('Are you sure you want to remove this customer from the banned list?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/banned/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to remove banned customer');
+                }
+
+                alert('Customer removed from banned list');
+                loadBanned();
+
+            } catch (error) {
+                alert('Failed to remove customer: ' + error.message);
+            }
+        }
+
+        // Auto-load on page load
+        window.addEventListener('load', () => {
+            loadBanned();
+        });
+    </script>
+</body>
+</html>
