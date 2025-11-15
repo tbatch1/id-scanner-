@@ -101,10 +101,11 @@ app.use(
 
 app.use(express.json({ limit: '1mb' }));
 
-// Scan sessions need higher limits for testing
+// Scan sessions - Production ready for high volume (13 locations, 500+ scans/day)
+// At peak: 50 scans/hour/location * 13 locations = 650 scans/hour = ~2600 per 15min
 const scanSessionLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 500, // Allow 500 scans per 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5000, // Allow 5000 scans per 15 minutes (20,000/hour capacity)
   standardHeaders: true,
   legacyHeaders: false,
   handler(req, res) {
