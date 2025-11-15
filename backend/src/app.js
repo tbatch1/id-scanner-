@@ -101,6 +101,26 @@ app.use(
 
 app.use(express.json({ limit: '1mb' }));
 
+// Scan sessions need higher limits for testing
+const scanSessionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500, // Allow 500 scans per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler(req, res) {
+    logger.logSecurity('rate_limit_exceeded', {
+      ip: req.ip,
+      path: req.path,
+      type: 'scan_sessions'
+    });
+    res.status(429).json({
+      error: 'RATE_LIMIT_EXCEEDED',
+      message: 'Too many scan attempts from this IP, please try again later.'
+    });
+  }
+});
+
+app.use('/api/scan-sessions', scanSessionLimiter);
 app.use('/api/sales/:saleId/verify', strictLimiter);
 app.use('/api/sales/:saleId/complete', strictLimiter);
 app.use('/api', generalLimiter);
