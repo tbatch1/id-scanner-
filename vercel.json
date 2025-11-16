@@ -5,6 +5,14 @@
       "destination": "/api"
     },
     {
+      "source": "/admin/(pending|scans|status|refresh)",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/(pending|scans)/(.*)",
+      "destination": "/api"
+    },
+    {
       "source": "/payment-gateway.html",
       "destination": "/frontend/payment-gateway-auto.html"
     },
