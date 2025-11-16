@@ -450,7 +450,7 @@
             document.getElementById('pendingList').innerHTML = '<div class="loading">Loading...</div>';
 
             try {
-                const response = await fetch(`/api/admin/pending/${location}`);
+                const response = await fetch(`/admin/pending/${location}`);
                 const data = await response.json();
 
                 if (!response.ok) {

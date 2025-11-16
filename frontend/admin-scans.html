@@ -268,7 +268,7 @@
                 if (status) params.append('status', status);
                 params.append('limit', '100');
 
-                const response = await fetch(`/api/admin/scans?${params}`);
+                const response = await fetch(`/admin/scans?${params}`);
                 const data = await response.json();
 
                 if (!response.ok) {
