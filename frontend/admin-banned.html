@@ -233,24 +233,17 @@
         <div class="form-title">Add Banned Customer</div>
 
         <div class="form-row">
-            <select id="documentType" class="form-input">
-                <option value="">Select Document Type</option>
-                <option value="drivers_license">Driver's License</option>
-                <option value="passport">Passport</option>
-                <option value="state_id">State ID</option>
-                <option value="military_id">Military ID</option>
-            </select>
-
-            <input type="text" id="documentNumber" class="form-input" placeholder="Document Number" />
+            <input type="text" id="firstName" class="form-input" placeholder="First Name (required)" />
+            <input type="text" id="lastName" class="form-input" placeholder="Last Name (required)" />
         </div>
 
         <div class="form-row">
-            <input type="text" id="issuingCountry" class="form-input" placeholder="Country (e.g., USA)" />
-            <input type="text" id="firstName" class="form-input" placeholder="First Name" />
-            <input type="text" id="lastName" class="form-input" placeholder="Last Name" />
+            <input type="tel" id="phone" class="form-input" placeholder="Phone Number (optional)" />
+            <input type="email" id="email" class="form-input" placeholder="Email (optional)" />
         </div>
 
-        <textarea id="notes" class="form-textarea" placeholder="Reason for ban (required)"></textarea>
+        <input type="hidden" id="documentNumber" />
+        <input type="hidden" id="documentType" value="routed_id" />
 
         <button class="add-btn" onclick="addBanned()">Add to Banned List</button>
         <button class="refresh-btn" onclick="loadBanned()">Refresh List</button>
@@ -313,27 +306,23 @@
         }
 
         async function addBanned() {
-            const documentType = document.getElementById('documentType').value;
-            const documentNumber = document.getElementById('documentNumber').value;
-            const issuingCountry = document.getElementById('issuingCountry').value;
             const firstName = document.getElementById('firstName').value;
             const lastName = document.getElementById('lastName').value;
-            const notes = document.getElementById('notes').value;
+            const phone = document.getElementById('phone').value;
+            const email = document.getElementById('email').value;
 
-            if (!documentType) {
-                alert('Please select a document type');
+            if (!firstName || !lastName) {
+                alert('First name and last name are required');
                 return;
             }
 
-            if (!documentNumber) {
-                alert('Please enter a document number');
-                return;
-            }
+            // Generate unique routed ID tracking number
+            const routedId = `RT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-            if (!notes) {
-                alert('Please enter a reason for banning this customer');
-                return;
-            }
+            // Store in hidden field for reference
+            document.getElementById('documentNumber').value = routedId;
+
+            const notes = `Phone: ${phone || 'N/A'} | Email: ${email || 'N/A'} | Routed ID: ${routedId}`;
 
             try {
                 const response = await fetch('/api/banned', {
@@ -342,9 +331,9 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        documentType,
-                        documentNumber,
-                        issuingCountry: issuingCountry || 'USA',
+                        documentType: 'routed_id',
+                        documentNumber: routedId,
+                        issuingCountry: 'USA',
                         firstName,
                         lastName,
                         notes
@@ -357,15 +346,13 @@
                     throw new Error(data.message || 'Failed to add banned customer');
                 }
 
-                alert('Customer banned successfully');
+                alert(`Customer banned successfully!\nRouted ID: ${routedId}`);
 
                 // Clear form
-                document.getElementById('documentType').value = '';
-                document.getElementById('documentNumber').value = '';
-                document.getElementById('issuingCountry').value = '';
                 document.getElementById('firstName').value = '';
                 document.getElementById('lastName').value = '';
-                document.getElementById('notes').value = '';
+                document.getElementById('phone').value = '';
+                document.getElementById('email').value = '';
 
                 // Reload list
                 loadBanned();
