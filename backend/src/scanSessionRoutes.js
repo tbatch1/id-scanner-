@@ -27,8 +27,7 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    // Save to scan_sessions table
-    const sessionQuery = `
+    const query = `
       INSERT INTO scan_sessions (
         session_id,
         approved,
@@ -55,7 +54,7 @@ router.post('/', async (req, res) => {
       RETURNING *
     `;
 
-    const sessionResult = await db.pool.query(sessionQuery, [
+    const result = await db.pool.query(query, [
       sessionId,
       approved !== undefined ? approved : null,
       firstName || null,
@@ -67,72 +66,11 @@ router.post('/', async (req, res) => {
       registerId || null
     ]);
 
-    // Also save to verifications table so it appears in admin dashboard
-    const verificationStatus = approved === true ? 'approved' : (approved === false ? 'rejected' : 'pending');
-    const verificationQuery = `
-      INSERT INTO verifications (
-        verification_id,
-        sale_id,
-        first_name,
-        last_name,
-        age,
-        date_of_birth,
-        status,
-        reason,
-        document_type,
-        document_number,
-        issuing_country,
-        sex,
-        document_expiry,
-        location_id,
-        clerk_id,
-        created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-      ON CONFLICT (sale_id)
-      DO UPDATE SET
-        status = EXCLUDED.status,
-        first_name = EXCLUDED.first_name,
-        last_name = EXCLUDED.last_name,
-        age = EXCLUDED.age,
-        date_of_birth = EXCLUDED.date_of_birth,
-        reason = EXCLUDED.reason,
-        document_type = EXCLUDED.document_type,
-        document_number = EXCLUDED.document_number,
-        issuing_country = EXCLUDED.issuing_country,
-        sex = EXCLUDED.sex,
-        document_expiry = EXCLUDED.document_expiry
-      RETURNING *
-    `;
-
-    await db.pool.query(verificationQuery, [
-      sessionId, // verification_id (use session ID)
-      sessionId, // sale_id (use session ID for now)
-      firstName || null,
-      lastName || null,
-      age || null,
-      dob || null,
-      verificationStatus,
-      reason || null,
-      documentType || null,
-      documentNumber || null,
-      nationality || null, // Maps to issuing_country
-      sex || null,
-      expiry || null,
-      outletId || null,
-      registerId || null,
-      scannedAt ? new Date(scannedAt) : new Date()
-    ]);
-
-    logger.info({
-      event: 'scan_session_saved',
-      sessionId,
-      approved,
-      status: verificationStatus
-    }, 'Scan session and verification saved');
+    logger.info({ event: 'scan_session_saved', sessionId, approved }, 'Scan session saved');
 
     res.status(200).json({
       success: true,
-      data: sessionResult.rows[0]
+      data: result.rows[0]
     });
   } catch (error) {
     logger.logAPIError('save_scan_session', error, { sessionId });

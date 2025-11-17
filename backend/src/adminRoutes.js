@@ -60,27 +60,28 @@ router.get('/pending/:locationId', async (req, res) => {
   const { locationId } = req.params;
 
   try {
+    // Query scan_sessions table for rejected scans at this location
     const query = `
       SELECT
-        v.verification_id,
-        v.sale_id,
-        v.first_name,
-        v.last_name,
-        v.age,
-        v.date_of_birth,
-        v.status,
-        v.reason,
-        v.document_type,
-        v.location_id,
-        v.clerk_id,
-        v.created_at,
-        EXTRACT(EPOCH FROM (NOW() - v.created_at)) AS seconds_ago
-      FROM verifications v
-      LEFT JOIN sales_completions sc ON v.verification_id = sc.verification_id
-      WHERE v.location_id = $1
-        AND v.status = 'rejected'
-        AND sc.id IS NULL
-      ORDER BY v.created_at DESC
+        session_id AS verification_id,
+        session_id AS sale_id,
+        first_name,
+        last_name,
+        age,
+        date_of_birth,
+        CASE WHEN approved = true THEN 'approved'
+             WHEN approved = false THEN 'rejected'
+             ELSE 'pending' END AS status,
+        reason,
+        'drivers_license' AS document_type,
+        outlet_id AS location_id,
+        register_id AS clerk_id,
+        completed_at AS created_at,
+        EXTRACT(EPOCH FROM (NOW() - completed_at)) AS seconds_ago
+      FROM scan_sessions
+      WHERE outlet_id = $1
+        AND approved = false
+      ORDER BY completed_at DESC
       LIMIT 50
     `;
 
@@ -118,15 +119,20 @@ router.get('/scans', async (req, res) => {
     let paramIndex = 1;
 
     if (location) {
-      whereConditions.push(`location_id = $${paramIndex}`);
+      whereConditions.push(`outlet_id = $${paramIndex}`);
       params.push(location);
       paramIndex++;
     }
 
     if (status) {
-      whereConditions.push(`status = $${paramIndex}`);
-      params.push(status);
-      paramIndex++;
+      // Map status to approved field
+      if (status === 'approved') {
+        whereConditions.push(`approved = true`);
+      } else if (status === 'rejected') {
+        whereConditions.push(`approved = false`);
+      } else if (status === 'pending') {
+        whereConditions.push(`approved IS NULL`);
+      }
     }
 
     const whereClause = whereConditions.length > 0
@@ -138,21 +144,23 @@ router.get('/scans', async (req, res) => {
 
     const query = `
       SELECT
-        verification_id,
-        sale_id,
+        session_id AS verification_id,
+        session_id AS sale_id,
         first_name,
         last_name,
         age,
         date_of_birth,
-        status,
+        CASE WHEN approved = true THEN 'approved'
+             WHEN approved = false THEN 'rejected'
+             ELSE 'pending' END AS status,
         reason,
-        document_type,
-        location_id,
-        clerk_id,
-        created_at
-      FROM verifications
+        'drivers_license' AS document_type,
+        outlet_id AS location_id,
+        register_id AS clerk_id,
+        completed_at AS created_at
+      FROM scan_sessions
       ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY completed_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
