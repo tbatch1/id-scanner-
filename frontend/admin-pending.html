@@ -71,60 +71,78 @@
 
         .location-select-wrapper {
             position: relative;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
 
-        .location-select-wrapper::after {
-            content: '▼';
+        .location-select-wrapper::before {
+            content: '';
             position: absolute;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
+            inset: -2px;
+            background: linear-gradient(135deg, #5a54ff, #22d3ee, #2D9B5F);
+            border-radius: 16px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
             pointer-events: none;
-            color: var(--ls-teal);
-            font-size: 12px;
+            z-index: 0;
+        }
+
+        .location-select-wrapper:hover::before {
+            opacity: 0.6;
+            animation: borderGlow 2s ease infinite;
+        }
+
+        @keyframes borderGlow {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
         }
 
         .location-select {
+            position: relative;
+            z-index: 1;
             width: 100%;
-            padding: 16px 20px;
-            padding-right: 45px;
-            background: linear-gradient(135deg, rgba(90, 84, 255, 0.12), rgba(34, 211, 238, 0.08));
-            border: 2px solid transparent;
-            border-radius: 14px;
+            padding: 18px 24px;
+            padding-right: 50px;
+            background: rgba(13, 17, 27, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
             color: var(--ls-text);
-            font-size: 17px;
-            font-weight: 600;
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
             cursor: pointer;
             appearance: none;
             -webkit-appearance: none;
             -moz-appearance: none;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(90, 84, 255, 0.15);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.05);
         }
 
         .location-select:hover {
-            background: linear-gradient(135deg, rgba(90, 84, 255, 0.18), rgba(34, 211, 238, 0.12));
+            background: rgba(20, 25, 40, 0.98);
             border-color: rgba(90, 84, 255, 0.4);
-            box-shadow: 0 6px 20px rgba(90, 84, 255, 0.25);
+            transform: translateY(-1px);
+            box-shadow: 0 12px 40px rgba(90, 84, 255, 0.2),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
         }
 
         .location-select:focus {
             outline: none;
-            border-color: var(--ls-teal);
-            box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.15);
+            background: rgba(20, 25, 40, 1);
+            border-color: #5a54ff;
+            transform: translateY(-2px);
+            box-shadow: 0 16px 48px rgba(90, 84, 255, 0.35),
+                        0 0 0 4px rgba(90, 84, 255, 0.1),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.15);
         }
 
         .location-select option {
-            background: #1a1f2e;
+            background: #0f121e;
             color: var(--ls-text);
-            padding: 12px;
-            font-weight: 500;
-        }
-
-        .location-select option:checked {
-            background: linear-gradient(135deg, var(--ls-blue), #4a44d0);
-            color: white;
+            padding: 14px 20px;
+            font-weight: 400;
         }
 
         .stats {
@@ -405,26 +423,26 @@
     <div class="controls">
         <div class="location-select-wrapper">
             <select id="locationSelect" class="location-select">
-                <option value="">📍 Select Location...</option>
-                <option value="1960">🏢 1960</option>
-                <option value="290">🏢 290</option>
-                <option value="almeda">🏢 Almeda</option>
-                <option value="bellaire">🏢 Bellaire</option>
-                <option value="bush">🏢 Bush</option>
-                <option value="cypress">🏢 Cypress</option>
-                <option value="energy_corridor">🏢 Energy Corridor</option>
-                <option value="galleria">🏢 Galleria</option>
-                <option value="heights">🏢 Heights</option>
-                <option value="hobby">🏢 Hobby</option>
-                <option value="katy">🏢 Katy</option>
-                <option value="north">🏢 North</option>
-                <option value="south">🏢 South</option>
-                <option value="south_main">🏢 South Main</option>
-                <option value="tc_jester">🏢 TC Jester</option>
-                <option value="warehouse">🏢 Warehouse</option>
-                <option value="westchase">🏢 Westchase</option>
-                <option value="westheimer">🏢 Westheimer</option>
-                <option value="west_oaks">🏢 West Oaks</option>
+                <option value="">Select Location</option>
+                <option value="1960">1960</option>
+                <option value="290">290</option>
+                <option value="almeda">Almeda</option>
+                <option value="bellaire">Bellaire</option>
+                <option value="bush">Bush</option>
+                <option value="cypress">Cypress</option>
+                <option value="energy_corridor">Energy Corridor</option>
+                <option value="galleria">Galleria</option>
+                <option value="heights">Heights</option>
+                <option value="hobby">Hobby</option>
+                <option value="katy">Katy</option>
+                <option value="north">North</option>
+                <option value="south">South</option>
+                <option value="south_main">South Main</option>
+                <option value="tc_jester">TC Jester</option>
+                <option value="warehouse">Warehouse</option>
+                <option value="westchase">Westchase</option>
+                <option value="westheimer">Westheimer</option>
+                <option value="west_oaks">West Oaks</option>
             </select>
         </div>
 
