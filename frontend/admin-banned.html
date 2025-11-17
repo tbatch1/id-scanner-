@@ -493,6 +493,14 @@
 
                 if (!response.ok) {
                     const data = await response.json();
+
+                    // If customer is already removed (404), just refresh the list
+                    if (response.status === 404) {
+                        closeModal();
+                        loadBanned();
+                        return;
+                    }
+
                     throw new Error(data.message || 'Failed to remove banned customer');
                 }
 
