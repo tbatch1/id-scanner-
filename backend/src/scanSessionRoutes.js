@@ -16,7 +16,8 @@ router.post('/', async (req, res) => {
 
   const {
     sessionId, approved, firstName, lastName, age, dob, reason, outletId, registerId,
-    documentType, documentNumber, nationality, sex, expiry, scannedAt
+    documentType, documentNumber, nationality, sex, expiry, scannedAt,
+    employeeId, employeeName
   } = req.body || {};
 
   if (!sessionId) {
@@ -38,8 +39,10 @@ router.post('/', async (req, res) => {
         reason,
         outlet_id,
         register_id,
+        employee_id,
+        employee_name,
         completed_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
       ON CONFLICT (session_id)
       DO UPDATE SET
         approved = EXCLUDED.approved,
@@ -50,6 +53,8 @@ router.post('/', async (req, res) => {
         reason = EXCLUDED.reason,
         outlet_id = EXCLUDED.outlet_id,
         register_id = EXCLUDED.register_id,
+        employee_id = EXCLUDED.employee_id,
+        employee_name = EXCLUDED.employee_name,
         completed_at = NOW()
       RETURNING *
     `;
@@ -63,7 +68,9 @@ router.post('/', async (req, res) => {
       dob || null,
       reason || null,
       outletId || null,
-      registerId || null
+      registerId || null,
+      employeeId || null,
+      employeeName || null
     ]);
 
     logger.info({ event: 'scan_session_saved', sessionId, approved }, 'Scan session saved');

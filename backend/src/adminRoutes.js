@@ -75,7 +75,7 @@ router.get('/pending/:locationId', async (req, res) => {
         reason,
         'drivers_license' AS document_type,
         outlet_id AS location_id,
-        register_id AS clerk_id,
+        COALESCE(employee_name, 'Register ' || SUBSTRING(register_id, 1, 8)) AS clerk_id,
         completed_at AS created_at,
         EXTRACT(EPOCH FROM (NOW() - completed_at)) AS seconds_ago
       FROM scan_sessions
@@ -156,7 +156,7 @@ router.get('/scans', async (req, res) => {
         reason,
         'drivers_license' AS document_type,
         outlet_id AS location_id,
-        register_id AS clerk_id,
+        COALESCE(employee_name, 'Register ' || SUBSTRING(register_id, 1, 8)) AS clerk_id,
         completed_at AS created_at
       FROM scan_sessions
       ${whereClause}
