@@ -69,15 +69,62 @@
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
         }
 
+        .location-select-wrapper {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .location-select-wrapper::after {
+            content: '▼';
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: var(--ls-teal);
+            font-size: 12px;
+        }
+
         .location-select {
             width: 100%;
-            padding: 12px 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--ls-border);
-            border-radius: 12px;
+            padding: 16px 20px;
+            padding-right: 45px;
+            background: linear-gradient(135deg, rgba(90, 84, 255, 0.12), rgba(34, 211, 238, 0.08));
+            border: 2px solid transparent;
+            border-radius: 14px;
             color: var(--ls-text);
-            font-size: 16px;
-            margin-bottom: 15px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(90, 84, 255, 0.15);
+        }
+
+        .location-select:hover {
+            background: linear-gradient(135deg, rgba(90, 84, 255, 0.18), rgba(34, 211, 238, 0.12));
+            border-color: rgba(90, 84, 255, 0.4);
+            box-shadow: 0 6px 20px rgba(90, 84, 255, 0.25);
+        }
+
+        .location-select:focus {
+            outline: none;
+            border-color: var(--ls-teal);
+            box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.15);
+        }
+
+        .location-select option {
+            background: #1a1f2e;
+            color: var(--ls-text);
+            padding: 12px;
+            font-weight: 500;
+        }
+
+        .location-select option:checked {
+            background: linear-gradient(135deg, var(--ls-blue), #4a44d0);
+            color: white;
         }
 
         .stats {
@@ -356,28 +403,30 @@
     </div>
 
     <div class="controls">
-        <select id="locationSelect" class="location-select">
-            <option value="">Select Location...</option>
-            <option value="1960">1960</option>
-            <option value="290">290</option>
-            <option value="almeda">Almeda</option>
-            <option value="bellaire">Bellaire</option>
-            <option value="bush">Bush</option>
-            <option value="cypress">Cypress</option>
-            <option value="energy_corridor">Energy Corridor</option>
-            <option value="galleria">Galleria</option>
-            <option value="heights">Heights</option>
-            <option value="hobby">Hobby</option>
-            <option value="katy">Katy</option>
-            <option value="north">North</option>
-            <option value="south">South</option>
-            <option value="south_main">South Main</option>
-            <option value="tc_jester">TC Jester</option>
-            <option value="warehouse">Warehouse</option>
-            <option value="westchase">Westchase</option>
-            <option value="westheimer">Westheimer</option>
-            <option value="west_oaks">West Oaks</option>
-        </select>
+        <div class="location-select-wrapper">
+            <select id="locationSelect" class="location-select">
+                <option value="">📍 Select Location...</option>
+                <option value="1960">🏢 1960</option>
+                <option value="290">🏢 290</option>
+                <option value="almeda">🏢 Almeda</option>
+                <option value="bellaire">🏢 Bellaire</option>
+                <option value="bush">🏢 Bush</option>
+                <option value="cypress">🏢 Cypress</option>
+                <option value="energy_corridor">🏢 Energy Corridor</option>
+                <option value="galleria">🏢 Galleria</option>
+                <option value="heights">🏢 Heights</option>
+                <option value="hobby">🏢 Hobby</option>
+                <option value="katy">🏢 Katy</option>
+                <option value="north">🏢 North</option>
+                <option value="south">🏢 South</option>
+                <option value="south_main">🏢 South Main</option>
+                <option value="tc_jester">🏢 TC Jester</option>
+                <option value="warehouse">🏢 Warehouse</option>
+                <option value="westchase">🏢 Westchase</option>
+                <option value="westheimer">🏢 Westheimer</option>
+                <option value="west_oaks">🏢 West Oaks</option>
+            </select>
+        </div>
 
         <div class="stats">
             <div class="stat">

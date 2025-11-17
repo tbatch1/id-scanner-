@@ -69,12 +69,37 @@
         .filter-select, .filter-input {
             flex: 1;
             min-width: 150px;
-            padding: 10px 14px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--ls-border);
-            border-radius: 10px;
+            padding: 14px 18px;
+            background: linear-gradient(135deg, rgba(90, 84, 255, 0.12), rgba(34, 211, 238, 0.08));
+            border: 2px solid transparent;
+            border-radius: 12px;
             color: var(--ls-text);
-            font-size: 14px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(90, 84, 255, 0.15);
+        }
+
+        .filter-select:hover, .filter-input:hover {
+            background: linear-gradient(135deg, rgba(90, 84, 255, 0.18), rgba(34, 211, 238, 0.12));
+            border-color: rgba(90, 84, 255, 0.4);
+            box-shadow: 0 6px 20px rgba(90, 84, 255, 0.25);
+        }
+
+        .filter-select:focus, .filter-input:focus {
+            outline: none;
+            border-color: var(--ls-teal);
+            box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.15);
+        }
+
+        .filter-select option {
+            background: #1a1f2e;
+            color: var(--ls-text);
+            padding: 12px;
+            font-weight: 500;
         }
 
         .load-btn {
@@ -199,33 +224,33 @@
     <div class="filters">
         <div class="filter-row">
             <select id="locationFilter" class="filter-select">
-                <option value="">All Locations</option>
-                <option value="1960">1960</option>
-                <option value="290">290</option>
-                <option value="almeda">Almeda</option>
-                <option value="bellaire">Bellaire</option>
-                <option value="bush">Bush</option>
-                <option value="cypress">Cypress</option>
-                <option value="energy_corridor">Energy Corridor</option>
-                <option value="galleria">Galleria</option>
-                <option value="heights">Heights</option>
-                <option value="hobby">Hobby</option>
-                <option value="katy">Katy</option>
-                <option value="north">North</option>
-                <option value="south">South</option>
-                <option value="south_main">South Main</option>
-                <option value="tc_jester">TC Jester</option>
-                <option value="warehouse">Warehouse</option>
-                <option value="westchase">Westchase</option>
-                <option value="westheimer">Westheimer</option>
-                <option value="west_oaks">West Oaks</option>
+                <option value="">📍 All Locations</option>
+                <option value="1960">🏢 1960</option>
+                <option value="290">🏢 290</option>
+                <option value="almeda">🏢 Almeda</option>
+                <option value="bellaire">🏢 Bellaire</option>
+                <option value="bush">🏢 Bush</option>
+                <option value="cypress">🏢 Cypress</option>
+                <option value="energy_corridor">🏢 Energy Corridor</option>
+                <option value="galleria">🏢 Galleria</option>
+                <option value="heights">🏢 Heights</option>
+                <option value="hobby">🏢 Hobby</option>
+                <option value="katy">🏢 Katy</option>
+                <option value="north">🏢 North</option>
+                <option value="south">🏢 South</option>
+                <option value="south_main">🏢 South Main</option>
+                <option value="tc_jester">🏢 TC Jester</option>
+                <option value="warehouse">🏢 Warehouse</option>
+                <option value="westchase">🏢 Westchase</option>
+                <option value="westheimer">🏢 Westheimer</option>
+                <option value="west_oaks">🏢 West Oaks</option>
             </select>
 
             <select id="statusFilter" class="filter-select">
-                <option value="">All Statuses</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="approved_override">Manager Override</option>
+                <option value="">🔍 All Statuses</option>
+                <option value="approved">✅ Approved</option>
+                <option value="rejected">❌ Rejected</option>
+                <option value="approved_override">⚠️ Manager Override</option>
             </select>
 
             <button class="load-btn" onclick="loadScans()">Load Scans</button>
