@@ -222,6 +222,100 @@
             font-size: 14px;
             font-weight: 600;
         }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--ls-panel);
+            border: 1px solid var(--ls-border);
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: modalSlideIn 0.2s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--ls-text);
+            margin-bottom: 12px;
+        }
+
+        .modal-message {
+            font-size: 14px;
+            color: rgba(244, 246, 255, 0.7);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .modal-customer-name {
+            color: var(--ls-amber);
+            font-weight: 600;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .modal-btn-cancel {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--ls-text);
+        }
+
+        .modal-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .modal-btn-confirm {
+            background: linear-gradient(135deg, var(--ls-red), #dc2626);
+            color: white;
+        }
+
+        .modal-btn-confirm:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -262,6 +356,19 @@
         <a href="/admin/overrides.html" class="nav-link">Override History</a>
     </div>
 
+    <div id="confirmModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title">Remove Customer</div>
+            <div class="modal-message">
+                Are you sure you want to remove <span class="modal-customer-name" id="modalCustomerName"></span> from the banned list?
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn modal-btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="modal-btn modal-btn-confirm" onclick="confirmRemove()">Remove</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         async function loadBanned() {
             const listContainer = document.getElementById('bannedList');
@@ -293,7 +400,7 @@
                                 <div class="banned-details">Routed ID: ${item.documentNumber} | Added: ${created}</div>
                                 ${item.notes ? `<div class="banned-note">${item.notes}</div>` : ''}
                             </div>
-                            <button class="remove-btn" onclick="removeBanned('${item.id}')">Remove</button>
+                            <button class="remove-btn" onclick="showRemoveModal('${item.id}', '${name}')">Remove</button>
                         </div>
                     `;
                 }).join('');
@@ -363,13 +470,24 @@
             }
         }
 
-        async function removeBanned(id) {
-            if (!confirm('Are you sure you want to remove this customer from the banned list?')) {
-                return;
-            }
+        let currentRemoveId = null;
+
+        function showRemoveModal(id, name) {
+            currentRemoveId = id;
+            document.getElementById('modalCustomerName').textContent = name;
+            document.getElementById('confirmModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('confirmModal').classList.remove('active');
+            currentRemoveId = null;
+        }
+
+        async function confirmRemove() {
+            if (!currentRemoveId) return;
 
             try {
-                const response = await fetch(`/api/banned/${id}`, {
+                const response = await fetch(`/api/banned/${currentRemoveId}`, {
                     method: 'DELETE'
                 });
 
@@ -379,13 +497,21 @@
                     throw new Error(data.message || 'Failed to remove banned customer');
                 }
 
-                alert('Customer removed from banned list');
+                closeModal();
                 loadBanned();
 
             } catch (error) {
                 alert('Failed to remove customer: ' + error.message);
+                closeModal();
             }
         }
+
+        // Close modal when clicking outside
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'confirmModal') {
+                closeModal();
+            }
+        });
 
         // Auto-load on page load
         window.addEventListener('load', () => {
