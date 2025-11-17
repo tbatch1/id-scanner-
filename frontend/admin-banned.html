@@ -275,21 +275,22 @@
                     throw new Error(data.message || 'Failed to load banned customers');
                 }
 
-                if (!data.banned || data.banned.length === 0) {
+                const banned = data.data || data.banned || [];
+
+                if (banned.length === 0) {
                     listContainer.innerHTML = '<div class="empty">No banned customers</div>';
                     return;
                 }
 
-                const html = data.banned.map(item => {
-                    const name = [item.first_name, item.last_name].filter(Boolean).join(' ') || 'Unknown';
-                    const country = item.issuing_country || 'N/A';
-                    const created = new Date(item.created_at).toLocaleDateString();
+                const html = banned.map(item => {
+                    const name = [item.firstName, item.lastName].filter(Boolean).join(' ') || 'Unknown';
+                    const created = new Date(item.createdAt).toLocaleDateString();
 
                     return `
                         <div class="banned-item">
                             <div class="banned-info">
-                                <div class="banned-doc">${item.document_type} / ${item.document_number}</div>
-                                <div class="banned-details">Name: ${name} | Country: ${country} | Added: ${created}</div>
+                                <div class="banned-doc">${name}</div>
+                                <div class="banned-details">Routed ID: ${item.documentNumber} | Added: ${created}</div>
                                 ${item.notes ? `<div class="banned-note">${item.notes}</div>` : ''}
                             </div>
                             <button class="remove-btn" onclick="removeBanned('${item.id}')">Remove</button>
