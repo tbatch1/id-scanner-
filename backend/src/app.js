@@ -9,6 +9,7 @@ const logger = require('./logger');
 const { authenticateRequest, optionalAuth } = require('./auth');
 const apiRoutes = require('./routes');
 const adminRoutes = require('./adminRoutes');
+const scanSessionRoutes = require('./scanSessionRoutes');
 
 const app = express();
 
@@ -129,6 +130,7 @@ app.use('/api', generalLimiter);
 app.use('/admin', adminRoutes);
 
 const authMiddleware = process.env.API_SECRET_KEY ? authenticateRequest : optionalAuth;
+app.use('/api/scan-sessions', authMiddleware, scanSessionRoutes);
 app.use('/api', authMiddleware, apiRoutes);
 
 const frontendDir = path.resolve(__dirname, '..', '..', 'frontend');

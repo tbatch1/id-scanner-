@@ -19,7 +19,11 @@
       "Bash(git ls-tree:*)",
       "Bash(git log:*)",
       "Bash(dir:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(logo-base64.txt)",
+      "Bash(start https://id-scanner-project.vercel.app)",
+      "Bash(git revert:*)",
+      "Bash(npm test:*)"
     ],
     "deny": [],
     "ask": []

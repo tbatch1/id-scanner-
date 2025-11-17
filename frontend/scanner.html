@@ -11,6 +11,14 @@
     <style>
         :root {
             color-scheme: dark;
+            --ls-bg: #0d111b;
+            --ls-panel: rgba(15, 18, 34, 0.92);
+            --ls-border: rgba(255, 255, 255, 0.08);
+            --ls-blue: #5a54ff;
+            --ls-green: #1fbf75;
+            --ls-amber: #f97316;
+            --ls-text: #f4f6ff;
+            --ls-teal: #22d3ee;
         }
 
         * {
@@ -20,50 +28,67 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #2c3e50;
-            color: #ffffff;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: radial-gradient(circle at 20% 20%, rgba(90, 84, 255, 0.35), transparent 55%), radial-gradient(circle at 80% 0%, rgba(34, 211, 238, 0.2), transparent 50%), var(--ls-bg);
+            color: var(--ls-text);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding: 20px;
+            padding: 32px 20px 40px;
+            position: relative;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: url('data:image/svg+xml,%3Csvg width=\"200\" height=\"200\" viewBox=\"0 0 120 120\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cpath opacity=\"0.04\" d=\"M0 60L120 60M60 0L60 120\" stroke=\"white\"/%3E%3C/svg%3E');
+            pointer-events: none;
         }
 
         .container {
-            max-width: 800px;
+            max-width: 860px;
             width: 100%;
             text-align: center;
+            background: var(--ls-panel);
+            border-radius: 28px;
+            padding: 32px 32px 36px;
+            border: 1px solid var(--ls-border);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(22px);
         }
 
         h1 {
-            font-size: 28px;
+            font-size: 30px;
             margin-bottom: 20px;
             font-weight: 700;
-            background: linear-gradient(90deg, #ff6b35 0%, #5dade2 50%, #7ed956 100%);
+            letter-spacing: 0.5px;
+            background: linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
         .amount-display {
-            background: #34495e;
-            border: 3px solid transparent;
-            border-image: linear-gradient(90deg, #ff6b35 0%, #5dade2 50%, #7ed956 100%) 1;
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 25px;
+            background: linear-gradient(135deg, rgba(90, 84, 255, 0.18) 0%, rgba(34, 211, 238, 0.12) 100%);
+            border: 1px solid rgba(90, 84, 255, 0.35);
+            border-radius: 20px;
+            padding: 22px 28px;
+            margin-bottom: 26px;
             font-size: 18px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
         }
 
         .amount-display #amount {
             display: block;
-            font-size: 36px;
+            font-size: 38px;
             font-weight: 700;
             margin-top: 8px;
-            background: linear-gradient(90deg, #ff6b35 0%, #5dade2 50%, #7ed956 100%);
+            background: linear-gradient(135deg, var(--ls-teal, #22d3ee) 0%, var(--ls-green) 60%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -71,15 +96,15 @@
 
         #camera-container {
             width: 100%;
-            max-width: 600px;
-            margin: 0 auto 20px;
-            border-radius: 20px;
+            max-width: 640px;
+            margin: 0 auto 24px;
+            border-radius: 24px;
             overflow: hidden;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-            background: #34495e;
+            box-shadow: 0 35px 90px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(90, 84, 255, 0.3);
+            background: rgba(7, 9, 17, 0.9);
             position: relative;
-            border: 3px solid transparent;
-            border-image: linear-gradient(135deg, #ff6b35 0%, #5dade2 33%, #7ed956 66%, #ff6b35 100%) 1;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px);
         }
 
         #scanGuide {
@@ -89,23 +114,23 @@
             transform: translate(-50%, -50%);
             width: 85%;
             height: 55%;
-            border: 3px solid #7ed956;
+            border: 3px solid var(--ls-green);
             border-radius: 12px;
             pointer-events: none;
             z-index: 10;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4),
-                        0 0 30px rgba(126, 217, 86, 0.4);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45),
+                        0 0 30px rgba(31, 191, 117, 0.4);
             animation: guidePulse 2s ease-in-out infinite;
         }
 
         @keyframes guidePulse {
             0%, 100% {
                 box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4),
-                            0 0 30px rgba(126, 217, 86, 0.4);
+                            0 0 30px rgba(31, 191, 117, 0.4);
             }
             50% {
                 box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4),
-                            0 0 50px rgba(126, 217, 86, 0.8);
+                            0 0 50px rgba(31, 191, 117, 0.75);
             }
         }
 
@@ -116,7 +141,7 @@
             left: -2px;
             right: -2px;
             bottom: -2px;
-            border: 2px dashed rgba(126, 217, 86, 0.5);
+            border: 2px dashed rgba(31, 191, 117, 0.45);
             border-radius: 12px;
             animation: dashMove 20s linear infinite;
         }
@@ -130,7 +155,7 @@
             position: absolute;
             width: 30px;
             height: 30px;
-            border: 4px solid #7ed956;
+            border: 4px solid var(--ls-green);
         }
 
         #scanGuide .corner.top-left {
@@ -169,12 +194,12 @@
             height: 2px;
             background: linear-gradient(90deg,
                 transparent 0%,
-                rgba(126, 217, 86, 0.3) 10%,
-                #7ed956 50%,
-                rgba(126, 217, 86, 0.3) 90%,
+                rgba(31, 191, 117, 0.35) 10%,
+                var(--ls-green) 50%,
+                rgba(31, 191, 117, 0.35) 90%,
                 transparent 100%);
-            box-shadow: 0 0 10px rgba(126, 217, 86, 0.6),
-                        0 0 20px rgba(126, 217, 86, 0.3);
+            box-shadow: 0 0 10px rgba(31, 191, 117, 0.6),
+                        0 0 20px rgba(31, 191, 117, 0.3);
             transform: translateY(-50%);
             z-index: 12;
         }
@@ -187,7 +212,7 @@
             transform: translate(-50%, -50%);
             width: 4px;
             height: 4px;
-            background: #7ed956;
+            background: var(--ls-green);
             border-radius: 50%;
             box-shadow: 0 0 8px #7ed956;
         }
@@ -268,8 +293,8 @@
             bottom: 15px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
-            color: #7ed956;
+            background: rgba(0, 0, 0, 0.65);
+            color: var(--ls-green);
             padding: 8px 16px;
             border-radius: 8px;
             font-size: 14px;
@@ -304,32 +329,31 @@
             margin-bottom: 20px;
             font-size: 16px;
             font-weight: 500;
+            border: 1px solid var(--ls-border);
+            background: rgba(255, 255, 255, 0.02);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35);
         }
 
         .status.info {
-            background: #34495e;
-            border: 2px solid #5dade2;
-            box-shadow: 0 4px 12px rgba(93, 173, 226, 0.3);
+            border-color: rgba(90, 84, 255, 0.45);
+            background: linear-gradient(135deg, rgba(90, 84, 255, 0.15), rgba(34, 211, 238, 0.12));
         }
 
         .status.success {
-            background: #7ed956;
-            border: 2px solid #7ed956;
-            box-shadow: 0 4px 12px rgba(126, 217, 86, 0.4);
-            color: #1a1a1a;
-            font-weight: 600;
+            border-color: rgba(31, 191, 117, 0.65);
+            background: linear-gradient(135deg, rgba(31, 191, 117, 0.18), rgba(34, 211, 238, 0.12));
+            color: var(--ls-text);
         }
 
         .status.error {
-            background: #ff6b35;
-            border: 2px solid #ff6b35;
-            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+            border-color: rgba(239, 68, 68, 0.65);
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(185, 28, 28, 0.15));
         }
 
         button {
-            background: #34495e;
-            border: 2px solid #5dade2;
-            color: white;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--ls-text);
             padding: 16px 40px;
             border-radius: 12px;
             font-size: 17px;
@@ -337,6 +361,7 @@
             cursor: pointer;
             transition: all 0.3s ease;
             margin: 10px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
         }
 
         button:active {
@@ -344,12 +369,12 @@
         }
 
         button.primary {
-            background: linear-gradient(135deg, #ff6b35 0%, #ff8c5a 100%);
-            border: 2px solid #ff6b35;
+            background: linear-gradient(135deg, var(--ls-blue), #7f7dff);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             font-size: 20px;
             padding: 20px 50px;
-            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
-            color: white;
+            box-shadow: 0 20px 45px rgba(90, 84, 255, 0.45);
+            color: var(--ls-text);
             font-weight: 700;
         }
 
@@ -360,8 +385,8 @@
             width: 60px;
             height: 60px;
             border-radius: 50%;
-            background: rgba(0, 0, 0, 0.7);
-            border: 3px solid rgba(255, 255, 255, 0.5);
+            background: rgba(0, 0, 0, 0.65);
+            border: 2px solid rgba(255, 255, 255, 0.35);
             color: white;
             font-size: 28px;
             cursor: pointer;
@@ -376,27 +401,27 @@
 
         #flashButton.active {
             background: rgba(255, 215, 0, 0.9);
-            border-color: #ffd700;
+            border-color: rgba(255, 215, 0, 0.85);
             box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
             color: #000;
         }
 
         #logs {
-            background: #34495e;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
+            background: rgba(12, 15, 25, 0.85);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 22px;
             font-size: 11px;
             text-align: left;
             max-height: 200px;
             overflow-y: auto;
-            font-family: monospace;
-            border: 2px solid transparent;
-            border-image: linear-gradient(90deg, #ff6b35 0%, #5dade2 50%, #7ed956 100%) 1;
+            font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+            border: 1px solid rgba(90, 84, 255, 0.3);
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.35);
         }
 
         #logs .log-title {
-            background: linear-gradient(90deg, #ff6b35 0%, #5dade2 50%, #7ed956 100%);
+            background: linear-gradient(135deg, #ffffff 0%, #9ca3ff 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -1212,22 +1237,27 @@
                 // Save complete data to database
                 stepStart = performance.now();
                 log('Saving to database...');
-                await saveScanResult({
-                    sessionId: sessionId,
-                    approved: approved,
-                    firstName: parsedData.firstName,
-                    lastName: parsedData.lastName,
-                    age: age,
-                    dob: parsedData.dob,
-                    documentType: 'drivers_license',
-                    documentNumber: parsedData.documentNumber,
-                    sex: parsedData.sex,
-                    expiry: parsedData.expiry,
-                    nationality: parsedData.issuingState || 'USA',
-                    reason: approved ? null : 'Under minimum age',
-                    outletId: outletId,
-                    registerId: registerId
-                });
+                try {
+                    await saveScanResult({
+                        sessionId: sessionId,
+                        approved: approved,
+                        firstName: parsedData.firstName,
+                        lastName: parsedData.lastName,
+                        age: age,
+                        dob: parsedData.dob,
+                        documentType: 'drivers_license',
+                        documentNumber: parsedData.documentNumber,
+                        sex: parsedData.sex,
+                        expiry: parsedData.expiry,
+                        nationality: parsedData.issuingState || 'USA',
+                        reason: approved ? null : 'Under minimum age',
+                        outletId: outletId,
+                        registerId: registerId
+                    });
+                } catch (error) {
+                    handlePersistenceError(error);
+                    return;
+                }
 
                 timingData.db_save = Math.round(performance.now() - stepStart);
                 log(`⏱️ [TIMING] Database save completed in ${timingData.db_save}ms`);
@@ -1301,22 +1331,27 @@
                 );
 
                 // Save complete data to database
-                await saveScanResult({
-                    sessionId: sessionId,
-                    approved: approved,
-                    firstName: parsedData.firstName,
-                    lastName: parsedData.lastName,
-                    age: age,
-                    dob: parsedData.dob,
-                    documentType: parsedData.documentType,
-                    documentNumber: parsedData.documentNumber,
-                    sex: parsedData.sex,
-                    expiry: parsedData.expiry,
-                    nationality: parsedData.nationality,
-                    reason: approved ? null : 'Under minimum age',
-                    outletId: outletId,
-                    registerId: registerId
-                });
+                try {
+                    await saveScanResult({
+                        sessionId: sessionId,
+                        approved: approved,
+                        firstName: parsedData.firstName,
+                        lastName: parsedData.lastName,
+                        age: age,
+                        dob: parsedData.dob,
+                        documentType: parsedData.documentType,
+                        documentNumber: parsedData.documentNumber,
+                        sex: parsedData.sex,
+                        expiry: parsedData.expiry,
+                        nationality: parsedData.nationality,
+                        reason: approved ? null : 'Under minimum age',
+                        outletId: outletId,
+                        registerId: registerId
+                    });
+                } catch (error) {
+                    handlePersistenceError(error);
+                    return;
+                }
 
                 // Stop camera
                 if (videoStream) {
@@ -1438,9 +1473,16 @@
             } catch (error) {
                 log(`⏱️ [DB TIMING] ❌ DB operation failed after ${(performance.now() - dbStartTime).toFixed(0)}ms`);
                 log(`Database error: ${error.message}`, 'error');
-                // Don't throw - allow approval to proceed even if DB fails
-                return null;
+                throw error;
             }
+        }
+
+        function handlePersistenceError(error) {
+            log(`Persistence error: ${error.message}`, 'error');
+            updateStatus('⚠️ Unable to save verification. Check network connectivity, then rescan.', 'error');
+            clearInterval(scanInterval);
+            isScanning = true;
+            scanInterval = setInterval(scanVideoFrame, 150);
         }
 
         // MRZ Parsing Functions
