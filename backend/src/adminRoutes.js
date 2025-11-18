@@ -155,7 +155,7 @@ router.get('/scans', async (req, res) => {
              ELSE 'pending' END AS status,
         reason,
         'drivers_license' AS document_type,
-        outlet_id AS location_id,
+        COALESCE(outlet_name, outlet_id) AS location_id,
         COALESCE(employee_name, 'Register ' || SUBSTRING(register_id, 1, 8)) AS clerk_id,
         completed_at AS created_at
       FROM scan_sessions

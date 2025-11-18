@@ -32,6 +32,23 @@ async function getUserById(userId) {
   }
 }
 
+async function getOutletById(outletId) {
+  try {
+    const response = await api.get(`/outlets/${outletId}`);
+    const outlet = response.data.data;
+
+    return {
+      outletId: outlet.id,
+      name: outlet.name || null,
+      code: outlet.code || null,
+      label: outlet.name || outlet.code || null
+    };
+  } catch (error) {
+    logger.warn({ event: 'get_outlet_failed', outletId, error: error.message });
+    return null;
+  }
+}
+
 async function getSaleById(saleId) {
   try {
     const response = await api.get(`/sales/${saleId}`);
@@ -44,11 +61,19 @@ async function getSaleById(saleId) {
       employeeName = user?.name || null;
     }
 
+    // Fetch outlet/location name if outlet_id exists
+    let outletName = null;
+    if (sale.outlet_id) {
+      const outlet = await getOutletById(sale.outlet_id);
+      outletName = outlet?.label || null;
+    }
+
     return {
       saleId: sale.id,
       total: parseFloat(sale.total_price || 0),
       currency: 'USD',
       outletId: sale.outlet_id,
+      outletName: outletName,
       registerId: sale.register_id,
       userId: sale.user_id,
       employeeName: employeeName,

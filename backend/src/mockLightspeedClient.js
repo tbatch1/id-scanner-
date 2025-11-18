@@ -27,6 +27,7 @@ function seedSales() {
       ],
       customer: null,
       employeeName: 'John Smith',
+      outletName: 'Westheimer',
       status: 'awaiting_verification',
       createdAt: now,
       updatedAt: now,
@@ -63,6 +64,7 @@ function seedSales() {
         dob: '1998-05-12'
       },
       employeeName: 'Sarah Johnson',
+      outletName: 'Galleria',
       status: 'awaiting_verification',
       createdAt: now,
       updatedAt: now,

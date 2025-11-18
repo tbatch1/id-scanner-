@@ -24,7 +24,9 @@
       "Bash(start https://id-scanner-project.vercel.app)",
       "Bash(git revert:*)",
       "Bash(npm test:*)",
-      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_HTvjn0FrEZ7D@ep-holy-brook-a4hgmwaj-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require\" npx pg-sql:*)"
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_HTvjn0FrEZ7D@ep-holy-brook-a4hgmwaj-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require\" npx pg-sql:*)",
+      "Bash(git rm:*)",
+      "Bash(psql:*)"
     ],
     "deny": [],
     "ask": []

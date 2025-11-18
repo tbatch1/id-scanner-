@@ -17,7 +17,7 @@ router.post('/', async (req, res) => {
   const {
     sessionId, approved, firstName, lastName, age, dob, reason, outletId, registerId,
     documentType, documentNumber, nationality, sex, expiry, scannedAt,
-    employeeId, employeeName
+    employeeId, employeeName, outletName
   } = req.body || {};
 
   if (!sessionId) {
@@ -38,11 +38,12 @@ router.post('/', async (req, res) => {
         date_of_birth,
         reason,
         outlet_id,
+        outlet_name,
         register_id,
         employee_id,
         employee_name,
         completed_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
       ON CONFLICT (session_id)
       DO UPDATE SET
         approved = EXCLUDED.approved,
@@ -52,6 +53,7 @@ router.post('/', async (req, res) => {
         date_of_birth = EXCLUDED.date_of_birth,
         reason = EXCLUDED.reason,
         outlet_id = EXCLUDED.outlet_id,
+        outlet_name = EXCLUDED.outlet_name,
         register_id = EXCLUDED.register_id,
         employee_id = EXCLUDED.employee_id,
         employee_name = EXCLUDED.employee_name,
@@ -68,6 +70,7 @@ router.post('/', async (req, res) => {
       dob || null,
       reason || null,
       outletId || null,
+      outletName || null,
       registerId || null,
       employeeId || null,
       employeeName || null
