@@ -160,8 +160,8 @@
         document.getElementById('amount').textContent = `$${parseFloat(amount).toFixed(2)}`;
 
         function startScanner() {
-            // Final Attempt: Redirect directly to the file path to bypass Vercel rewrite issues.
-            let checkoutUrl = window.location.origin + '/frontend/checkout.html';
+            // Redirect to scanner.html
+            let scannerUrl = window.location.origin + '/scanner.html';
             const params = [];
 
             // Read all parameters from the current URL
@@ -172,25 +172,26 @@
             const outletId = urlParams.get('outletId') || urlParams.get('outlet_id');
             const registerId = urlParams.get('registerId') || urlParams.get('register_id');
             const employeeName = urlParams.get('employeeName') || urlParams.get('employee_name');
+            const amount = urlParams.get('amount') || '0.00';
 
-            // Add the parameters to an array
-            if (paymentType) params.push(`type=${encodeURIComponent(paymentType)}`);
-            if (saleId) params.push(`saleId=${encodeURIComponent(saleId)}`);
-            if (clerkId) params.push(`clerkId=${encodeURIComponent(clerkId)}`);
-            if (outletId) params.push(`outletId=${encodeURIComponent(outletId)}`);
-            if (registerId) params.push(`registerId=${encodeURIComponent(registerId)}`);
-            if (employeeName) params.push(`employeeName=${encodeURIComponent(employeeName)}`);
+            // Use scanner.html parameter names
+            if (saleId) params.push(`session_id=${encodeURIComponent(saleId)}`);
+            if (registerId) params.push(`register_id=${encodeURIComponent(registerId)}`);
+            if (amount) params.push(`amount=${encodeURIComponent(amount)}`);
+            if (outletId) params.push(`outlet_id=${encodeURIComponent(outletId)}`);
+            if (clerkId) params.push(`employee_id=${encodeURIComponent(clerkId)}`);
+            if (employeeName) params.push(`employee_name=${encodeURIComponent(employeeName)}`);
 
             // Join the parameters to the URL if any exist
             if (params.length > 0) {
-                checkoutUrl += '?' + params.join('&');
+                scannerUrl += '?' + params.join('&');
             }
 
             // Break out of iframe and redirect the whole page
             if (window.top) {
-                window.top.location.href = checkoutUrl;
+                window.top.location.href = scannerUrl;
             } else {
-                window.location.href = checkoutUrl;
+                window.location.href = scannerUrl;
             }
         }
     </script>
