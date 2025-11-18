@@ -1293,7 +1293,7 @@
                 // Send timing data to database for analysis
                 sendTimingData(timingData);
 
-                // Send message back to Lightspeed
+                // Send message back to Lightspeed and redirect
                 if (origin) {
                     const message = approved
                         ? { status: 'ACCEPT', message: `ID verified - Age ${age}` }
@@ -1309,13 +1309,19 @@
                         log(`Sending message to parent: ${JSON.stringify(message)} at ${targetOrigin}`);
                         window.parent.postMessage(message, targetOrigin);
                     }
-                }
 
-                // Auto-close after 1 second (reduced from 2 seconds)
-                log('Auto-closing window in 1 second...');
-                setTimeout(() => {
-                    window.close();
-                }, 1000);
+                    // Redirect back to Lightspeed POS after 1 second
+                    log('Redirecting back to Lightspeed POS in 1 second...');
+                    setTimeout(() => {
+                        window.location.href = targetOrigin;
+                    }, 1000);
+                } else {
+                    // No origin, just try to close
+                    log('Auto-closing window in 1 second...');
+                    setTimeout(() => {
+                        window.close();
+                    }, 1000);
+                }
 
             } catch (error) {
                 log(`Parse error: ${error.message}`, 'error');
@@ -1402,10 +1408,16 @@
 
                 updateStatus('✅ Verified! Closing...', 'success');
 
-                // Auto-close after 1 second (reduced from 2 seconds)
-                setTimeout(() => {
-                    window.close();
-                }, 1000);
+                // Redirect back to Lightspeed POS after 1 second
+                if (origin) {
+                    setTimeout(() => {
+                        window.location.href = 'https://' + origin;
+                    }, 1000);
+                } else {
+                    setTimeout(() => {
+                        window.close();
+                    }, 1000);
+                }
 
             } catch (error) {
                 log(`MRZ parse error: ${error.message}`, 'error');
