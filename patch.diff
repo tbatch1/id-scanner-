@@ -1,35 +1,119 @@
-*** Update File: frontend/checkout.html
-@@
--        captureFrameBtn.addEventListener('click', () => manualSnapshot({ showFlash: true }));
--        shutterButton.addEventListener('click', () => manualSnapshot({ showFlash: true }));
-+        captureFrameBtn.addEventListener('click', () => manualSnapshot({ showFlash: true }));
-+        shutterButton.addEventListener('click', () => manualSnapshot({ showFlash: true }));
-+        fallbackCaptureBtn.addEventListener('click', () => {
-+            fallbackInput.click();
-+        });
-+
-+        fallbackInput.addEventListener('change', async (event) => {
-+            if (isProcessingResult) {
-+                return;
-+            }
-+
-+            const file = event.target.files && event.target.files[0];
-+            if (!file) {
-+                return;
-+            }
-+
-+            const reader = new FileReader();
-+            reader.onload = () => {
-+                const dataUrl = reader.result;
-+                showPreview(dataUrl);
-+            };
-+            reader.onerror = () => {
-+                showToast('Unable to load photo. Try again.', 'error');
-+            };
-+            reader.readAsDataURL(file);
-+            event.target.value = '';
-+        });
+diff --git a/frontend/id-card.html b/frontend/id-card.html
+index 5501b2c..e25837c 100644
+--- a/frontend/id-card.html
++++ b/frontend/id-card.html
+@@ -20,34 +20,30 @@
+     <p>Redirecting to scanner...</p>
+     <script>
+         // Parse query parameters from the current URL (of the iframe)
+         const urlParams = new URLSearchParams(window.location.search);
+-        const registerId = urlParams.get('register_id');
+-        const amount = urlParams.get('amount') || '0.00';
+-        const outletId = urlParams.get('outlet_id') || '02f4a1bc-ae66-11f0-f174-8d8eeff9231e';
+-        const employeeId = urlParams.get('employee_id');
+-        const employeeName = urlParams.get('employee_name');
+         const saleId = urlParams.get('sale_id');
+-
+-        // Generate a unique session ID (or use sale_id if provided)
+-        const sessionId = saleId || 'SCAN-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
++        const clerkId = urlParams.get('employee_id');
++        const outletId = urlParams.get('outlet_id');
++        const customerPhone = urlParams.get('customer_phone');
  
-         // Gesture handlers must be registered once
-         registerGestureHandlers();
-*** End Patch
+         // Construct the destination URL for the standalone scanner page
+-        let scannerUrl = window.location.origin + '/scanner.html?session_id=' + sessionId +
+-                          '&register_id=' + registerId +
+-                          '&amount=' + amount +
+-                          '&outlet_id=' + outletId;
+-
+-        // Add employee info if provided
+-        if (employeeId) {
+-            scannerUrl += '&employee_id=' + employeeId;
++        let checkoutUrl = `${window.location.origin}/checkout.html?type=card`;
++        if (saleId) {
++            checkoutUrl += `&saleId=${encodeURIComponent(saleId)}`;
+         }
+-        if (employeeName) {
+-            scannerUrl += '&employee_name=' + encodeURIComponent(employeeName);
++        if (clerkId) {
++            checkoutUrl += `&clerkId=${encodeURIComponent(clerkId)}`;
++        }
++        if (outletId) {
++            checkoutUrl += `&outletId=${encodeURIComponent(outletId)}`;
++        }
++        if (customerPhone) {
++            checkoutUrl += `&customerPhone=${encodeURIComponent(customerPhone)}`;
+         }
+ 
+         // Redirect the main browser window (not just the iframe) to the scanner URL.
+         // This is the key part to "break out" of the iframe.
+         if (window.top) {
+-            window.top.location.href = scannerUrl;
++            window.top.location.href = checkoutUrl;
+         } else {
+             // Fallback if not in an iframe
+-            window.location.href = scannerUrl;
++            window.location.href = checkoutUrl;
+         }
+     </script>
+ </body>
+diff --git a/frontend/id-cash.html b/frontend/id-cash.html
+index 5501b2c..e25837c 100644
+--- a/frontend/id-cash.html
++++ b/frontend/id-cash.html
+@@ -20,34 +20,30 @@
+     <p>Redirecting to scanner...</p>
+     <script>
+         // Parse query parameters from the current URL (of the iframe)
+         const urlParams = new URLSearchParams(window.location.search);
+-        const registerId = urlParams.get('register_id');
+-        const amount = urlParams.get('amount') || '0.00';
+-        const outletId = urlParams.get('outlet_id') || '02f4a1bc-ae66-11f0-f174-8d8eeff9231e';
+-        const employeeId = urlParams.get('employee_id');
+-        const employeeName = urlParams.get('employee_name');
+         const saleId = urlParams.get('sale_id');
+-
+-        // Generate a unique session ID (or use sale_id if provided)
+-        const sessionId = saleId || 'SCAN-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
++        const clerkId = urlParams.get('employee_id');
++        const outletId = urlParams.get('outlet_id');
++        const customerPhone = urlParams.get('customer_phone');
+ 
+         // Construct the destination URL for the standalone scanner page
+-        let scannerUrl = window.location.origin + '/scanner.html?session_id=' + sessionId +
+-                          '&register_id=' + registerId +
+-                          '&amount=' + amount +
+-                          '&outlet_id=' + outletId;
+-
+-        // Add employee info if provided
+-        if (employeeId) {
+-            scannerUrl += '&employee_id=' + employeeId;
++        let checkoutUrl = `${window.location.origin}/checkout.html?type=cash`;
++        if (saleId) {
++            checkoutUrl += `&saleId=${encodeURIComponent(saleId)}`;
+         }
+-        if (employeeName) {
+-            scannerUrl += '&employee_name=' + encodeURIComponent(employeeName);
++        if (clerkId) {
++            checkoutUrl += `&clerkId=${encodeURIComponent(clerkId)}`;
++        }
++        if (outletId) {
++            checkoutUrl += `&outletId=${encodeURIComponent(outletId)}`;
++        }
++        if (customerPhone) {
++            checkoutUrl += `&customerPhone=${encodeURIComponent(customerPhone)}`;
+         }
+ 
+         // Redirect the main browser window (not just the iframe) to the scanner URL.
+         // This is the key part to "break out" of the iframe.
+         if (window.top) {
+-            window.top.location.href = scannerUrl;
++            window.top.location.href = checkoutUrl;
+         } else {
+             // Fallback if not in an iframe
+-            window.location.href = scannerUrl;
++            window.location.href = checkoutUrl;
+         }
+     </script>
+ </body>
+</html>

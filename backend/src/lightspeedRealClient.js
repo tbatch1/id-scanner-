@@ -14,10 +14,35 @@ const api = axios.create({
   timeout: 15000
 });
 
+async function getUserById(userId) {
+  try {
+    const response = await api.get(`/users/${userId}`);
+    const user = response.data.data;
+
+    return {
+      userId: user.id,
+      name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || null,
+      firstName: user.first_name || null,
+      lastName: user.last_name || null,
+      email: user.email || null
+    };
+  } catch (error) {
+    logger.warn({ event: 'get_user_failed', userId, error: error.message });
+    return null;
+  }
+}
+
 async function getSaleById(saleId) {
   try {
     const response = await api.get(`/sales/${saleId}`);
     const sale = response.data.data;
+
+    // Fetch employee/clerk name if user_id exists
+    let employeeName = null;
+    if (sale.user_id) {
+      const user = await getUserById(sale.user_id);
+      employeeName = user?.name || null;
+    }
 
     return {
       saleId: sale.id,
@@ -26,6 +51,7 @@ async function getSaleById(saleId) {
       outletId: sale.outlet_id,
       registerId: sale.register_id,
       userId: sale.user_id,
+      employeeName: employeeName,
       customerId: sale.customer_id,
       items: sale.line_items || [],
       verification: null,

@@ -1183,6 +1183,11 @@
                 const payload = await response.json();
                 const sale = payload.data;
 
+                // Use employee name from Lightspeed if available
+                if (sale.employeeName) {
+                    ui.clerkLabel.textContent = `Clerk: ${sale.employeeName}`;
+                }
+
                 setSaleLocation({
                     locationId: sale.locationId || sale.outletId || state.locationId || null,
                     outlet: sale.outlet || state.outlet || null,
@@ -1378,6 +1383,15 @@
 
             try {
                 // TRACKING: Save to scan_sessions for manager dashboard
+                // Try to get employeeName from multiple sources:
+                // 1. URL parameter (from payment gateway)
+                // 2. State from loaded sale (from Lightspeed API)
+                // 3. Extract from UI clerk label if it was updated
+                let employeeName = urlParams.get('employeeName') || null;
+                if (!employeeName && ui.clerkLabel.textContent.includes('Clerk: ') && !ui.clerkLabel.textContent.includes('demo-clerk')) {
+                    employeeName = ui.clerkLabel.textContent.replace('Clerk: ', '').trim();
+                }
+
                 const trackingPayload = {
                     sessionId: saleId,
                     approved: ageData.age >= 21,
@@ -1393,7 +1407,7 @@
                     outletId: locationHint || state.locationId || null,
                     registerId: urlParams.get('registerId') || null,
                     employeeId: clerkId,
-                    employeeName: urlParams.get('employeeName') || null,
+                    employeeName: employeeName,
                     scannedAt: new Date().toISOString()
                 };
 

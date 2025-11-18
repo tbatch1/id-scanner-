@@ -26,6 +26,7 @@ function seedSales() {
         }
       ],
       customer: null,
+      employeeName: 'John Smith',
       status: 'awaiting_verification',
       createdAt: now,
       updatedAt: now,
@@ -61,6 +62,7 @@ function seedSales() {
         lastName: 'Rivera',
         dob: '1998-05-12'
       },
+      employeeName: 'Sarah Johnson',
       status: 'awaiting_verification',
       createdAt: now,
       updatedAt: now,

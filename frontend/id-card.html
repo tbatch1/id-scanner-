@@ -21,37 +21,33 @@
     <script>
         // Parse query parameters from the current URL (of the iframe)
         const urlParams = new URLSearchParams(window.location.search);
-        const registerId = urlParams.get('register_id');
-        const amount = urlParams.get('amount') || '0.00';
-        const outletId = urlParams.get('outlet_id') || '02f4a1bc-ae66-11f0-f174-8d8eeff9231e';
-        const employeeId = urlParams.get('employee_id');
-        const employeeName = urlParams.get('employee_name');
         const saleId = urlParams.get('sale_id');
-
-        // Generate a unique session ID (or use sale_id if provided)
-        const sessionId = saleId || 'SCAN-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        const clerkId = urlParams.get('employee_id');
+        const outletId = urlParams.get('outlet_id');
+        const customerPhone = urlParams.get('customer_phone');
 
         // Construct the destination URL for the standalone scanner page
-        let scannerUrl = window.location.origin + '/scanner.html?session_id=' + sessionId +
-                          '&register_id=' + registerId +
-                          '&amount=' + amount +
-                          '&outlet_id=' + outletId;
-
-        // Add employee info if provided
-        if (employeeId) {
-            scannerUrl += '&employee_id=' + employeeId;
+        let checkoutUrl = `${window.location.origin}/checkout.html?type=card`;
+        if (saleId) {
+            checkoutUrl += `&saleId=${encodeURIComponent(saleId)}`;
         }
-        if (employeeName) {
-            scannerUrl += '&employee_name=' + encodeURIComponent(employeeName);
+        if (clerkId) {
+            checkoutUrl += `&clerkId=${encodeURIComponent(clerkId)}`;
+        }
+        if (outletId) {
+            checkoutUrl += `&outletId=${encodeURIComponent(outletId)}`;
+        }
+        if (customerPhone) {
+            checkoutUrl += `&customerPhone=${encodeURIComponent(customerPhone)}`;
         }
 
         // Redirect the main browser window (not just the iframe) to the scanner URL.
         // This is the key part to "break out" of the iframe.
         if (window.top) {
-            window.top.location.href = scannerUrl;
+            window.top.location.href = checkoutUrl;
         } else {
             // Fallback if not in an iframe
-            window.location.href = scannerUrl;
+            window.location.href = checkoutUrl;
         }
     </script>
 </body>

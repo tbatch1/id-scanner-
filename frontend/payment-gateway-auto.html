@@ -127,7 +127,7 @@
 </head>
 <body>
     <div class="container">
-        <div class="icon">>ª</div>
+        <div class="icon">>ï¿½</div>
         <h1>ID Verification Required</h1>
         <p class="subtitle">Age verification needed to complete purchase</p>
 
@@ -137,7 +137,7 @@
         </div>
 
         <button class="scan-button" onclick="startScanner()">
-            =ø Scan ID to Continue
+            =ï¿½ Scan ID to Continue
         </button>
 
         <p class="info-text">
@@ -146,41 +146,51 @@
     </div>
 
     <script>
-        // Parse query parameters from the iframe URL
+        // Parse query parameters from the iframe URL, supporting both old and new names
         const urlParams = new URLSearchParams(window.location.search);
-        const registerId = urlParams.get('register_id');
+        const paymentType = urlParams.get('type');
+        const registerId = urlParams.get('register_id') || urlParams.get('registerId');
         const amount = urlParams.get('amount') || '0.00';
-        const outletId = urlParams.get('outlet_id') || '02f4a1bc-ae66-11f0-f174-8d8eeff9231e';
-        const employeeId = urlParams.get('employee_id');
-        const employeeName = urlParams.get('employee_name');
-        const saleId = urlParams.get('sale_id');
+        const outletId = urlParams.get('outlet_id') || urlParams.get('outletId');
+        const clerkId = urlParams.get('employee_id') || urlParams.get('clerkId');
+        const employeeName = urlParams.get('employee_name') || urlParams.get('employeeName');
+        const saleId = urlParams.get('sale_id') || urlParams.get('saleId');
 
         // Display the amount
         document.getElementById('amount').textContent = `$${parseFloat(amount).toFixed(2)}`;
 
         function startScanner() {
-            // Generate session ID (or use sale_id if provided)
-            const sessionId = saleId || 'SCAN-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            // Final Attempt: Redirect directly to the file path to bypass Vercel rewrite issues.
+            let checkoutUrl = window.location.origin + '/frontend/checkout.html';
+            const params = [];
 
-            // Build scanner URL with all parameters
-            let scannerUrl = window.location.origin + '/scanner.html?session_id=' + sessionId +
-                '&register_id=' + registerId +
-                '&amount=' + amount +
-                '&outlet_id=' + outletId;
+            // Read all parameters from the current URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const paymentType = urlParams.get('type');
+            const saleId = urlParams.get('saleId') || urlParams.get('sale_id');
+            const clerkId = urlParams.get('clerkId') || urlParams.get('employee_id');
+            const outletId = urlParams.get('outletId') || urlParams.get('outlet_id');
+            const registerId = urlParams.get('registerId') || urlParams.get('register_id');
+            const employeeName = urlParams.get('employeeName') || urlParams.get('employee_name');
 
-            // Add employee info if provided
-            if (employeeId) {
-                scannerUrl += '&employee_id=' + employeeId;
+            // Add the parameters to an array
+            if (paymentType) params.push(`type=${encodeURIComponent(paymentType)}`);
+            if (saleId) params.push(`saleId=${encodeURIComponent(saleId)}`);
+            if (clerkId) params.push(`clerkId=${encodeURIComponent(clerkId)}`);
+            if (outletId) params.push(`outletId=${encodeURIComponent(outletId)}`);
+            if (registerId) params.push(`registerId=${encodeURIComponent(registerId)}`);
+            if (employeeName) params.push(`employeeName=${encodeURIComponent(employeeName)}`);
+
+            // Join the parameters to the URL if any exist
+            if (params.length > 0) {
+                checkoutUrl += '?' + params.join('&');
             }
-            if (employeeName) {
-                scannerUrl += '&employee_name=' + encodeURIComponent(employeeName);
-            }
 
-            // Break out of iframe and redirect the whole page to scanner
+            // Break out of iframe and redirect the whole page
             if (window.top) {
-                window.top.location.href = scannerUrl;
+                window.top.location.href = checkoutUrl;
             } else {
-                window.location.href = scannerUrl;
+                window.location.href = checkoutUrl;
             }
         }
     </script>
