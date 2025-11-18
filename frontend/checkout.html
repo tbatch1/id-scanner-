@@ -1057,7 +1057,7 @@
                 if (!alerts.length) {
                     setSystemBanner('');
                 } else {
-                    setSystemBanner(alerts.join(' • '), level, action);
+                    setSystemBanner(alerts.join(' ï¿½ '), level, action);
                 }
             } catch (error) {
                 setSystemBanner('Unable to reach backend. Check network connection.', 'error');
@@ -1377,6 +1377,38 @@
             ui.completeSaleBtn.disabled = true;
 
             try {
+                // TRACKING: Save to scan_sessions for manager dashboard
+                const trackingPayload = {
+                    sessionId: saleId,
+                    approved: ageData.age >= 21,
+                    firstName: licenseData.firstName || null,
+                    lastName: licenseData.lastName || null,
+                    age: ageData.age,
+                    dob: ageData.iso || null,
+                    documentType: licenseData.documentType || 'unknown',
+                    documentNumber: licenseData.documentNumber || licenseData.licenseNumber || null,
+                    nationality: licenseData.nationality || null,
+                    sex: licenseData.sex || null,
+                    expiry: licenseData.documentExpiry || null,
+                    outletId: locationHint || state.locationId || null,
+                    registerId: urlParams.get('registerId') || null,
+                    employeeId: clerkId,
+                    employeeName: urlParams.get('employeeName') || null,
+                    scannedAt: new Date().toISOString()
+                };
+
+                // Save to scan_sessions (non-blocking - don't wait for response)
+                fetch(`${API_BASE}/scan-sessions`, {
+                    method: 'POST',
+                    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify(trackingPayload)
+                }).catch(err => {
+                    console.warn('Failed to save to scan_sessions:', err);
+                    logFrontendEvent('warn', 'Scan session tracking failed', {
+                        error: err.message
+                    });
+                });
+
                 const response = await fetch(`${API_BASE}/sales/${saleId}/verify`, {
                     method: 'POST',
                     headers: buildHeaders({ 'Content-Type': 'application/json' }),
