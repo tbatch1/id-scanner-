@@ -17,10 +17,6 @@
       "destination": "/frontend/payment-gateway-auto.html"
     },
     {
-      "source": "/checkout.html",
-      "destination": "/frontend/checkout.html"
-    },
-    {
       "source": "/scanner.html",
       "destination": "/frontend/scanner.html"
     },

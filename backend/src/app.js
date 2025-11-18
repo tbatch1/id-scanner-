@@ -139,10 +139,6 @@ app.use(express.static(frontendDir));
 const rootDir = path.resolve(__dirname, '..', '..');
 app.use(express.static(rootDir));
 
-app.get('/demo/checkout', (req, res) => {
-  res.sendFile(path.join(frontendDir, 'checkout.html'));
-});
-
 app.use((req, res) => {
   res.status(404).json({
     error: 'NOT_FOUND',
