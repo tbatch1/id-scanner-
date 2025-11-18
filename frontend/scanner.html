@@ -493,6 +493,7 @@
         const registerId = urlParams.get('register_id');
         const amount = urlParams.get('amount') || '0.00';
         const outletId = urlParams.get('outlet_id') || '02f4a1bc-ae66-11f0-f174-8d8eeff9231e';
+        const outletName = urlParams.get('outlet_name');
         const origin = urlParams.get('origin');
         const employeeId = urlParams.get('employee_id');
         const employeeName = urlParams.get('employee_name');
@@ -1261,6 +1262,7 @@
                         nationality: parsedData.issuingState || 'USA',
                         reason: approved ? null : 'Under minimum age',
                         outletId: outletId,
+                        outletName: outletName,
                         registerId: registerId,
                         employeeId: employeeId,
                         employeeName: employeeName
@@ -1380,6 +1382,7 @@
                         nationality: parsedData.nationality,
                         reason: approved ? null : 'Under minimum age',
                         outletId: outletId,
+                        outletName: outletName,
                         registerId: registerId,
                         employeeId: employeeId,
                         employeeName: employeeName
@@ -1478,6 +1481,7 @@
                     expiry: data.expiry || null,
                     reason: data.reason || null,
                     outletId: data.outletId,
+                    outletName: data.outletName || null,
                     registerId: data.registerId,
                     employeeId: data.employeeId || null,
                     employeeName: data.employeeName || null,
