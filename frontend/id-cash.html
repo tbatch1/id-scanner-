@@ -2,151 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ID Verification Required</title>
+    <title>Redirecting to Scanner...</title>
     <style>
-        :root {
-            color-scheme: dark;
-            --ls-bg: #0d111b;
-            --ls-panel: rgba(15, 18, 34, 0.92);
-            --ls-border: rgba(255, 255, 255, 0.08);
-            --ls-blue: #5a54ff;
-            --ls-green: #1fbf75;
-            --ls-text: #f4f6ff;
-            --ls-teal: #22d3ee;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: radial-gradient(circle at 20% 20%, rgba(90, 84, 255, 0.35), transparent 55%),
-                        radial-gradient(circle at 80% 0%, rgba(34, 211, 238, 0.2), transparent 50%),
-                        var(--ls-bg);
-            color: var(--ls-text);
-            min-height: 100vh;
+            font-family: sans-serif;
+            background-color: #0d111b;
+            color: #f4f6ff;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 500px;
-            width: 100%;
-            background: var(--ls-panel);
-            border-radius: 24px;
-            padding: 40px 32px;
-            border: 1px solid var(--ls-border);
-            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
-            backdrop-filter: blur(22px);
-            text-align: center;
-        }
-
-        h1 {
-            font-size: 28px;
-            margin-bottom: 12px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .subtitle {
-            font-size: 15px;
-            color: rgba(244, 246, 255, 0.7);
-            margin-bottom: 32px;
-        }
-
-        .amount-box {
-            background: linear-gradient(135deg, rgba(90, 84, 255, 0.18) 0%, rgba(34, 211, 238, 0.12) 100%);
-            border: 1px solid rgba(90, 84, 255, 0.35);
-            border-radius: 20px;
-            padding: 24px;
-            margin-bottom: 32px;
-        }
-
-        .amount-label {
-            font-size: 14px;
-            color: rgba(244, 246, 255, 0.6);
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .amount {
-            font-size: 42px;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--ls-teal) 0%, var(--ls-green) 60%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .scan-button {
-            width: 100%;
-            padding: 18px 32px;
-            font-size: 17px;
-            font-weight: 600;
-            background: linear-gradient(135deg, var(--ls-blue) 0%, rgba(90, 84, 255, 0.8) 100%);
-            color: white;
-            border: none;
-            border-radius: 16px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 8px 24px rgba(90, 84, 255, 0.3);
-        }
-
-        .scan-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 32px rgba(90, 84, 255, 0.4);
-            background: linear-gradient(135deg, #6b65ff 0%, var(--ls-blue) 100%);
-        }
-
-        .scan-button:active {
-            transform: translateY(0);
-        }
-
-        .info-text {
-            margin-top: 24px;
-            font-size: 13px;
-            color: rgba(244, 246, 255, 0.5);
-            line-height: 1.6;
-        }
-
-        .icon {
-            font-size: 48px;
-            margin-bottom: 16px;
+            height: 100vh;
+            margin: 0;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="icon">>ª</div>
-        <h1>ID Verification Required</h1>
-        <p class="subtitle">Age verification needed to complete purchase</p>
-
-        <div class="amount-box">
-            <div class="amount-label">Purchase Amount</div>
-            <div class="amount" id="amount">$0.00</div>
-        </div>
-
-        <button class="scan-button" onclick="startScanner()">
-            =ø Scan ID to Continue
-        </button>
-
-        <p class="info-text">
-            You must be 21 or older to purchase. Scan your ID to verify age and complete transaction.
-        </p>
-    </div>
-
+    <p>Redirecting to scanner...</p>
     <script>
-        // Parse query parameters from the iframe URL
+        // Parse query parameters from the current URL (of the iframe)
         const urlParams = new URLSearchParams(window.location.search);
         const registerId = urlParams.get('register_id');
         const amount = urlParams.get('amount') || '0.00';
@@ -155,33 +28,30 @@
         const employeeName = urlParams.get('employee_name');
         const saleId = urlParams.get('sale_id');
 
-        // Display the amount
-        document.getElementById('amount').textContent = `$${parseFloat(amount).toFixed(2)}`;
+        // Generate a unique session ID (or use sale_id if provided)
+        const sessionId = saleId || 'SCAN-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
 
-        function startScanner() {
-            // Generate session ID (or use sale_id if provided)
-            const sessionId = saleId || 'SCAN-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        // Construct the destination URL for the standalone scanner page
+        let scannerUrl = window.location.origin + '/scanner.html?session_id=' + sessionId +
+                          '&register_id=' + registerId +
+                          '&amount=' + amount +
+                          '&outlet_id=' + outletId;
 
-            // Build scanner URL with all parameters
-            let scannerUrl = window.location.origin + '/scanner.html?session_id=' + sessionId +
-                '&register_id=' + registerId +
-                '&amount=' + amount +
-                '&outlet_id=' + outletId;
+        // Add employee info if provided
+        if (employeeId) {
+            scannerUrl += '&employee_id=' + employeeId;
+        }
+        if (employeeName) {
+            scannerUrl += '&employee_name=' + encodeURIComponent(employeeName);
+        }
 
-            // Add employee info if provided
-            if (employeeId) {
-                scannerUrl += '&employee_id=' + employeeId;
-            }
-            if (employeeName) {
-                scannerUrl += '&employee_name=' + encodeURIComponent(employeeName);
-            }
-
-            // Break out of iframe and redirect the whole page to scanner
-            if (window.top) {
-                window.top.location.href = scannerUrl;
-            } else {
-                window.location.href = scannerUrl;
-            }
+        // Redirect the main browser window (not just the iframe) to the scanner URL.
+        // This is the key part to "break out" of the iframe.
+        if (window.top) {
+            window.top.location.href = scannerUrl;
+        } else {
+            // Fallback if not in an iframe
+            window.location.href = scannerUrl;
         }
     </script>
 </body>
