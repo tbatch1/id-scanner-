@@ -443,6 +443,7 @@
 </head>
 <body>
     <div class="container">
+        <img src="/frontend/assets/thc-logo.png" alt="THC Club" style="width: 80px; height: 80px; margin-bottom: 20px;">
         <h1>📷 ID Scanner</h1>
 
         <div id="amount-display" class="amount-display">
@@ -483,7 +484,7 @@
             📸 CAPTURE HIGH-RES PHOTO
         </button>
 
-        <button onclick="closeScanner()">Close Scanner</button>
+        <button id="closeButton" onclick="closeScanner()" style="display:none;">Close Scanner</button>
     </div>
 
     <script>
@@ -556,12 +557,10 @@
 
         // Close scanner and return to Lightspeed POS
         function closeScanner() {
-            log('closeScanner called - attempting to return to Lightspeed POS');
+            log('closeScanner called - navigating to Lightspeed POS');
 
-            // Show instruction for user to tap "Done" on iOS
-            const message = 'Tap the "Done" button at the top of the screen to return to Lightspeed POS';
-            updateStatus(message, 'success');
-            alert(message);
+            // Navigate to Lightspeed POS sell screen
+            window.location.href = 'https://retail.lightspeed.app/sell';
         }
 
         // Logging function - show all logs for debugging
