@@ -558,22 +558,9 @@
         function closeScanner() {
             log('closeScanner called - attempting to return to Lightspeed POS');
 
-            // Try multiple methods to return
-            try {
-                // Method 1: Go back in browser history (should work if Lightspeed opened this URL)
-                log('Attempting window.history.back()');
-                window.history.back();
-            } catch (e) {
-                log('history.back() failed, trying window.close()');
-                // Method 2: Try to close the window
-                try {
-                    window.close();
-                } catch (e2) {
-                    log('window.close() also failed');
-                    // Method 3: Show message to user
-                    alert('Please return to the Lightspeed POS app manually');
-                }
-            }
+            // Navigate directly to Lightspeed POS sell screen
+            log('Navigating to https://retail.lightspeed.app/sell');
+            window.location.href = 'https://retail.lightspeed.app/sell';
         }
 
         // Logging function - show all logs for debugging
