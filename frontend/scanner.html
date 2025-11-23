@@ -1293,31 +1293,37 @@
                 // Send timing data to database for analysis
                 sendTimingData(timingData);
 
-                // Send message back to Lightspeed and redirect
+                // Send Lightspeed Payments API messages to close iframe
                 if (origin) {
-                    const message = approved
-                        ? { status: 'ACCEPT', message: `ID verified - Age ${age}` }
-                        : { status: 'DECLINE', message: `Age verification failed - Age ${age}` };
-
                     const targetOrigin = 'https://' + origin;
 
-                    if (window.opener) {
-                        log(`Sending message to opener: ${JSON.stringify(message)} at ${targetOrigin}`);
-                        window.opener.postMessage(message, targetOrigin);
-                    }
-                    if (window.parent && window.parent !== window.self) {
-                        log(`Sending message to parent: ${JSON.stringify(message)} at ${targetOrigin}`);
-                        window.parent.postMessage(message, targetOrigin);
+                    // Step 1: Send ACCEPT or DECLINE message
+                    if (approved) {
+                        const acceptMessage = JSON.stringify({
+                            "step": "ACCEPT",
+                            "external_transaction_id": sessionId,
+                            "card_last_four": "0000",
+                            "terminal_serial_number": "ID_SCANNER"
+                        });
+                        log(`Sending ACCEPT message: ${acceptMessage}`);
+                        window.parent.postMessage(acceptMessage, targetOrigin);
+                    } else {
+                        const declineMessage = JSON.stringify({
+                            "step": "DECLINE"
+                        });
+                        log(`Sending DECLINE message: ${declineMessage}`);
+                        window.parent.postMessage(declineMessage, targetOrigin);
                     }
 
-                    // Redirect back to Lightspeed POS after 1 second
-                    log('Redirecting back to Lightspeed POS in 1 second...');
+                    // Step 2: Send EXIT to close iframe and return to POS menu
                     setTimeout(() => {
-                        window.location.href = targetOrigin;
-                    }, 1000);
+                        const exitMessage = JSON.stringify({ "step": "EXIT" });
+                        log(`Sending EXIT message: ${exitMessage}`);
+                        window.parent.postMessage(exitMessage, targetOrigin);
+                    }, 500);
                 } else {
                     // No origin, just try to close
-                    log('Auto-closing window in 1 second...');
+                    log('No origin parameter, attempting window.close()');
                     setTimeout(() => {
                         window.close();
                     }, 1000);

@@ -187,12 +187,8 @@
                 scannerUrl += '?' + params.join('&');
             }
 
-            // Break out of iframe and redirect the whole page
-            if (window.top) {
-                window.top.location.href = scannerUrl;
-            } else {
-                window.location.href = scannerUrl;
-            }
+            // Navigate to scanner within the iframe (don't break out)
+            window.location.href = scannerUrl;
         }
     </script>
 </body>
