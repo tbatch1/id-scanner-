@@ -187,8 +187,12 @@
                 scannerUrl += '?' + params.join('&');
             }
 
-            // Navigate to scanner within the iframe (don't break out)
-            window.location.href = scannerUrl;
+            // Break out of iframe to full screen (camera won't work in Safari iframe)
+            if (window.top) {
+                window.top.location.href = scannerUrl;
+            } else {
+                window.location.href = scannerUrl;
+            }
         }
     </script>
 </body>

@@ -483,7 +483,7 @@
             📸 CAPTURE HIGH-RES PHOTO
         </button>
 
-        <button onclick="window.close()">Close Scanner</button>
+        <button onclick="closeScanner()">Close Scanner</button>
     </div>
 
     <script>
@@ -551,6 +551,28 @@
                 }).catch(() => {}); // Fail silently if endpoint unreachable
             } catch (e) {
                 // Ignore remote logging errors
+            }
+        }
+
+        // Close scanner and return to Lightspeed POS
+        function closeScanner() {
+            log('closeScanner called - attempting to return to Lightspeed POS');
+
+            // Try multiple methods to return
+            try {
+                // Method 1: Go back in browser history (should work if Lightspeed opened this URL)
+                log('Attempting window.history.back()');
+                window.history.back();
+            } catch (e) {
+                log('history.back() failed, trying window.close()');
+                // Method 2: Try to close the window
+                try {
+                    window.close();
+                } catch (e2) {
+                    log('window.close() also failed');
+                    // Method 3: Show message to user
+                    alert('Please return to the Lightspeed POS app manually');
+                }
             }
         }
 
@@ -1293,40 +1315,18 @@
                 // Send timing data to database for analysis
                 sendTimingData(timingData);
 
-                // Send Lightspeed Payments API messages to close iframe
-                if (origin) {
-                    const targetOrigin = 'https://' + origin;
+                // Show manual close button for user to return to POS
+                log('Scan complete - user must manually return to Lightspeed POS');
 
-                    // Step 1: Send ACCEPT or DECLINE message
-                    if (approved) {
-                        const acceptMessage = JSON.stringify({
-                            "step": "ACCEPT",
-                            "external_transaction_id": sessionId,
-                            "card_last_four": "0000",
-                            "terminal_serial_number": "ID_SCANNER"
-                        });
-                        log(`Sending ACCEPT message: ${acceptMessage}`);
-                        window.parent.postMessage(acceptMessage, targetOrigin);
-                    } else {
-                        const declineMessage = JSON.stringify({
-                            "step": "DECLINE"
-                        });
-                        log(`Sending DECLINE message: ${declineMessage}`);
-                        window.parent.postMessage(declineMessage, targetOrigin);
-                    }
+                // Stop scanning
+                if (scanInterval) clearInterval(scanInterval);
+                isScanning = false;
 
-                    // Step 2: Send EXIT to close iframe and return to POS menu
-                    setTimeout(() => {
-                        const exitMessage = JSON.stringify({ "step": "EXIT" });
-                        log(`Sending EXIT message: ${exitMessage}`);
-                        window.parent.postMessage(exitMessage, targetOrigin);
-                    }, 500);
+                // Show success/failure message with close button
+                if (approved) {
+                    updateStatus('✅ ID Verified! Click "Close Scanner" to return to POS.', 'success');
                 } else {
-                    // No origin, just try to close
-                    log('No origin parameter, attempting window.close()');
-                    setTimeout(() => {
-                        window.close();
-                    }, 1000);
+                    updateStatus('❌ REJECTED: Under 21. Click "Close Scanner" to return to POS.', 'error');
                 }
 
             } catch (error) {
