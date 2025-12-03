@@ -86,7 +86,74 @@ function optionalAuth(req, res, next) {
   next();
 }
 
+/**
+ * Admin Token Authentication Middleware
+ *
+ * Protects admin routes (dashboard, reports, sensitive data) from unauthorized access
+ * Required for TABC compliance and data privacy
+ *
+ * Usage:
+ * - Admin requests must include X-Admin-Token header
+ * - Token stored in environment variable ADMIN_TOKEN
+ * - Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+ */
+function adminAuth(req, res, next) {
+  const token = req.headers['x-admin-token'];
+  const expectedToken = process.env.ADMIN_TOKEN;
+
+  // If no admin token is configured, allow access but warn
+  if (!expectedToken) {
+    logger.warn({
+      event: 'admin_auth_bypassed',
+      ip: req.ip,
+      path: req.path,
+      reason: 'ADMIN_TOKEN not configured'
+    }, 'Admin route accessed without authentication - ADMIN_TOKEN not set');
+    return next();
+  }
+
+  // Check if token is provided
+  if (!token) {
+    logger.logSecurity('missing_admin_token', {
+      ip: req.ip,
+      path: req.path,
+      origin: req.get('origin'),
+      userAgent: req.get('user-agent')
+    });
+
+    return res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Missing admin token. Include X-Admin-Token header in your request.'
+    });
+  }
+
+  // Validate token
+  if (token !== expectedToken) {
+    logger.logSecurity('invalid_admin_token', {
+      ip: req.ip,
+      path: req.path,
+      providedToken: token.substring(0, 8) + '...', // Log prefix only for security
+      origin: req.get('origin')
+    });
+
+    return res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid admin token.'
+    });
+  }
+
+  // Success - log and continue
+  logger.debug({
+    event: 'admin_auth_success',
+    ip: req.ip,
+    path: req.path
+  }, 'Admin request authenticated successfully');
+
+  next();
+}
+
 module.exports = {
   authenticateRequest,
-  optionalAuth
+  optionalAuth,
+  adminAuth
 };

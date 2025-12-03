@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const pinoHttp = require('pino-http');
 const config = require('./config');
 const logger = require('./logger');
-const { authenticateRequest, optionalAuth } = require('./auth');
+const { authenticateRequest, optionalAuth, adminAuth } = require('./auth');
 const apiRoutes = require('./routes');
 const adminRoutes = require('./adminRoutes');
 const scanSessionRoutes = require('./scanSessionRoutes');
@@ -72,7 +72,7 @@ const generalLimiter = rateLimit({
 
 const strictLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 200, // Increased from 30 to 200 for 18 locations
   standardHeaders: true,
   legacyHeaders: false,
   handler(req, res) {
@@ -127,11 +127,12 @@ app.use('/api/sales/:saleId/verify', strictLimiter);
 app.use('/api/sales/:saleId/complete', strictLimiter);
 app.use('/api', generalLimiter);
 
-app.use('/admin', adminRoutes);
+// Admin routes - protected with admin token authentication
+app.use('/admin', adminAuth, adminRoutes);
 
-const authMiddleware = process.env.API_SECRET_KEY ? authenticateRequest : optionalAuth;
-app.use('/api/scan-sessions', authMiddleware, scanSessionRoutes);
-app.use('/api', authMiddleware, apiRoutes);
+// API routes - enforce authentication when API_SECRET_KEY is configured
+app.use('/api/scan-sessions', authenticateRequest, scanSessionRoutes);
+app.use('/api', authenticateRequest, apiRoutes);
 
 const frontendDir = path.resolve(__dirname, '..', '..', 'frontend');
 app.use(express.static(frontendDir));

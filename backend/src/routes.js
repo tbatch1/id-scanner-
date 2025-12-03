@@ -356,14 +356,14 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
         logger.logSecurity('banned_customer_attempt', {
           saleId,
           clerkId,
-        documentType: normalizedScan.documentType,
-        documentNumber: normalizedScan.documentNumber,
-        issuingCountry: normalizedScan.issuingCountry || null,
-        locationId,
-        outletCode: outletDescriptor?.code || null,
-        bannedId: bannedRecord.id
-      });
-    }
+          documentType: normalizedScan.documentType,
+          documentNumber: normalizedScan.documentNumber,
+          issuingCountry: normalizedScan.issuingCountry || null,
+          locationId,
+          outletCode: outletDescriptor?.code || null,
+          bannedId: bannedRecord.id
+        });
+      }
     } catch (banError) {
       logger.logAPIError('find_banned_customer', banError, {
         saleId,
@@ -752,13 +752,13 @@ router.post('/sales/:saleId/override', validateOverride, async (req, res) => {
     const mappedVerification = mapDbVerification(result.verification);
     const overrideRecord = result.override
       ? {
-          id: result.override.id,
-          verificationId: result.override.verification_id,
-          saleId: result.override.sale_id,
-          managerId: result.override.manager_id,
-          note: result.override.note,
-          createdAt: result.override.created_at
-        }
+        id: result.override.id,
+        verificationId: result.override.verification_id,
+        saleId: result.override.sale_id,
+        managerId: result.override.manager_id,
+        note: result.override.note,
+        createdAt: result.override.created_at
+      }
       : null;
 
     logger.logSecurity('override_success', { saleId, verificationId, managerId: managerId || null });
@@ -778,11 +778,11 @@ router.post('/sales/:saleId/override', validateOverride, async (req, res) => {
 router.post('/lightspeed/payment-action', async (req, res) => {
   const { saleId, outletId, registerId, employeeId, paymentType } = req.body;
 
-  logger.info({ 
-    event: 'custom_button_clicked', 
-    saleId, 
+  logger.info({
+    event: 'custom_button_clicked',
+    saleId,
     outletId,
-    paymentType 
+    paymentType
   }, 'Payment button clicked in Lightspeed POS');
 
   if (!saleId) {
@@ -796,11 +796,11 @@ router.post('/lightspeed/payment-action', async (req, res) => {
     // Check if already verified in database
     if (db.pool) {
       const verification = await complianceStore.getLatestVerificationForSale(saleId);
-      
+
       if (verification && !isVerificationExpired({ createdAt: verification.verified_at, status: verification.verification_status })) {
         if (verification.verification_status === 'approved' || verification.verification_status === 'approved_override') {
           logger.info({ event: 'already_verified', saleId }, 'Sale already verified - allowing payment');
-          
+
           return res.json({
             action: 'proceed',
             approved: true,
@@ -812,7 +812,7 @@ router.post('/lightspeed/payment-action', async (req, res) => {
 
     // Need verification
     logger.info({ event: 'verification_required', saleId }, 'ID scan required');
-    
+
     res.json({
       action: 'require_scan',
       approved: false,
@@ -821,7 +821,7 @@ router.post('/lightspeed/payment-action', async (req, res) => {
 
   } catch (error) {
     logger.logAPIError('payment_action', error, { saleId });
-    
+
     res.json({
       action: 'require_scan',
       approved: false,
@@ -846,7 +846,7 @@ router.post('/dynamix/webhook', async (req, res) => {
   try {
     // Auto-verify using the scan data
     const normalizedScan = normalizeScanInput(scan);
-    
+
     const verification = await lightspeed.recordVerification({
       saleId,
       clerkId: clerkId || 'dynamix-auto',
@@ -869,9 +869,9 @@ router.post('/dynamix/webhook', async (req, res) => {
       documentType: normalizedScan.documentType
     });
 
-    res.status(200).json({ 
+    res.status(200).json({
       success: true,
-      verification 
+      verification
     });
   } catch (error) {
     logger.logAPIError('dynamix_webhook', error, { saleId });
@@ -879,6 +879,83 @@ router.post('/dynamix/webhook', async (req, res) => {
       error: 'WEBHOOK_FAILED',
       message: 'Failed to process scan'
     });
+  }
+});
+
+/**
+ * Cron job endpoint for data retention enforcement
+ * Called daily by Vercel Cron to delete old records per TABC compliance
+ *
+ * TABC requires 2-year retention (730 days)
+ * This endpoint is protected by Vercel's internal cron authentication
+ */
+router.post('/cron/retention', async (req, res) => {
+  // Verify this is a Vercel Cron request
+  const authHeader = req.headers.authorization;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    logger.logSecurity('unauthorized_cron_attempt', {
+      ip: req.ip,
+      path: req.path
+    });
+    return res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid cron secret'
+    });
+  }
+
+  if (!db.pool) {
+    logger.warn({
+      event: 'retention_skipped',
+      reason: 'no_database'
+    }, 'Retention enforcement skipped - no database configured');
+    return res.status(200).json({
+      success: true,
+      message: 'Retention skipped - no database configured'
+    });
+  }
+
+  try {
+    logger.info({ event: 'retention_started' }, 'Starting scheduled data retention enforcement');
+
+    const result = await complianceStore.enforceRetention({
+      verificationDays: 730 // TABC 2-year requirement
+    });
+
+    logger.info({
+      event: 'retention_completed',
+      ...result
+    }, `Data retention completed: ${result.verificationsDeleted} verifications, ${result.completionsDeleted} completions, ${result.overridesDeleted} overrides deleted`);
+
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    logger.logAPIError('retention_enforcement', error);
+    res.status(500).json({
+      error: 'RETENTION_FAILED',
+      message: 'Failed to enforce data retention'
+    });
+  }
+});
+
+// Cron job endpoint for retention enforcement
+router.get('/cron/retention', async (req, res) => {
+  // Verify that the request is authorized (Vercel cron jobs can be secured, or we rely on API key)
+  // For now, we'll rely on the global authenticateRequest middleware if it's applied to /api
+
+  if (!db.pool) {
+    return res.status(503).json({ error: 'DB_UNAVAILABLE' });
+  }
+
+  try {
+    const results = await complianceStore.enforceRetention();
+    res.json({ data: results });
+  } catch (error) {
+    logger.logAPIError('cron_retention', error);
+    res.status(500).json({ error: 'INTERNAL_ERROR' });
   }
 });
 

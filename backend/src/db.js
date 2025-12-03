@@ -42,7 +42,7 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? {
     rejectUnauthorized: false // Required for Vercel Postgres
   } : false,
-  max: 20, // Maximum number of connections in pool
+  max: 40, // Maximum number of connections in pool (upgraded for 18 locations)
   idleTimeoutMillis: 30000, // Close idle connections after 30s
   connectionTimeoutMillis: 2000, // Timeout if can't connect in 2s
 });

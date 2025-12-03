@@ -531,11 +531,11 @@ async function listRecentOverrides({ days = 30, limit = 200 } = {}) {
 }
 
 async function enforceRetention({
-  verificationDays = 365,
+  verificationDays = 730, // TABC requires 2-year retention (730 days)
   overrideDays,
   completionDays
 } = {}) {
-  const normalizedVerificationDays = normalizeRetentionDays(verificationDays, 365);
+  const normalizedVerificationDays = normalizeRetentionDays(verificationDays, 730);
   const normalizedOverrideDays = normalizeRetentionDays(
     overrideDays ?? normalizedVerificationDays,
     normalizedVerificationDays

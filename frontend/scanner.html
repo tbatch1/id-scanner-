@@ -5,13 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>ID Scanner</title>
-    <script>
-        // If we are in an iframe, break out to the top-level window
-        if (window.top !== window.self) {
-            window.top.location.href = window.location.href;
-        }
-    </script>
+    <meta name="apple-mobile-web-app-title" content="ID Scanner">
+    <title>ID Scanner - THC Club</title>
+    <link rel="manifest" href="/frontend/manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/dynamsoft-barcode-reader-bundle@10.4.3100/dist/dbr.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dynamsoft-code-parser@2.4.32/dist/dcp.js"></script>
     <style>
@@ -439,6 +435,121 @@
             color: #ecf0f1;
             margin: 2px 0;
         }
+
+        /* Register Selection Modal */
+        #registerModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        #registerModal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--ls-panel);
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            border: 1px solid var(--ls-border);
+            box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7);
+        }
+
+        .modal-content h2 {
+            font-size: 28px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .modal-content p {
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
+        .modal-content input,
+        .modal-content select {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--ls-text);
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .modal-content input:focus,
+        .modal-content select:focus {
+            outline: none;
+            border-color: var(--ls-blue);
+            box-shadow: 0 0 20px rgba(90, 84, 255, 0.3);
+        }
+
+        /* Back to POS Floating Button */
+        #backToPOSButton {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: linear-gradient(135deg, var(--ls-amber), #ea580c);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 18px 32px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 20px 45px rgba(249, 115, 22, 0.4);
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+
+        #backToPOSButton:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 25px 55px rgba(249, 115, 22, 0.5);
+        }
+
+        #backToPOSButton:active {
+            transform: translateY(0);
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--ls-panel);
+            color: var(--ls-text);
+            padding: 16px 24px;
+            border-radius: 12px;
+            border: 1px solid var(--ls-border);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1001;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -483,9 +594,26 @@
         <button id="captureButton" class="primary" onclick="captureHighResPhoto()" style="display:none;">
             📸 CAPTURE HIGH-RES PHOTO
         </button>
-
-        <button id="closeButton" onclick="closeScanner()" style="display:none;">Close Scanner</button>
     </div>
+
+    <!-- Register Selection Modal -->
+    <div id="registerModal">
+        <div class="modal-content">
+            <h2>🏪 Select Register</h2>
+            <p>Choose your register to continue scanning</p>
+            <input type="text" id="registerInput" placeholder="Enter Register ID (e.g., REG-001)" />
+            <button class="primary" onclick="saveRegister()">Save & Continue</button>
+        </div>
+    </div>
+
+    <!-- Back to POS Floating Button -->
+    <button id="backToPOSButton" onclick="showBackToPOSHint()">
+        <span>↩️</span>
+        <span>Return to POS</span>
+    </button>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
 
     <script>
         // Parse query parameters
@@ -555,13 +683,89 @@
             }
         }
 
-        // Close scanner and return to Lightspeed POS
-        function closeScanner() {
-            log('closeScanner called - navigating to Lightspeed POS');
+        // ===== COMPANION APP FEATURES =====
 
-            // Navigate to Lightspeed POS sell screen
-            window.location.href = 'https://retail.lightspeed.app/sell';
+        // Show toast notification
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
         }
+
+        // Show hint for returning to POS
+        function showBackToPOSHint() {
+            log('User tapped Return to POS button');
+            showToast('👆 Swipe up from bottom to switch back to Lightspeed POS');
+
+            // If window.opener exists (rare), try to focus it
+            if (window.opener && !window.opener.closed) {
+                try {
+                    window.opener.focus();
+                } catch (e) {
+                    log('Could not focus opener window', 'warn');
+                }
+            }
+        }
+
+        // Register management
+        function checkRegister() {
+            // Check if register_id is in URL params
+            let currentRegisterId = urlParams.get('register_id');
+
+            // If not in URL, check localStorage
+            if (!currentRegisterId) {
+                currentRegisterId = localStorage.getItem('scanner_register_id');
+            }
+
+            // If still no register_id, show modal
+            if (!currentRegisterId) {
+                log('No register ID found, showing selection modal');
+                document.getElementById('registerModal').classList.add('show');
+                return null;
+            }
+
+            // Save to localStorage for next time
+            localStorage.setItem('scanner_register_id', currentRegisterId);
+            log(`Using register: ${currentRegisterId}`);
+            return currentRegisterId;
+        }
+
+        // Save register selection
+        function saveRegister() {
+            const input = document.getElementById('registerInput');
+            const registerId = input.value.trim();
+
+            if (!registerId) {
+                showToast('⚠️ Please enter a register ID');
+                return;
+            }
+
+            // Save to localStorage
+            localStorage.setItem('scanner_register_id', registerId);
+            log(`Register saved: ${registerId}`);
+
+            // Hide modal
+            document.getElementById('registerModal').classList.remove('show');
+            showToast(`✅ Register ${registerId} selected`);
+
+            // Update global registerId variable
+            window.currentRegisterId = registerId;
+        }
+
+        // Initialize register on page load
+        window.currentRegisterId = checkRegister();
+
+        // Pre-fill register input if available
+        const savedRegisterId = localStorage.getItem('scanner_register_id');
+        if (savedRegisterId) {
+            document.getElementById('registerInput').value = savedRegisterId;
+        }
+
+        // ===== END COMPANION APP FEATURES =====
 
         // Logging function - show all logs for debugging
         function log(message, level = 'info') {
@@ -1272,7 +1476,7 @@
                         reason: approved ? null : 'Under minimum age',
                         outletId: outletId,
                         outletName: outletName,
-                        registerId: registerId,
+                        registerId: registerId || window.currentRegisterId,
                         employeeId: employeeId,
                         employeeName: employeeName
                     });
@@ -1382,7 +1586,7 @@
                         reason: approved ? null : 'Under minimum age',
                         outletId: outletId,
                         outletName: outletName,
-                        registerId: registerId,
+                        registerId: registerId || window.currentRegisterId,
                         employeeId: employeeId,
                         employeeName: employeeName
                     });
