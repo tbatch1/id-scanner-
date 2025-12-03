@@ -5,8 +5,14 @@ frontend/node_modules/
 
 # Environment files
 .env
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
 backend/.env
+backend/.env.local
 frontend/.env
+frontend/.env.local
 
 # Logs
 *.log
