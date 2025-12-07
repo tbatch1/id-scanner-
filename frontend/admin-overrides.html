@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,8 +28,8 @@
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: radial-gradient(circle at top, rgba(90, 84, 255, 0.35), transparent 55%),
-                        radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.25), transparent 50%),
-                        var(--ls-bg);
+                radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.25), transparent 50%),
+                var(--ls-bg);
             color: var(--ls-text);
             min-height: 100vh;
             padding: 20px;
@@ -181,6 +182,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="header">
         <h1>Override History</h1>
@@ -212,9 +214,9 @@
     </div>
 
     <div class="nav-links">
-        <a href="/admin/pending.html" class="nav-link">Pending Approvals</a>
-        <a href="/admin/scans.html" class="nav-link">View All Scans</a>
-        <a href="/admin/banned.html" class="nav-link">Banned Customers</a>
+
+        <a href="admin-scans.html" class="nav-link">View All Scans</a>
+        <a href="admin-banned.html" class="nav-link">Banned Customers</a>
     </div>
 
     <script>
@@ -251,6 +253,7 @@
                             </div>
                             <div class="sale-info">
                                 <strong>Sale ID:</strong> ${override.sale_id}<br>
+                                <strong>Location:</strong> ${override.locationId || 'N/A'}<br>
                                 <strong>Verification ID:</strong> ${override.verification_id}
                             </div>
                             ${override.note ? `<div class="note-box">Note: ${override.note}</div>` : ''}
@@ -272,4 +275,5 @@
         });
     </script>
 </body>
+
 </html>

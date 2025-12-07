@@ -1,21 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ID Verification Required</title>
+    <title>ID Verification - Lightspeed Payment Gateway</title>
     <style>
-        :root {
-            color-scheme: dark;
-            --ls-bg: #0d111b;
-            --ls-panel: rgba(15, 18, 34, 0.92);
-            --ls-border: rgba(255, 255, 255, 0.08);
-            --ls-blue: #5a54ff;
-            --ls-green: #1fbf75;
-            --ls-text: #f4f6ff;
-            --ls-teal: #22d3ee;
-        }
-
         * {
             margin: 0;
             padding: 0;
@@ -23,177 +13,474 @@
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: radial-gradient(circle at 20% 20%, rgba(90, 84, 255, 0.35), transparent 55%),
-                        radial-gradient(circle at 80% 0%, rgba(34, 211, 238, 0.2), transparent 50%),
-                        var(--ls-bg);
-            color: var(--ls-text);
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0d111b;
+            color: white;
             display: flex;
             align-items: center;
             justify-content: center;
+            min-height: 100vh;
             padding: 20px;
         }
 
         .container {
-            max-width: 500px;
-            width: 100%;
-            background: var(--ls-panel);
-            border-radius: 24px;
-            padding: 40px 32px;
-            border: 1px solid var(--ls-border);
-            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
-            backdrop-filter: blur(22px);
             text-align: center;
-        }
-
-        h1 {
-            font-size: 28px;
-            margin-bottom: 12px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .subtitle {
-            font-size: 15px;
-            color: rgba(244, 246, 255, 0.7);
-            margin-bottom: 32px;
-        }
-
-        .amount-box {
-            background: linear-gradient(135deg, rgba(90, 84, 255, 0.18) 0%, rgba(34, 211, 238, 0.12) 100%);
-            border: 1px solid rgba(90, 84, 255, 0.35);
-            border-radius: 20px;
-            padding: 24px;
-            margin-bottom: 32px;
-        }
-
-        .amount-label {
-            font-size: 14px;
-            color: rgba(244, 246, 255, 0.6);
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .amount {
-            font-size: 42px;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--ls-teal) 0%, var(--ls-green) 60%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .scan-button {
+            max-width: 600px;
             width: 100%;
-            padding: 18px 32px;
-            font-size: 17px;
-            font-weight: 600;
-            background: linear-gradient(135deg, var(--ls-blue) 0%, rgba(90, 84, 255, 0.8) 100%);
-            color: white;
-            border: none;
+        }
+
+        /* Waiting State */
+        .status-waiting {
+            display: none;
+        }
+
+        .status-waiting.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 80px;
+            height: 80px;
+            border: 6px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #5a54ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 32px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .status-waiting h1 {
+            font-size: 36px;
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+
+        .status-waiting p {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 24px;
+        }
+
+        .instruction {
+            background: rgba(90, 84, 255, 0.15);
+            border: 1px solid rgba(90, 84, 255, 0.3);
             border-radius: 16px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 8px 24px rgba(90, 84, 255, 0.3);
-        }
-
-        .scan-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 32px rgba(90, 84, 255, 0.4);
-            background: linear-gradient(135deg, #6b65ff 0%, var(--ls-blue) 100%);
-        }
-
-        .scan-button:active {
-            transform: translateY(0);
-        }
-
-        .info-text {
+            padding: 24px;
             margin-top: 24px;
-            font-size: 13px;
-            color: rgba(244, 246, 255, 0.5);
+        }
+
+        .instruction-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .instruction p {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.8);
             line-height: 1.6;
         }
 
-        .icon {
+        .instruction strong {
+            color: #5a54ff;
+            font-weight: 600;
+        }
+
+        /* Success State (GREEN) */
+        .status-success {
+            display: none;
+        }
+
+        .status-success.active {
+            display: block;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .success-container {
+            background: linear-gradient(135deg, #1fbf75 0%, #16a859 100%);
+            border-radius: 32px;
+            padding: 64px 48px;
+            box-shadow: 0 30px 80px rgba(31, 191, 117, 0.4);
+        }
+
+        .success-icon {
+            font-size: 120px;
+            margin-bottom: 24px;
+            animation: successPop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes successPop {
+            0% {
+                transform: scale(0);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .success-container h1 {
             font-size: 48px;
             margin-bottom: 16px;
+            font-weight: 800;
+        }
+
+        .success-container .customer-info {
+            font-size: 24px;
+            margin-bottom: 12px;
+            opacity: 0.95;
+        }
+
+        .success-container .age-info {
+            font-size: 20px;
+            opacity: 0.9;
+        }
+
+        /* Rejected State (RED) */
+        .status-rejected {
+            display: none;
+        }
+
+        .status-rejected.active {
+            display: block;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        .rejected-container {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border-radius: 32px;
+            padding: 64px 48px;
+            box-shadow: 0 30px 80px rgba(239, 68, 68, 0.4);
+        }
+
+        .rejected-icon {
+            font-size: 120px;
+            margin-bottom: 24px;
+            animation: shakeDeny 0.6s ease-in-out;
+        }
+
+        @keyframes shakeDeny {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            10%,
+            30%,
+            50%,
+            70%,
+            90% {
+                transform: translateX(-10px);
+            }
+
+            20%,
+            40%,
+            60%,
+            80% {
+                transform: translateX(10px);
+            }
+        }
+
+        .rejected-container h1 {
+            font-size: 48px;
+            margin-bottom: 16px;
+            font-weight: 800;
+        }
+
+        .rejected-container .reason {
+            font-size: 24px;
+            margin-bottom: 12px;
+            opacity: 0.95;
+        }
+
+        .rejected-container .action {
+            font-size: 18px;
+            opacity: 0.9;
+            margin-top: 24px;
+        }
+
+        /* Error State */
+        .status-error {
+            display: none;
+        }
+
+        .status-error.active {
+            display: block;
+        }
+
+        .status-error h1 {
+            font-size: 36px;
+            margin-bottom: 16px;
+            color: #ef4444;
+        }
+
+        .status-error p {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.7);
         }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <div class="icon">>�</div>
-        <h1>ID Verification Required</h1>
-        <p class="subtitle">Age verification needed to complete purchase</p>
+        <!-- Waiting State -->
+        <div class="status-waiting active" id="statusWaiting">
+            <img src="/frontend/assets/thc-logo.png" alt="THC Club"
+                style="width: 120px; height: 120px; margin-bottom: 24px;">
+            <div class="spinner"></div>
+            <h1>Waiting for ID Scan...</h1>
+            <p>Please complete verification in the Scanner app</p>
 
-        <div class="amount-box">
-            <div class="amount-label">Purchase Amount</div>
-            <div class="amount" id="amount">$0.00</div>
+            <div class="instruction">
+                <div class="instruction-icon">📱</div>
+                <p>
+                    <strong>Instructions for cashier:</strong><br>
+                    1. Swipe up from bottom of iPad<br>
+                    2. Open "ID Scanner" app<br>
+                    3. Customer double-taps to scan ID<br>
+                    4. Return here when complete
+                </p>
+            </div>
         </div>
 
-        <button class="scan-button" onclick="startScanner()">
-            =� Scan ID to Continue
-        </button>
+        <!-- Success State (GREEN) -->
+        <div class="status-success" id="statusSuccess">
+            <div class="success-container">
+                <div class="success-icon">✅</div>
+                <h1>ID VERIFIED</h1>
+                <div class="customer-info" id="successName"></div>
+                <div class="age-info" id="successAge"></div>
+            </div>
+        </div>
 
-        <p class="info-text">
-            You must be 21 or older to purchase. Scan your ID to verify age and complete transaction.
-        </p>
+        <!-- Rejected State (RED) -->
+        <div class="status-rejected" id="statusRejected">
+            <div class="rejected-container">
+                <div class="rejected-icon">🚫</div>
+                <h1>VERIFICATION FAILED</h1>
+                <div class="reason" id="rejectReason"></div>
+                <div class="action">Cannot complete transaction</div>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div class="status-error" id="statusError">
+            <h1>⚠️ Error</h1>
+            <p id="errorMessage">An error occurred during verification</p>
+        </div>
     </div>
 
     <script>
-        // Parse query parameters from the iframe URL, supporting both old and new names
+        // Parse sale_id from URL
         const urlParams = new URLSearchParams(window.location.search);
-        const paymentType = urlParams.get('type');
-        const registerId = urlParams.get('register_id') || urlParams.get('registerId');
-        const amount = urlParams.get('amount') || '0.00';
-        const outletId = urlParams.get('outlet_id') || urlParams.get('outletId');
-        const clerkId = urlParams.get('employee_id') || urlParams.get('clerkId');
-        const employeeName = urlParams.get('employee_name') || urlParams.get('employeeName');
         const saleId = urlParams.get('sale_id') || urlParams.get('saleId');
+        const amount = urlParams.get('amount') || '0.00';
 
-        // Display the amount
-        document.getElementById('amount').textContent = `$${parseFloat(amount).toFixed(2)}`;
+        let pollInterval = null;
+        let verificationComplete = false;
 
-        function startScanner() {
-            // Redirect to scanner.html
-            let scannerUrl = window.location.origin + '/scanner.html';
-            const params = [];
+        function log(message) {
+            console.log(`[Payment Gateway] ${message}`);
+        }
 
-            // Read all parameters from the current URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const paymentType = urlParams.get('type');
-            const saleId = urlParams.get('saleId') || urlParams.get('sale_id');
-            const clerkId = urlParams.get('clerkId') || urlParams.get('employee_id');
-            const outletId = urlParams.get('outletId') || urlParams.get('outlet_id');
-            const registerId = urlParams.get('registerId') || urlParams.get('register_id');
-            const employeeName = urlParams.get('employeeName') || urlParams.get('employee_name');
-            const amount = urlParams.get('amount') || '0.00';
+        function showStatus(statusId) {
+            // Hide all status divs
+            document.getElementById('statusWaiting').classList.remove('active');
+            document.getElementById('statusSuccess').classList.remove('active');
+            document.getElementById('statusRejected').classList.remove('active');
+            document.getElementById('statusError').classList.remove('active');
 
-            // Use scanner.html parameter names
-            if (saleId) params.push(`session_id=${encodeURIComponent(saleId)}`);
-            if (registerId) params.push(`register_id=${encodeURIComponent(registerId)}`);
-            if (amount) params.push(`amount=${encodeURIComponent(amount)}`);
-            if (outletId) params.push(`outlet_id=${encodeURIComponent(outletId)}`);
-            if (clerkId) params.push(`employee_id=${encodeURIComponent(clerkId)}`);
-            if (employeeName) params.push(`employee_name=${encodeURIComponent(employeeName)}`);
+            // Show requested status
+            document.getElementById(statusId).classList.add('active');
+        }
 
-            // Join the parameters to the URL if any exist
-            if (params.length > 0) {
-                scannerUrl += '?' + params.join('&');
+        async function checkVerificationStatus() {
+            if (!saleId) {
+                log('No sale_id provided');
+                showError('Missing sale ID');
+                return;
             }
 
-            // Break out of iframe to full screen (camera won't work in Safari iframe)
-            if (window.top) {
-                window.top.location.href = scannerUrl;
-            } else {
-                window.location.href = scannerUrl;
+            try {
+                log(`Polling verification status for sale ${saleId}...`);
+
+                const response = await fetch(`/api/sales/${saleId}/status`);
+
+                if (!response.ok) {
+                    throw new Error(`Status check failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                log(`Status: ${data.status}`);
+
+                if (data.status === 'approved') {
+                    handleApproved(data);
+                } else if (data.status === 'rejected') {
+                    handleRejected(data);
+                }
+                // If still 'pending', keep polling
+
+            } catch (error) {
+                log(`Error checking status: ${error.message}`);
+                console.error(error);
             }
         }
+
+        async function handleApproved(data) {
+            log('Verification approved!');
+
+            // Stop polling
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+
+            verificationComplete = true;
+
+            // Update UI with customer info
+            const nameEl = document.getElementById('successName');
+            const ageEl = document.getElementById('successAge');
+
+            if (data.customerName) {
+                nameEl.textContent = data.customerName;
+            }
+
+            if (data.age) {
+                ageEl.textContent = `Age: ${data.age} ✓`;
+            }
+
+            // Show success screen
+            showStatus('statusSuccess');
+
+            // Send completion to backend (which will unlock Lightspeed sale)
+            try {
+                const completeResponse = await fetch(`/api/sales/${saleId}/complete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        approved: true,
+                        paymentAmount: parseFloat(amount)
+                    })
+                });
+
+                if (completeResponse.ok) {
+                    log('Lightspeed sale unlocked successfully');
+                } else {
+                    log(`Warning: Failed to unlock Lightspeed sale: ${completeResponse.status}`);
+                }
+            } catch (error) {
+                log(`Error completing sale: ${error.message}`);
+            }
+        }
+
+        async function handleRejected(data) {
+            log('Verification rejected');
+
+            // Stop polling
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+
+            verificationComplete = true;
+
+            // Update UI with rejection reason
+            const reasonEl = document.getElementById('rejectReason');
+            reasonEl.textContent = data.reason || 'Under 21 years old';
+
+            // Show rejected screen
+            showStatus('statusRejected');
+
+            // Send completion to backend
+            try {
+                const completeResponse = await fetch(`/api/sales/${saleId}/complete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        approved: false,
+                        paymentAmount: parseFloat(amount)
+                    })
+                });
+
+                if (completeResponse.ok) {
+                    log('Lightspeed sale rejection recorded');
+                } else {
+                    log(`Warning: Failed to record rejection: ${completeResponse.status}`);
+                }
+            } catch (error) {
+                log(`Error completing sale: ${error.message}`);
+            }
+        }
+
+        function showError(message) {
+            // Stop polling
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+
+            document.getElementById('errorMessage').textContent = message;
+            showStatus('statusError');
+        }
+
+        // Start polling when page loads
+        window.addEventListener('load', () => {
+            log('Payment gateway loaded');
+
+            if (!saleId) {
+                showError('Missing sale_id parameter');
+                return;
+            }
+
+            log(`Starting polling for sale ${saleId}`);
+
+            // Check immediately
+            checkVerificationStatus();
+
+            // Then poll every 2 seconds
+            pollInterval = setInterval(checkVerificationStatus, 2000);
+
+            // Stop polling after 15 minutes (timeout)
+            setTimeout(() => {
+                if (!verificationComplete && pollInterval) {
+                    clearInterval(pollInterval);
+                    showError('Verification timeout - please try again');
+                }
+            }, 15 * 60 * 1000);
+        });
+
+        // Cleanup on unload
+        window.addEventListener('beforeunload', () => {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+        });
     </script>
 </body>
+
 </html>

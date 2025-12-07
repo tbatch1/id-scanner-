@@ -510,6 +510,7 @@ async function listRecentOverrides({ days = 30, limit = 200 } = {}) {
         o.manager_id AS "managerId",
         o.note,
         o.created_at AS "createdAt",
+        v.location_id AS "locationId",
         v.clerk_id AS "clerkId",
         v.status,
         v.document_type AS "documentType",
@@ -611,6 +612,24 @@ async function removeBannedCustomer(id) {
   return rowCount > 0;
 }
 
+async function countRecentOverrides({ locationId, minutes = 10 }) {
+  // If no pool, return 0 (can't count)
+  if (!query) return 0;
+
+  const { rows } = await query(
+    `
+      SELECT COUNT(*) as count
+      FROM verification_overrides o
+      JOIN verifications v ON v.verification_id = o.verification_id
+      WHERE o.created_at >= NOW() - ($1::int || ' minutes')::interval
+      AND ($2::text IS NULL OR v.location_id = $2)
+    `,
+    [minutes, locationId]
+  );
+
+  return parseInt(rows[0]?.count || 0, 10);
+}
+
 module.exports = {
   saveVerification,
   getLatestVerificationForSale,
@@ -623,5 +642,6 @@ module.exports = {
   markVerificationOverride,
   listOverridesForSale,
   listRecentOverrides,
-  enforceRetention
+  enforceRetention,
+  countRecentOverrides
 };

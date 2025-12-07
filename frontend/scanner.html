@@ -1501,23 +1501,40 @@
                 timingData.total = Math.round(performance.now() - totalStartTime);
                 log(`⏱️ [TIMING] ✅ TOTAL PROCESSING TIME: ${timingData.total}ms`);
 
-                updateStatus('✅ Verified! Closing...', 'success');
-
                 // Send timing data to database for analysis
                 sendTimingData(timingData);
 
-                // Show manual close button for user to return to POS
-                log('Scan complete - user must manually return to Lightspeed POS');
+                // Check if opened via Payment Gateway Flow (has sale_id)
+                const saleId = urlParams.get('sale_id');
 
-                // Stop scanning
-                if (scanInterval) clearInterval(scanInterval);
-                isScanning = false;
+                if (saleId) {
+                    // Payment Gateway Flow: Send verification to backend
+                    log('Payment Gateway Flow detected - sending verification to backend');
+                    updateStatus('✅ Sending verification...', 'success');
 
-                // Show success/failure message with close button
-                if (approved) {
-                    updateStatus('✅ ID Verified! Click "Close Scanner" to return to POS.', 'success');
+                    // Send verification result to backend
+                    await sendSaleVerification(saleId, {
+                        approved,
+                        customerId: result.licenseNumber || result.documentNumber,
+                        customerName: `${result.firstName || ''} ${result.lastName || ''}`.trim(),
+                        age: result.age,
+                        reason: approved ? null : 'Under 21',
+                        registerId: registerId || window.currentRegisterId
+                    });
+
+                    // Show success message
+                    showToast('✅ Verification sent! Return to Lightspeed');
+                    updateStatus('✅ Verification sent! Return to Lightspeed', 'success');
                 } else {
-                    updateStatus('❌ REJECTED: Under 21. Click "Close Scanner" to return to POS.', 'error');
+                    // Companion App Flow: Stay on page
+                    log('Companion App Flow - staying on scanner page');
+
+                    // Show success/failure message
+                    if (approved) {
+                        updateStatus('✅ ID Verified! Ready for next scan.', 'success');
+                    } else {
+                        updateStatus('❌ REJECTED: Under 21. Check ID and try again.', 'error');
+                    }
                 }
 
             } catch (error) {
@@ -1603,17 +1620,31 @@
                     videoStream.getTracks().forEach(track => track.stop());
                 }
 
-                updateStatus('✅ Verified! Closing...', 'success');
+                // Check if opened via Payment Gateway Flow (has sale_id)
+                const saleId = urlParams.get('sale_id');
 
-                // Redirect back to Lightspeed POS after 1 second
-                if (origin) {
-                    setTimeout(() => {
-                        window.location.href = 'https://' + origin;
-                    }, 1000);
+                if (saleId) {
+                    // Payment Gateway Flow: Send verification to backend
+                    log('Payment Gateway Flow detected (MRZ) - sending verification to backend');
+                    updateStatus('✅ Sending verification...', 'success');
+
+                    // Send verification result to backend
+                    await sendSaleVerification(saleId, {
+                        approved,
+                        customerId: parsedData.documentNumber,
+                        customerName: `${parsedData.firstName || ''} ${parsedData.lastName || ''}`.trim(),
+                        age: age,
+                        reason: approved ? null : 'Under 21',
+                        registerId: registerId || window.currentRegisterId
+                    });
+
+                    // Show success message
+                    showToast('✅ Verification sent! Return to Lightspeed');
+                    updateStatus('✅ Verification sent! Return to Lightspeed', 'success');
                 } else {
-                    setTimeout(() => {
-                        window.close();
-                    }, 1000);
+                    // Companion App Flow: Stay on page
+                    log('Companion App Flow (MRZ) - staying on scanner page');
+                    updateStatus('✅ Document Verified! Ready for next scan.', 'success');
                 }
 
             } catch (error) {
@@ -1729,6 +1760,46 @@
             } catch (error) {
                 log(`⏱️ [DB TIMING] ❌ DB operation failed after ${(performance.now() - dbStartTime).toFixed(0)}ms`);
                 log(`Database error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        async function sendSaleVerification(saleId, data) {
+            log(`Sending sale verification for sale ${saleId}...`);
+
+            try {
+                const payload = {
+                    approved: data.approved,
+                    customerId: data.customerId || null,
+                    customerName: data.customerName || null,
+                    age: data.age || null,
+                    reason: data.reason || null,
+                    registerId: data.registerId || null
+                };
+
+                log(`Sale verification payload: ${JSON.stringify(payload)}`);
+
+                const response = await fetch(`/api/sales/${saleId}/verify`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`Sale verification failed: ${response.status} - ${errorText}`, 'error');
+                    throw new Error(`Verification failed: ${response.status}`);
+                }
+
+                const result = await response.json();
+                log(`Sale verification sent successfully: ${JSON.stringify(result)}`);
+                return result;
+
+            } catch (error) {
+                log(`Sale verification error: ${error.message}`, 'error');
+                showToast('❌ Failed to send verification');
                 throw error;
             }
         }

@@ -26,7 +26,10 @@
       "Bash(npm test:*)",
       "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_HTvjn0FrEZ7D@ep-holy-brook-a4hgmwaj-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require\" npx pg-sql:*)",
       "Bash(git rm:*)",
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "Bash(git pull:*)",
+      "Bash(start http://localhost:4000/admin-scans.html)",
+      "Bash(timeout 3 bash:*)"
     ],
     "deny": [],
     "ask": []

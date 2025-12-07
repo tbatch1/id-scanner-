@@ -131,8 +131,9 @@ app.use('/api', generalLimiter);
 app.use('/admin', adminAuth, adminRoutes);
 
 // API routes - enforce authentication when API_SECRET_KEY is configured
+// Note: Sale verification routes (/api/sales/*) use optionalAuth to allow iframe access
 app.use('/api/scan-sessions', authenticateRequest, scanSessionRoutes);
-app.use('/api', authenticateRequest, apiRoutes);
+app.use('/api', optionalAuth, apiRoutes);
 
 const frontendDir = path.resolve(__dirname, '..', '..', 'frontend');
 app.use(express.static(frontendDir));

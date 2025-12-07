@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('./db');
 const logger = require('./logger');
+const complianceStore = require('./complianceStore');
 
 const router = express.Router();
 
@@ -61,14 +62,46 @@ router.post('/', async (req, res) => {
       RETURNING *
     `;
 
+    // Check for Banned Customer
+    let isBanned = false;
+    let rejectionReason = reason;
+    let finalApproved = approved;
+
+    if (documentNumber) {
+      try {
+        const bannedRecord = await complianceStore.findBannedCustomer({
+          documentType: documentType || 'drivers_license',
+          documentNumber: documentNumber,
+          issuingCountry: nationality || null
+        });
+
+        if (bannedRecord) {
+          isBanned = true;
+          finalApproved = false;
+          rejectionReason = bannedRecord.notes || 'BANNED_CUSTOMER';
+
+          logger.logSecurity('banned_customer_attempt', {
+            sessionId,
+            documentType,
+            documentNumber,
+            issuingCountry: nationality,
+            outletId,
+            bannedId: bannedRecord.id
+          });
+        }
+      } catch (banError) {
+        logger.logAPIError('find_banned_customer_session', banError, { sessionId });
+      }
+    }
+
     const result = await db.pool.query(query, [
       sessionId,
-      approved !== undefined ? approved : null,
+      finalApproved !== undefined ? finalApproved : null,
       firstName || null,
       lastName || null,
       age || null,
       dob || null,
-      reason || null,
+      rejectionReason || null,
       outletId || null,
       outletName || null,
       registerId || null,

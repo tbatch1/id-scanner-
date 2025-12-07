@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ID Verification</title>
+    <style>
+        :root {
+            --bg-color: #f4f6f8;
+            --card-bg: #ffffff;
+            --text-primary: #212b36;
+            --text-secondary: #637381;
+            --success: #36b37e;
+            --error: #ff5630;
+            --warning: #ffab00;
+            --border: #dfe3e8;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+
+        .status-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--success);
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .btn {
+            background-color: var(--text-secondary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-top: 20px;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn-cancel {
+            background-color: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            margin-top: 10px;
+        }
+
+        .btn-warning {
+            background-color: var(--warning);
+            color: white;
+            border: none;
+            margin-top: 10px;
+        }
+
+        .btn-warning:hover {
+            background-color: #e69500;
+        }
+
+        #status-text {
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 320px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .pin-input {
+            font-size: 24px;
+            letter-spacing: 4px;
+            text-align: center;
+            width: 100%;
+            padding: 12px;
+            margin: 16px 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .note-input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-actions .btn {
+            margin-top: 0;
+            font-size: 14px;
+            padding: 10px 16px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card" id="loading-card">
+        <img src="/frontend/assets/thc-logo.png" alt="THC Club"
+            style="width: 120px; height: 120px; margin-bottom: 24px;">
+        <div class="spinner"></div>
+        <h1>Waiting for Scan...</h1>
+        <p>Please scan the customer's ID using the <strong>Companion App</strong> on this iPad.</p>
+        <div id="status-text">Listening for verification...</div>
+        <button class="btn btn-warning" onclick="showOverrideModal()">Manual ID Override</button>
+        <button class="btn btn-cancel" onclick="cancelVerification()">Cancel</button>
+    </div>
+
+    <div class="card hidden" id="success-card">
+        <span class="status-icon">✅</span>
+        <h1>ID Verified</h1>
+        <p id="success-details">Age 21+ confirmed.</p>
+        <button class="btn" style="background-color: var(--success);" onclick="completeSale()">Complete Sale</button>
+    </div>
+
+    <div class="card hidden" id="error-card">
+        <span class="status-icon">❌</span>
+        <h1>Verification Failed</h1>
+        <p id="error-details">Customer is under 21.</p>
+        <button class="btn btn-cancel" onclick="retry()">Try Again</button>
+        <button class="btn btn-warning" onclick="showOverrideModal()">Manual ID Override</button>
+    </div>
+
+    <div id="override-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>Manual ID Override</h2>
+            <p>Enter Manager PIN to bypass verification.</p>
+            <input type="password" id="manager-pin" class="pin-input" placeholder="Enter PIN" maxlength="4" />
+            <input type="text" id="override-note" class="note-input" placeholder="Reason (Optional)" />
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeOverrideModal()">Cancel</button>
+                <button class="btn btn-warning" onclick="submitOverride()">Override</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showOverrideModal() {
+            document.getElementById('override-modal').classList.remove('hidden');
+            document.getElementById('manager-pin').value = '';
+            document.getElementById('override-note').value = '';
+            document.getElementById('manager-pin').focus();
+        }
+
+        function closeOverrideModal() {
+            document.getElementById('override-modal').classList.add('hidden');
+        }
+
+        async function submitOverride() {
+            const pin = document.getElementById('manager-pin').value;
+            const note = document.getElementById('override-note').value;
+
+            if (!pin) {
+                alert('Please enter a PIN');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/sales/${saleId}/override`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        verificationId: 'MANUAL-OVERRIDE', // Placeholder or generate one
+                        managerPin: pin,
+                        note: note
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    closeOverrideModal();
+                    showSuccess({ customerName: 'Manual Override' });
+                    setTimeout(completeSale, 1000);
+                } else {
+                    alert(data.message || 'Override Failed');
+                }
+            } catch (e) {
+                console.error('Override error', e);
+                alert('Failed to process override');
+            }
+        }
+
+        // Parse query parameters from Lightspeed
+        const urlParams = new URLSearchParams(window.location.search);
+        const saleId = urlParams.get('sale_id') || urlParams.get('saleId');
+        const registerId = urlParams.get('register_id');
+        const amount = urlParams.get('amount');
+
+        let pollInterval;
+
+        // Initialize
+        if (!saleId) {
+            showError('Missing Sale ID. Please open from Lightspeed.');
+        } else {
+            startPolling();
+        }
+
+        function startPolling() {
+            // Poll the backend every 2 seconds to see if the Companion App has scanned an ID
+            pollInterval = setInterval(checkStatus, 2000);
+        }
+
+        // Bluetooth Scanner Listener (HID Mode)
+        // Optimized for NETUM NT-1200 and standard PDF417 Scanners
+        let barcodeBuffer = '';
+        let lastKeyTime = 0;
+        const SCAN_TIMEOUT = 100; // Increased to 100ms to be safe for Bluetooth latency
+        const PDF417_PREFIX = ']L'; // Common AIM ID for PDF417
+
+        document.addEventListener('keydown', (e) => {
+            const currentTime = Date.now();
+            const isPrintable = e.key.length === 1;
+
+            // Reset buffer if too much time has passed (manual typing)
+            if (currentTime - lastKeyTime > SCAN_TIMEOUT && barcodeBuffer.length > 0) {
+                // Exception: If the buffer starts with the PDF417 prefix, keep it (some scanners are slow)
+                if (!barcodeBuffer.startsWith(PDF417_PREFIX)) {
+                    barcodeBuffer = '';
+                }
+            }
+
+            lastKeyTime = currentTime;
+
+            if (e.key === 'Enter') {
+                // Scanner sent the "Enter" terminator
+                if (barcodeBuffer.length > 10) { // Valid ID barcodes are long
+                    handleBluetoothScan(barcodeBuffer);
+                }
+                barcodeBuffer = '';
+            } else if (isPrintable) {
+                barcodeBuffer += e.key;
+            }
+        });
+
+        async function handleBluetoothScan(barcodeData) {
+            document.getElementById('status-text').textContent = 'Processing Scan...';
+
+            // Clean up the data (remove AIM ID prefix if present)
+            let cleanData = barcodeData;
+            if (cleanData.startsWith(PDF417_PREFIX)) {
+                cleanData = cleanData.substring(PDF417_PREFIX.length);
+                // Remove the modifier char if it's there (e.g., ]L1)
+                if (cleanData.length > 0 && !isNaN(parseInt(cleanData[0]))) {
+                    cleanData = cleanData.substring(1);
+                }
+            }
+
+            // Send to backend
+            try {
+                const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        barcodeData: cleanData,
+                        registerId: registerId || 'NETUM-NT1200'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.approved) {
+                    clearInterval(pollInterval);
+                    showSuccess({ customerName: data.customerName || 'Customer' });
+                    setTimeout(completeSale, 1000);
+                } else {
+                    showError(data.reason || 'Verification Failed');
+                }
+            } catch (e) {
+                console.error('Bluetooth scan error', e);
+                showError('Scan processing failed');
+            }
+        }
+
+        async function checkStatus() {
+            try {
+                const response = await fetch(`/api/sales/${saleId}/status`);
+                const data = await response.json();
+
+                if (data.status === 'approved' || data.status === 'approved_override') {
+                    clearInterval(pollInterval);
+                    showSuccess(data);
+                    // Auto-complete after 1 second for speed
+                    setTimeout(completeSale, 1000);
+                } else if (data.status === 'rejected') {
+                    clearInterval(pollInterval);
+                    showError(data.reason || 'ID Verification Failed');
+                }
+            } catch (e) {
+                console.error('Polling error', e);
+            }
+        }
+
+        async function completeSale() {
+            try {
+                // Tell backend to unlock the sale
+                await fetch(`/api/sales/${saleId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ approved: true })
+                });
+
+                // Tell Lightspeed to close the modal and accept payment
+                // (This uses the postMessage API for Custom Payments)
+                window.parent.postMessage('ACCEPT', '*');
+            } catch (e) {
+                showError('Failed to complete sale. Please try again.');
+            }
+        }
+
+        function cancelVerification() {
+            clearInterval(pollInterval);
+            window.parent.postMessage('DECLINE', '*');
+        }
+
+        function retry() {
+            document.getElementById('error-card').classList.add('hidden');
+            document.getElementById('loading-card').classList.remove('hidden');
+            startPolling();
+        }
+
+        function showSuccess(data) {
+            document.getElementById('loading-card').classList.add('hidden');
+            document.getElementById('success-card').classList.remove('hidden');
+            document.getElementById('success-details').textContent =
+                `${data.customerName || 'Customer'} is verified.`;
+        }
+
+        function showError(message) {
+            document.getElementById('loading-card').classList.add('hidden');
+            document.getElementById('error-card').classList.remove('hidden');
+            document.getElementById('error-details').textContent = message;
+        }
+    </script>
+</body>
+
+</html>
