@@ -179,12 +179,13 @@
 
     <div class="card" id="loading-card">
         <img src="/frontend/assets/thc-logo.png" alt="THC Club"
-            style="width: 120px; height: 120px; margin-bottom: 24px;">
+            style="width: 280px; height: auto; margin-bottom: 40px; filter: drop-shadow(0 0 20px rgba(90, 84, 255, 0.3));">
         <div class="spinner"></div>
-        <h1>Waiting for Scan...</h1>
-        <p>Please scan the customer's ID using the <strong>Companion App</strong> on this iPad.</p>
+        <h1>Waiting for ID Scan...</h1>
+        <p style="font-size: 24px; color: rgba(33, 43, 54, 0.9);">Scan ID now</p>
         <div id="status-text">Listening for verification...</div>
-        <button class="btn btn-warning" onclick="showOverrideModal()">Manual ID Override</button>
+        <button class="btn btn-warning" onclick="showOverrideModal()"
+            style="margin-top: 40px; padding: 16px 32px; font-size: 18px; cursor: pointer;">Manual ID Override</button>
         <button class="btn btn-cancel" onclick="cancelVerification()">Cancel</button>
     </div>
 
