@@ -119,20 +119,15 @@ router.get('/scans', async (req, res) => {
     let paramIndex = 1;
 
     if (location) {
-      whereConditions.push(`outlet_id = $${paramIndex}`);
+      whereConditions.push(`location_id = $${paramIndex}`);
       params.push(location);
       paramIndex++;
     }
 
     if (status) {
-      // Map status to approved field
-      if (status === 'approved') {
-        whereConditions.push(`approved = true`);
-      } else if (status === 'rejected') {
-        whereConditions.push(`approved = false`);
-      } else if (status === 'pending') {
-        whereConditions.push(`approved IS NULL`);
-      }
+      whereConditions.push(`status = $${paramIndex}`);
+      params.push(status);
+      paramIndex++;
     }
 
     const whereClause = whereConditions.length > 0
@@ -143,24 +138,22 @@ router.get('/scans', async (req, res) => {
     params.push(parseInt(offset, 10));
 
     const query = `
-      SELECT
-        session_id AS verification_id,
-        session_id AS sale_id,
-        first_name,
-        last_name,
-        age,
-        date_of_birth,
-        CASE WHEN approved = true THEN 'approved'
-             WHEN approved = false THEN 'rejected'
-             ELSE 'pending' END AS status,
-        reason,
-        'drivers_license' AS document_type,
-        COALESCE(outlet_name, outlet_id) AS location_id,
-        COALESCE(employee_name, 'Register ' || SUBSTRING(register_id, 1, 8)) AS clerk_id,
-        completed_at AS created_at
-      FROM scan_sessions
+    SELECT
+    verification_id,
+      sale_id,
+      first_name,
+      last_name,
+      age,
+      date_of_birth,
+      status,
+      reason,
+      document_type,
+      location_id,
+      clerk_id,
+      created_at
+      FROM verifications
       ${whereClause}
-      ORDER BY completed_at DESC
+      ORDER BY created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
@@ -241,88 +234,88 @@ router.get('/', (req, res) => {
     }
 
     refreshStatus();
-  `;
+    `;
 
-  res.type('html').send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Lightspeed OAuth Admin</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      margin: 0;
-      padding: 24px;
-      background: #111;
-      color: #f5f5f5;
+  res.type('html').send(`< !DOCTYPE html >
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <title>Lightspeed OAuth Admin</title>
+          <style>
+            body {
+              font - family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: #111;
+            color: #f5f5f5;
     }
-    h1 {
-      margin-bottom: 8px;
+            h1 {
+              margin - bottom: 8px;
     }
-    .banner {
-      padding: 12px;
-      border-radius: 6px;
-      margin-bottom: 16px;
+            .banner {
+              padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
     }
-    .banner.info { background: #1f2b3f; color: #d3e6ff; }
-    .banner.success { background: #1f3f2b; color: #d3ffe6; }
-    .banner.warn { background: #3f2a11; color: #ffe0b2; }
-    .banner.error { background: #3f1417; color: #ffc7c9; }
-    table {
-      width: 100%;
-      max-width: 520px;
-      border-collapse: collapse;
+            .banner.info {background: #1f2b3f; color: #d3e6ff; }
+            .banner.success {background: #1f3f2b; color: #d3ffe6; }
+            .banner.warn {background: #3f2a11; color: #ffe0b2; }
+            .banner.error {background: #3f1417; color: #ffc7c9; }
+            table {
+              width: 100%;
+            max-width: 520px;
+            border-collapse: collapse;
     }
-    td {
-      padding: 6px 8px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
+            td {
+              padding: 6px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
     }
-    .actions {
-      display: flex;
-      gap: 12px;
-      margin-top: 20px;
+            .actions {
+              display: flex;
+            gap: 12px;
+            margin-top: 20px;
     }
-    button {
-      padding: 8px 14px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      background: #0d6efd;
-      color: #fff;
+            button {
+              padding: 8px 14px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            background: #0d6efd;
+            color: #fff;
     }
-    button.secondary {
-      background: #2d2d2d;
+            button.secondary {
+              background: #2d2d2d;
     }
-    button:hover {
-      opacity: 0.9;
+            button:hover {
+              opacity: 0.9;
     }
-  </style>
-</head>
-<body>
-  <h1>Lightspeed OAuth Admin</h1>
-  <div id="status-banner" class="banner info">Loading Lightspeed status...</div>
+          </style>
+        </head>
+        <body>
+          <h1>Lightspeed OAuth Admin</h1>
+          <div id="status-banner" class="banner info">Loading Lightspeed status...</div>
 
-  <table>
-    <tbody>
-      <tr><td>Environment</td><td id="env">--</td></tr>
-      <tr><td>Mode</td><td id="mode">--</td></tr>
-      <tr><td>Writes</td><td id="writes">--</td></tr>
-      <tr><td>Status</td><td id="status">--</td></tr>
-      <tr><td>Has Refresh Token</td><td id="hasRefresh">--</td></tr>
-      <tr><td>Access Token Expires</td><td id="expires">--</td></tr>
-      <tr><td>Last Updated</td><td id="timestamp">--</td></tr>
-    </tbody>
-  </table>
+          <table>
+            <tbody>
+              <tr><td>Environment</td><td id="env">--</td></tr>
+              <tr><td>Mode</td><td id="mode">--</td></tr>
+              <tr><td>Writes</td><td id="writes">--</td></tr>
+              <tr><td>Status</td><td id="status">--</td></tr>
+              <tr><td>Has Refresh Token</td><td id="hasRefresh">--</td></tr>
+              <tr><td>Access Token Expires</td><td id="expires">--</td></tr>
+              <tr><td>Last Updated</td><td id="timestamp">--</td></tr>
+            </tbody>
+          </table>
 
-  <div class="actions">
-    <button onclick="launchOAuth()">Launch OAuth Login</button>
-    <button class="secondary" onclick="forceRefresh()">Force Refresh</button>
-    <button class="secondary" onclick="refreshStatus()">Reload Status</button>
-  </div>
+          <div class="actions">
+            <button onclick="launchOAuth()">Launch OAuth Login</button>
+            <button class="secondary" onclick="forceRefresh()">Force Refresh</button>
+            <button class="secondary" onclick="refreshStatus()">Reload Status</button>
+          </div>
 
-  <script>${authStatusScript}</script>
-</body>
-</html>`);
+          <script>${authStatusScript}</script>
+        </body>
+      </html>`);
 });
 
 module.exports = router;

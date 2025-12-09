@@ -337,6 +337,9 @@
                 <button class="page-btn" id="nextBtn" onclick="nextPage()" disabled>Next</button>
             </div>
         </div>
+        <div id="lastUpdate" style="font-size: 12px; color: rgba(244, 246, 255, 0.5); text-align: center; padding: 8px; margin-top: 8px;">
+            Auto-refresh: Every 10 seconds
+        </div>
     </div>
 
     <div class="nav-links">
@@ -454,9 +457,50 @@
             }
         }
 
+        // Auto-refresh functionality
+        let autoRefreshInterval = null;
+        let lastUpdateTime = null;
+
+        function startAutoRefresh() {
+            // Only refresh if page is visible
+            if (!document.hidden) {
+                loadScans(false); // Don't reset page
+                updateLastRefreshTime();
+            }
+        }
+
+        function updateLastRefreshTime() {
+            lastUpdateTime = new Date();
+            const timeStr = lastUpdateTime.toLocaleTimeString();
+            const updateIndicator = document.getElementById('lastUpdate');
+            if (updateIndicator) {
+                updateIndicator.textContent = `Last updated: ${timeStr} • Auto-refresh: Every 10 seconds`;
+            }
+        }
+
         // Auto-load on page load
         window.addEventListener('load', () => {
             loadScans(true);
+            updateLastRefreshTime();
+            // Start auto-refresh after initial load
+            autoRefreshInterval = setInterval(startAutoRefresh, 10000); // 10 seconds
+        });
+
+        // Pause/resume based on page visibility
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Pause auto-refresh when tab is hidden
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+            } else {
+                // Resume auto-refresh when tab becomes visible
+                if (!autoRefreshInterval) {
+                    autoRefreshInterval = setInterval(startAutoRefresh, 10000);
+                    startAutoRefresh(); // Immediate refresh when returning
+                }
+            }
         });
     </script>
 </body>

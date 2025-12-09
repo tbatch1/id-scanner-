@@ -313,17 +313,53 @@
     </div>
 
     <script>
-        // Parse sale_id from URL
+        // Parse sale_id from URL - support multiple parameter names
         const urlParams = new URLSearchParams(window.location.search);
-        const saleId = urlParams.get('sale_id') || urlParams.get('saleId');
-        const registerId = urlParams.get('register_id');
-        const amount = urlParams.get('amount') || '0.00';
+        // Lightspeed Custom Payments uses 'reference' as the transaction/sale ID
+        let saleId = urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
+
+        // Check if saleId is a template variable that wasn't replaced (like "{saleId}")
+        if (saleId && (saleId.includes('{') || saleId.includes('}'))) {
+            console.warn('Sale ID appears to be an unreplaced template variable:', saleId);
+            saleId = null; // Treat as missing
+        }
+
+        const registerId = urlParams.get('register_id') || urlParams.get('registerId') || urlParams.get('outlet_id');
+        const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
+        let amount = urlParams.get('amount') || '0.00';
+
+        // Check if amount is a template variable that wasn't replaced
+        if (amount && (amount.includes('{') || amount.includes('}'))) {
+            console.warn('Amount appears to be an unreplaced template variable:', amount);
+            amount = '0.00';
+        }
+
+        // Debug logging to help diagnose parameter issues
+        console.log('Payment Gateway Parameters:', {
+            saleId,
+            registerId,
+            clerkId,
+            amount,
+            allParams: Object.fromEntries(urlParams.entries())
+        });
 
         let pollInterval = null;
 
         // Initialize
         if (!saleId) {
-            showError('Missing Sale ID. Please open from Lightspeed.');
+            // Show detailed error message with all received parameters
+            const errorDetails = `Missing Sale ID. Please open from Lightspeed.
+
+Received parameters:
+${Object.entries(Object.fromEntries(urlParams.entries())).map(([k, v]) => `  ${k}: ${v}`).join('\n') || '  (none)'}
+
+Expected parameters:
+  - reference or sale_id or transaction_id (the sale ID)
+  - amount (optional)
+  - employee_id or clerk_id (optional)
+  - outlet_id or register_id (optional)`;
+
+            showError(errorDetails);
         } else {
             startPolling();
         }
@@ -379,7 +415,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         barcodeData: cleanData,
-                        registerId: registerId || 'NETUM-NT1200'
+                        registerId: registerId || 'NETUM-NT1200',
+                        clerkId: clerkId
                     })
                 });
 
@@ -426,7 +463,9 @@
                     body: JSON.stringify({
                         verificationId: 'MANUAL-OVERRIDE',
                         managerPin: pin,
-                        note: note
+                        note: note,
+                        clerkId: clerkId,
+                        registerId: registerId
                     })
                 });
 
@@ -492,7 +531,12 @@
         function showError(message) {
             document.getElementById('statusWaiting').classList.remove('active');
             document.getElementById('statusError').classList.add('active');
-            document.getElementById('errorMessage').textContent = message;
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.style.whiteSpace = 'pre-wrap';
+            errorEl.style.textAlign = 'left';
+            errorEl.style.fontFamily = 'monospace';
+            errorEl.style.fontSize = '14px';
+            errorEl.textContent = message;
         }
     </script>
 </body>

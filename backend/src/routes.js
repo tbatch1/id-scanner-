@@ -367,7 +367,7 @@ function parseAAMVA(data) {
 
 router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
   const { saleId } = req.params;
-  const { barcodeData, registerId } = req.body;
+  const { barcodeData, registerId, clerkId } = req.body;
 
   if (!barcodeData) {
     return res.status(400).json({ success: false, error: 'Barcode data is required.' });
@@ -431,7 +431,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       }
     }
 
-    // 4. Update In-Memory Store (for Polling)
+    // 4. Prepare verification result
     const verificationResult = {
       approved,
       customerId: parsed.documentNumber,
@@ -441,44 +441,42 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       registerId: registerId || 'BLUETOOTH-SCANNER'
     };
 
-    saleVerificationStore.updateVerification(saleId, verificationResult);
-
-    // 5. Persist to Database (Dashboard Integration)
+    // 5. Persist to Database FIRST (Dashboard Integration - CRITICAL)
+    // Database save must succeed before in-memory update to ensure data integrity
     if (db.pool) {
-      try {
-        // Need to fetch sale to get location/outlet info first
-        const sale = await lightspeed.getSaleById(saleId);
-        const locationId = determineLocationId(req, sale);
+      // Need to fetch sale to get location/outlet info first
+      const sale = await lightspeed.getSaleById(saleId);
+      const locationId = determineLocationId(req, sale);
 
-        // Construct verification object for DB
-        const dbVerification = {
-          verificationId: require('crypto').randomUUID(), // Node 14.17+
-          saleId,
-          clerkId: 'BLUETOOTH_DEVICE', // Placeholder
-          status: approved ? 'approved' : 'rejected',
-          reason,
-          firstName: parsed.firstName,
-          lastName: parsed.lastName,
-          dob: parsed.dob ? parsed.dob.toISOString() : null,
-          age: parsed.age,
-          documentType: 'drivers_license',
-          documentNumber: parsed.documentNumber,
-          issuingCountry: parsed.issuingCountry,
-          nationality: parsed.issuingCountry,
-          sex: parsed.sex,
-          source: 'bluetooth_gun'
-        };
+      // Construct verification object for DB
+      const dbVerification = {
+        verificationId: require('crypto').randomUUID(), // Node 14.17+
+        saleId,
+        clerkId: clerkId || 'BLUETOOTH_DEVICE',
+        status: approved ? 'approved' : 'rejected',
+        reason,
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
+        dob: parsed.dob ? parsed.dob.toISOString() : null,
+        age: parsed.age,
+        documentType: 'drivers_license',
+        documentNumber: parsed.documentNumber,
+        issuingCountry: parsed.issuingCountry,
+        nationality: parsed.issuingCountry,
+        sex: parsed.sex,
+        source: 'bluetooth_gun'
+      };
 
-        await complianceStore.saveVerification(dbVerification, {
-          ipAddress: req.ip,
-          userAgent: req.get('user-agent'),
-          locationId
-        });
-      } catch (dbError) {
-        logger.error('Failed to save bluetooth verification to DB', dbError);
-        // Don't fail the request, just log it
-      }
+      // Let database errors propagate - if DB save fails, entire request fails
+      await complianceStore.saveVerification(dbVerification, {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        locationId
+      });
     }
+
+    // 6. Update In-Memory Store (for Polling) - ONLY after DB save succeeds
+    saleVerificationStore.updateVerification(saleId, verificationResult);
 
     res.json({
       success: true,
@@ -591,6 +589,35 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
       sale,
       locationId
     });
+
+    if (db.pool) {
+      try {
+        await complianceStore.saveVerification({
+          verificationId: verification.verificationId || require('crypto').randomUUID(),
+          saleId,
+          clerkId,
+          status: normalizedScan.approved ? 'approved' : 'rejected',
+          reason: normalizedScan.reason,
+          firstName: normalizedScan.firstName,
+          lastName: normalizedScan.lastName,
+          dob: normalizedScan.dob,
+          age: normalizedScan.age,
+          documentType: normalizedScan.documentType,
+          documentNumber: normalizedScan.documentNumber,
+          issuingCountry: normalizedScan.issuingCountry,
+          nationality: normalizedScan.nationality,
+          sex: normalizedScan.sex,
+          source: normalizedScan.source || 'api_verify',
+          documentExpiry: normalizedScan.documentExpiry
+        }, {
+          locationId,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
+        });
+      } catch (dbError) {
+        logger.error('Failed to save api verification to DB', dbError);
+      }
+    }
 
     logger.logVerification(saleId, clerkId, normalizedScan.approved, normalizedScan.age, {
       documentType: normalizedScan.documentType,
@@ -811,7 +838,7 @@ const emailService = require('./emailService');
 
 router.post('/api/sales/:saleId/override', validateOverride, async (req, res) => {
   const { saleId } = req.params;
-  const { verificationId, managerPin, note } = req.body;
+  const { verificationId, managerPin, note, clerkId, registerId } = req.body;
 
   // 1. Validate PIN (Simple check for now, can be DB backed later)
   // Hardcoded for demo/pilot. In production, check against a manager table.
@@ -832,7 +859,9 @@ router.post('/api/sales/:saleId/override', validateOverride, async (req, res) =>
       verificationId,
       saleId,
       managerId: 'Manager-' + managerPin.slice(-2), // Obfuscate slightly
-      note
+      note,
+      clerkId,
+      registerId
     });
 
     // 3. Update In-Memory Store (so polling picks it up)
@@ -1266,7 +1295,33 @@ router.get('/sales/:saleId/status', async (req, res) => {
   const { saleId } = req.params;
 
   try {
-    const verification = saleVerificationStore.getVerification(saleId);
+    let verification = saleVerificationStore.getVerification(saleId);
+
+    // If not in memory, check database as fallback
+    if (!verification && db.pool) {
+      try {
+        const result = await db.pool.query(
+          'SELECT * FROM verifications WHERE sale_id = $1 ORDER BY created_at DESC LIMIT 1',
+          [saleId]
+        );
+
+        if (result.rows.length > 0) {
+          const row = result.rows[0];
+          // Map database row to verification format
+          verification = {
+            saleId: row.sale_id,
+            status: row.status,
+            age: row.age,
+            reason: row.reason,
+            customerName: `${row.first_name || ''} ${row.last_name || ''}`.trim() || null
+          };
+          logger.info('Retrieved verification from database fallback', { saleId });
+        }
+      } catch (dbError) {
+        logger.error('Failed to query database for verification', dbError);
+        // Continue to create pending verification
+      }
+    }
 
     if (!verification) {
       // Create a new pending verification if it doesn't exist

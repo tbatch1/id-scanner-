@@ -243,9 +243,11 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        verificationId: 'MANUAL-OVERRIDE', // Placeholder or generate one
+                        verificationId: 'MANUAL-OVERRIDE',
                         managerPin: pin,
-                        note: note
+                        note: note,
+                        clerkId: clerkId,
+                        registerId: registerId
                     })
                 });
 
@@ -264,11 +266,22 @@
             }
         }
 
-        // Parse query parameters from Lightspeed
+        // Parse query parameters from Lightspeed - support multiple parameter names
         const urlParams = new URLSearchParams(window.location.search);
-        const saleId = urlParams.get('sale_id') || urlParams.get('saleId');
-        const registerId = urlParams.get('register_id');
+        // Lightspeed Custom Payments uses 'reference' as the transaction/sale ID
+        const saleId = urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
+        const registerId = urlParams.get('register_id') || urlParams.get('registerId') || urlParams.get('outlet_id');
+        const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
         const amount = urlParams.get('amount');
+
+        // Debug logging to help diagnose parameter issues
+        console.log('Payment Gateway Parameters:', {
+            saleId,
+            registerId,
+            clerkId,
+            amount,
+            allParams: Object.fromEntries(urlParams.entries())
+        });
 
         let pollInterval;
 
@@ -336,7 +349,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         barcodeData: cleanData,
-                        registerId: registerId || 'NETUM-NT1200'
+                        registerId: registerId || 'NETUM-NT1200',
+                        clerkId: clerkId
                     })
                 });
 
