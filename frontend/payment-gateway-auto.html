@@ -374,9 +374,32 @@ Expected parameters:
         const SCAN_TIMEOUT = 100;
         const PDF417_PREFIX = ']L';
 
+        // Ensure page can receive keyboard input
+        window.addEventListener('load', () => {
+            // Focus the window to receive keyboard events
+            window.focus();
+            // Also try focusing the body
+            document.body.focus();
+            console.log('[Scanner] Page loaded and focused - ready to receive scans');
+        });
+
+        // Click anywhere to ensure focus (for iframe scenarios)
+        document.body.addEventListener('click', () => {
+            window.focus();
+            console.log('[Scanner] Page focused - ready to receive scans');
+        });
+
         document.addEventListener('keydown', (e) => {
             const currentTime = Date.now();
             const isPrintable = e.key.length === 1;
+
+            // Log every keystroke for debugging
+            console.log('[Scanner] Key received:', {
+                key: e.key,
+                isPrintable,
+                bufferLength: barcodeBuffer.length,
+                timeSinceLastKey: currentTime - lastKeyTime
+            });
 
             if (currentTime - lastKeyTime > SCAN_TIMEOUT && barcodeBuffer.length > 0) {
                 if (!barcodeBuffer.startsWith(PDF417_PREFIX)) {
@@ -387,8 +410,17 @@ Expected parameters:
             lastKeyTime = currentTime;
 
             if (e.key === 'Enter') {
+                console.log('[Scanner] Enter key pressed - checking buffer:', {
+                    bufferLength: barcodeBuffer.length,
+                    buffer: barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : ''),
+                    willProcess: barcodeBuffer.length > 10
+                });
+
                 if (barcodeBuffer.length > 10) {
+                    console.log('[Scanner] Processing scan - buffer meets minimum length');
                     handleBluetoothScan(barcodeBuffer);
+                } else {
+                    console.warn('[Scanner] Ignoring scan - buffer too short:', barcodeBuffer.length);
                 }
                 barcodeBuffer = '';
             } else if (isPrintable) {
@@ -397,6 +429,12 @@ Expected parameters:
         });
 
         async function handleBluetoothScan(barcodeData) {
+            console.log('[Scanner] handleBluetoothScan called with data:', {
+                length: barcodeData.length,
+                preview: barcodeData.substring(0, 100),
+                startsWithPrefix: barcodeData.startsWith(PDF417_PREFIX)
+            });
+
             // Visual feedback
             const statusText = document.querySelector('.status-waiting p');
             if (statusText) statusText.textContent = "Processing Scan...";
@@ -409,6 +447,14 @@ Expected parameters:
                 }
             }
 
+            console.log('[Scanner] Cleaned barcode data:', {
+                originalLength: barcodeData.length,
+                cleanedLength: cleanData.length,
+                preview: cleanData.substring(0, 100)
+            });
+
+            console.log('[Scanner] Sending POST request to:', `/api/sales/${saleId}/verify-bluetooth`);
+
             try {
                 const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
                     method: 'POST',
@@ -420,18 +466,22 @@ Expected parameters:
                     })
                 });
 
+                console.log('[Scanner] Response status:', response.status);
                 const data = await response.json();
+                console.log('[Scanner] Response data:', data);
 
                 if (data.success && data.approved) {
+                    console.log('[Scanner] ✓ Scan approved - proceeding to complete sale');
                     clearInterval(pollInterval);
                     showSuccess(data);
                     setTimeout(completeSale, 1000);
                 } else {
+                    console.warn('[Scanner] ✗ Scan rejected:', data.reason);
                     showRejected(data.reason || 'Verification Failed');
                 }
             } catch (e) {
-                console.error('Bluetooth scan error', e);
-                showError('Scan processing failed');
+                console.error('[Scanner] ✗ Bluetooth scan error:', e);
+                showError('Scan processing failed: ' + e.message);
             }
         }
 
