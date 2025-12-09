@@ -315,8 +315,8 @@
     <script>
         // Parse sale_id from URL - support multiple parameter names
         const urlParams = new URLSearchParams(window.location.search);
-        // Lightspeed Custom Payments uses 'reference' as the transaction/sale ID
-        let saleId = urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
+        // Lightspeed Custom Payments uses 'reference_id' as the transaction/sale ID
+        let saleId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
 
         // Check if saleId is a template variable that wasn't replaced (like "{saleId}")
         if (saleId && (saleId.includes('{') || saleId.includes('}'))) {
