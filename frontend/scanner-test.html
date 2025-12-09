@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Test - Real-Time Input Monitor</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #0f172a;
+            color: #f4f6ff;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: #3b82f6;
+        }
+        .status {
+            padding: 20px;
+            background: #1e293b;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .status.ready {
+            border: 2px solid #10b981;
+        }
+        .log-container {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .log-entry {
+            padding: 8px;
+            margin-bottom: 4px;
+            border-left: 3px solid #3b82f6;
+            background: #334155;
+            border-radius: 4px;
+        }
+        .log-entry.key {
+            border-left-color: #10b981;
+        }
+        .log-entry.complete {
+            border-left-color: #f59e0b;
+            background: #422006;
+        }
+        .log-entry.error {
+            border-left-color: #ef4444;
+            background: #450a0a;
+        }
+        .buffer-display {
+            background: #334155;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            word-break: break-all;
+            min-height: 60px;
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .stat {
+            flex: 1;
+            background: #334155;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3b82f6;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔫 Scanner Test Page</h1>
+        <p style="color: #94a3b8;">Point your Netum NT1200 scanner at an ID and pull the trigger. This page will show exactly what keys are being typed.</p>
+
+        <div class="status ready">
+            <strong>✅ Ready to Receive Scanner Input</strong>
+            <p style="margin: 5px 0 0 0; color: #94a3b8;">Page is focused and listening for keyboard events</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="keyCount">0</div>
+                <div class="stat-label">Keys Received</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="bufferLength">0</div>
+                <div class="stat-label">Buffer Length</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="scanCount">0</div>
+                <div class="stat-label">Complete Scans</div>
+            </div>
+        </div>
+
+        <div class="buffer-display">
+            <strong>Current Buffer:</strong>
+            <div id="bufferContent" style="margin-top: 10px; color: #10b981;">
+                (empty - waiting for scan...)
+            </div>
+        </div>
+
+        <h3 style="margin-top: 30px;">Live Event Log:</h3>
+        <div class="log-container" id="logContainer">
+            <div class="log-entry">System ready. Scan any barcode to test...</div>
+        </div>
+    </div>
+
+    <script>
+        let barcodeBuffer = '';
+        let lastKeyTime = 0;
+        let keyCount = 0;
+        let scanCount = 0;
+        const SCAN_TIMEOUT = 100;
+        const PDF417_PREFIX = ']L';
+
+        // Focus management
+        window.addEventListener('load', () => {
+            window.focus();
+            document.body.focus();
+            addLog('✓ Page loaded and focused', 'system');
+        });
+
+        document.body.addEventListener('click', () => {
+            window.focus();
+            addLog('✓ Page refocused', 'system');
+        });
+
+        // Log display
+        function addLog(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+            entry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+
+            // Keep only last 100 logs
+            while (logContainer.children.length > 100) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('keyCount').textContent = keyCount;
+            document.getElementById('bufferLength').textContent = barcodeBuffer.length;
+            document.getElementById('scanCount').textContent = scanCount;
+        }
+
+        function updateBuffer() {
+            const bufferContent = document.getElementById('bufferContent');
+            if (barcodeBuffer.length === 0) {
+                bufferContent.textContent = '(empty - waiting for scan...)';
+                bufferContent.style.color = '#94a3b8';
+            } else {
+                // Show first 200 chars
+                const preview = barcodeBuffer.length > 200
+                    ? barcodeBuffer.substring(0, 200) + '...'
+                    : barcodeBuffer;
+                bufferContent.textContent = preview;
+                bufferContent.style.color = '#10b981';
+            }
+        }
+
+        // Keyboard listener
+        document.addEventListener('keydown', (e) => {
+            const currentTime = Date.now();
+            const isPrintable = e.key.length === 1;
+            const timeSinceLastKey = currentTime - lastKeyTime;
+
+            keyCount++;
+
+            // Log the keystroke
+            if (e.key === 'Enter') {
+                addLog(`🔑 Enter key pressed (buffer: ${barcodeBuffer.length} chars)`, 'key');
+            } else if (isPrintable) {
+                addLog(`🔑 Key: "${e.key}" (char code: ${e.key.charCodeAt(0)})`, 'key');
+            } else {
+                addLog(`🔑 Special key: ${e.key}`, 'key');
+            }
+
+            // Timeout logic - reset buffer if too much time passed
+            if (timeSinceLastKey > SCAN_TIMEOUT && barcodeBuffer.length > 0) {
+                if (!barcodeBuffer.startsWith(PDF417_PREFIX)) {
+                    addLog(`⚠️ Buffer timeout - clearing incomplete scan (${barcodeBuffer.length} chars)`, 'error');
+                    barcodeBuffer = '';
+                }
+            }
+
+            lastKeyTime = currentTime;
+
+            // Process Enter key - complete scan
+            if (e.key === 'Enter') {
+                if (barcodeBuffer.length > 10) {
+                    scanCount++;
+                    addLog(`✅ COMPLETE SCAN RECEIVED (${barcodeBuffer.length} characters)`, 'complete');
+                    addLog(`📄 Data preview: ${barcodeBuffer.substring(0, 100)}...`, 'complete');
+
+                    // Check if it's PDF417 format
+                    if (barcodeBuffer.startsWith(PDF417_PREFIX)) {
+                        addLog(`✓ Valid PDF417 barcode detected (starts with ]L)`, 'complete');
+                    } else {
+                        addLog(`⚠️ Not PDF417 format (doesn't start with ]L)`, 'error');
+                    }
+                } else {
+                    addLog(`⚠️ Enter pressed but buffer too short (${barcodeBuffer.length} chars) - ignoring`, 'error');
+                }
+                barcodeBuffer = '';
+            } else if (isPrintable) {
+                barcodeBuffer += e.key;
+            }
+
+            updateStats();
+            updateBuffer();
+        });
+
+        // Update stats every 100ms
+        setInterval(updateStats, 100);
+    </script>
+</body>
+</html>

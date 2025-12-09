@@ -27,6 +27,10 @@
       "destination": "/frontend/scanner.html"
     },
     {
+      "source": "/scanner-test.html",
+      "destination": "/frontend/scanner-test.html"
+    },
+    {
       "source": "/admin/pending.html",
       "destination": "/frontend/admin-pending.html"
     },
