@@ -369,18 +369,20 @@ Expected parameters:
         }
 
         // --- HID Scanner Logic (Netum / Keyboard Mode) ---
+        // CRITICAL: Scanner sends 50-100 keystrokes in <200ms which can overwhelm the browser
+        // Solution: Use debounced listener with 70ms timeout (safe for Low Speed scanner setting)
         let barcodeBuffer = '';
-        let lastKeyTime = 0;
-        const SCAN_TIMEOUT = 100;
+        let scanTimeout = null;
+        const SCAN_DEBOUNCE_MS = 70; // Wait 70ms after last keystroke before processing
+        const MIN_SCAN_LENGTH = 10; // Minimum characters to be considered a valid scan
         const PDF417_PREFIX = ']L';
 
         // Ensure page can receive keyboard input
         window.addEventListener('load', () => {
-            // Focus the window to receive keyboard events
             window.focus();
-            // Also try focusing the body
             document.body.focus();
             console.log('[Scanner] Page loaded and focused - ready to receive scans');
+            console.log('[Scanner] Using debounced listener (70ms timeout) to handle rapid keystrokes');
         });
 
         // Click anywhere to ensure focus (for iframe scenarios)
@@ -389,43 +391,41 @@ Expected parameters:
             console.log('[Scanner] Page focused - ready to receive scans');
         });
 
+        // Debounced keyboard listener - prevents browser overwhelm from rapid scanner input
         document.addEventListener('keydown', (e) => {
-            const currentTime = Date.now();
-            const isPrintable = e.key.length === 1;
+            const char = e.key;
 
-            // Log every keystroke for debugging
-            console.log('[Scanner] Key received:', {
-                key: e.key,
-                isPrintable,
-                bufferLength: barcodeBuffer.length,
-                timeSinceLastKey: currentTime - lastKeyTime
-            });
+            // Build buffer from printable characters
+            if (char.length === 1) {
+                barcodeBuffer += char;
+                console.log('[Scanner] Keystroke buffered (total: ' + barcodeBuffer.length + ' chars)');
 
-            if (currentTime - lastKeyTime > SCAN_TIMEOUT && barcodeBuffer.length > 0) {
-                if (!barcodeBuffer.startsWith(PDF417_PREFIX)) {
-                    barcodeBuffer = '';
-                }
+                // Prevent default to avoid browser UI interference
+                e.preventDefault();
             }
 
-            lastKeyTime = currentTime;
+            // Clear existing timeout
+            if (scanTimeout) {
+                clearTimeout(scanTimeout);
+            }
 
-            if (e.key === 'Enter') {
-                console.log('[Scanner] Enter key pressed - checking buffer:', {
-                    bufferLength: barcodeBuffer.length,
-                    buffer: barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : ''),
-                    willProcess: barcodeBuffer.length > 10
-                });
+            // Set new timeout - if no more keystrokes come in 70ms, scan is complete
+            scanTimeout = setTimeout(() => {
+                if (barcodeBuffer.length >= MIN_SCAN_LENGTH) {
+                    console.log('[Scanner] Scan complete (debounce timeout reached)');
+                    console.log('[Scanner] Buffer length:', barcodeBuffer.length);
+                    console.log('[Scanner] Buffer preview:', barcodeBuffer.substring(0, 100));
 
-                if (barcodeBuffer.length > 10) {
-                    console.log('[Scanner] Processing scan - buffer meets minimum length');
+                    // Process the complete scan
                     handleBluetoothScan(barcodeBuffer);
-                } else {
-                    console.warn('[Scanner] Ignoring scan - buffer too short:', barcodeBuffer.length);
+                } else if (barcodeBuffer.length > 0) {
+                    console.warn('[Scanner] Buffer too short, ignoring:', barcodeBuffer.length, 'chars');
                 }
+
+                // Reset buffer
                 barcodeBuffer = '';
-            } else if (isPrintable) {
-                barcodeBuffer += e.key;
-            }
+                scanTimeout = null;
+            }, SCAN_DEBOUNCE_MS);
         });
 
         async function handleBluetoothScan(barcodeData) {
