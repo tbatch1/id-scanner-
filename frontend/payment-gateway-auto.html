@@ -467,6 +467,106 @@
             padding: 12px;
         }
 
+        /* ========== NUMBER PAD STYLES ========== */
+        .numpad-modal {
+            max-width: 320px;
+            padding: 25px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 8px;
+        }
+
+        .close-btn:active {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .pin-display {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .pin-dot {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transition: all 0.15s ease;
+        }
+
+        .pin-dot.filled {
+            background: var(--thc-orange);
+            border-color: var(--thc-orange);
+            box-shadow: 0 0 10px rgba(229, 92, 44, 0.5);
+        }
+
+        .numpad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .numpad-btn {
+            padding: 20px;
+            font-size: 28px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .numpad-btn:active {
+            background: rgba(255, 255, 255, 0.25);
+            transform: scale(0.95);
+        }
+
+        .numpad-clear {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        .numpad-submit {
+            background: rgba(46, 167, 80, 0.3);
+            border-color: var(--thc-green);
+            color: var(--thc-green);
+        }
+
+        .numpad-submit:active {
+            background: rgba(46, 167, 80, 0.5);
+        }
+
+        .error-msg {
+            color: #ef4444;
+            text-align: center;
+            min-height: 20px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
         .hidden {
             display: none !important;
         }
@@ -530,20 +630,40 @@
         </div>
     </div>
 
-    <!-- ========== OVERRIDE MODAL ========== -->
+    <!-- ========== OVERRIDE MODAL WITH NUMBER PAD ========== -->
     <div id="overrideModal" class="modal-overlay">
-        <div class="modal" onclick="event.stopPropagation()">
-            <h2>Manager Override</h2>
-            <p>Enter manager PIN to bypass verification</p>
-            <!-- Use type=tel for iOS numeric keypad, not password which can have issues -->
-            <input type="tel" id="managerPin" class="pin-input" placeholder="1234" maxlength="4" autocomplete="off"
-                autocorrect="off" autocapitalize="off" spellcheck="false" />
-            <input type="text" id="overrideNote" class="note-input" placeholder="Reason (optional)" autocomplete="off"
-                autocorrect="off" autocapitalize="off" spellcheck="false" />
-            <div class="modal-actions">
-                <button class="btn btn-cancel">Cancel</button>
-                <button class="btn btn-override">Override</button>
+        <div class="modal numpad-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Manager Override</h2>
+                <button class="close-btn" id="closeModalBtn">✕</button>
             </div>
+            <p>Enter 4-digit PIN</p>
+
+            <!-- PIN Display -->
+            <div class="pin-display" id="pinDisplay">
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+            </div>
+
+            <!-- Number Pad -->
+            <div class="numpad">
+                <button class="numpad-btn" data-num="1">1</button>
+                <button class="numpad-btn" data-num="2">2</button>
+                <button class="numpad-btn" data-num="3">3</button>
+                <button class="numpad-btn" data-num="4">4</button>
+                <button class="numpad-btn" data-num="5">5</button>
+                <button class="numpad-btn" data-num="6">6</button>
+                <button class="numpad-btn" data-num="7">7</button>
+                <button class="numpad-btn" data-num="8">8</button>
+                <button class="numpad-btn" data-num="9">9</button>
+                <button class="numpad-btn numpad-clear" data-action="clear">⌫</button>
+                <button class="numpad-btn" data-num="0">0</button>
+                <button class="numpad-btn numpad-submit" data-action="submit">✓</button>
+            </div>
+
+            <p class="error-msg" id="pinError"></p>
         </div>
     </div>
 
@@ -810,25 +930,91 @@
             ensureFocus();
         }
 
-        // ========== OVERRIDE MODAL ==========
+        // ========== NUMBER PAD OVERRIDE ==========
+        let currentPin = '';
+        const pinDots = document.querySelectorAll('.pin-dot');
+        const pinError = document.getElementById('pinError');
+
         function showOverrideModal() {
             document.getElementById('overrideModal').classList.add('active');
-            document.getElementById('managerPin').value = '';
-            document.getElementById('overrideNote').value = '';
-            document.getElementById('managerPin').focus();
+            currentPin = '';
+            updatePinDisplay();
+            pinError.textContent = '';
         }
 
         function closeOverrideModal() {
             document.getElementById('overrideModal').classList.remove('active');
+            currentPin = '';
+            updatePinDisplay();
             ensureFocus();
         }
 
-        async function submitOverride() {
-            const pin = document.getElementById('managerPin').value;
-            const note = document.getElementById('overrideNote').value;
+        function updatePinDisplay() {
+            pinDots.forEach((dot, index) => {
+                if (index < currentPin.length) {
+                    dot.classList.add('filled');
+                } else {
+                    dot.classList.remove('filled');
+                }
+            });
+        }
 
-            if (!pin) {
-                alert('Please enter PIN');
+        function handleNumpadInput(value) {
+            pinError.textContent = '';
+
+            if (value === 'clear') {
+                // Backspace - remove last digit
+                currentPin = currentPin.slice(0, -1);
+            } else if (value === 'submit') {
+                // Submit PIN
+                if (currentPin.length === 4) {
+                    submitOverride();
+                } else {
+                    pinError.textContent = 'Enter 4 digits';
+                }
+                return;
+            } else {
+                // Add digit (max 4)
+                if (currentPin.length < 4) {
+                    currentPin += value;
+                }
+            }
+
+            updatePinDisplay();
+        }
+
+        // Bind numpad buttons with touchend for iOS
+        document.querySelectorAll('.numpad-btn').forEach(btn => {
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const num = btn.getAttribute('data-num');
+                const action = btn.getAttribute('data-action');
+                handleNumpadInput(num || action);
+            });
+
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const num = btn.getAttribute('data-num');
+                const action = btn.getAttribute('data-action');
+                handleNumpadInput(num || action);
+            });
+        });
+
+        // Close button
+        document.getElementById('closeModalBtn')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeOverrideModal();
+        });
+        document.getElementById('closeModalBtn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeOverrideModal();
+        });
+
+        async function submitOverride() {
+            if (currentPin.length !== 4) {
+                pinError.textContent = 'Enter 4 digits';
                 return;
             }
 
@@ -838,8 +1024,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         verificationId: 'MANUAL-OVERRIDE',
-                        managerPin: pin,
-                        note: note,
+                        managerPin: currentPin,
+                        note: 'Number pad entry',
                         clerkId: clerkId,
                         registerId: registerId
                     })
@@ -852,11 +1038,13 @@
                     showSuccess({ customerName: 'Manual Override' });
                     setTimeout(completeSale, 1500);
                 } else {
-                    alert(data.message || 'Override Failed');
+                    pinError.textContent = data.message || 'Invalid PIN';
+                    currentPin = '';
+                    updatePinDisplay();
                 }
             } catch (e) {
                 console.error('Override error', e);
-                alert('Override failed');
+                pinError.textContent = 'Connection error';
             }
         }
 
