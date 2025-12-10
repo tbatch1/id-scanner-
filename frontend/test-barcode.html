@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ID Scanner - Ready to Scan</title>
+
+    <!-- GSAP Animation Library (Free CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Animated background particles */
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .scanner-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 32px;
+            padding: 60px 80px;
+            box-shadow:
+                0 25px 50px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            text-align: center;
+            position: relative;
+            max-width: 600px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .scanner-container:hover {
+            transform: translateY(-5px);
+            box-shadow:
+                0 35px 70px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        /* 3D Joint with realistic details */
+        .joint-wrapper {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 40px;
+            perspective: 1000px;
+        }
+
+        .joint {
+            position: relative;
+            width: 80px;
+            height: 160px;
+            margin: 0 auto;
+            transform-style: preserve-3d;
+        }
+
+        /* Joint paper body */
+        .joint-body {
+            position: absolute;
+            width: 80px;
+            height: 140px;
+            background: linear-gradient(to right,
+                    #f5f5f5 0%,
+                    #fff 20%,
+                    #f5f5f5 40%,
+                    #fff 60%,
+                    #f5f5f5 80%,
+                    #fff 100%);
+            border-radius: 8px 8px 4px 4px;
+            box-shadow:
+                inset 2px 0 10px rgba(0, 0, 0, 0.1),
+                inset -2px 0 10px rgba(0, 0, 0, 0.1),
+                0 5px 20px rgba(0, 0, 0, 0.2);
+            top: 20px;
+        }
+
+        /* Twist lines on joint */
+        .joint-line {
+            position: absolute;
+            width: 80px;
+            height: 2px;
+            background: rgba(0, 0, 0, 0.1);
+            left: 0;
+        }
+
+        /* Burning tip */
+        .joint-tip {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 30px;
+            background: radial-gradient(circle, #ff6b35 0%, #ff4520 50%, #8b2500 100%);
+            border-radius: 50%;
+            box-shadow:
+                0 0 20px #ff6b35,
+                0 0 40px rgba(255, 107, 53, 0.5),
+                inset 0 -5px 10px rgba(0, 0, 0, 0.5);
+            filter: brightness(1.2);
+        }
+
+        .glow {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, rgba(255, 107, 53, 0.8) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        /* Smoke particles */
+        .smoke {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.6) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(8px);
+            pointer-events: none;
+        }
+
+        /* Scanning laser effect */
+        .scan-line {
+            position: absolute;
+            top: 50%;
+            left: -100%;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg,
+                    transparent 0%,
+                    rgba(0, 255, 136, 0.8) 50%,
+                    transparent 100%);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.8);
+            opacity: 0;
+        }
+
+        h1 {
+            color: white;
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            letter-spacing: 1px;
+        }
+
+        p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 24px;
+            font-weight: 300;
+            margin-bottom: 40px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .status {
+            display: inline-block;
+            padding: 16px 40px;
+            background: rgba(16, 185, 129, 0.2);
+            border: 2px solid #10b981;
+            border-radius: 50px;
+            color: #10b981;
+            font-weight: 600;
+            font-size: 18px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(16, 185, 129, 0.6);
+            }
+        }
+
+        /* Scanning state */
+        .scanning .joint-tip {
+            animation: ember-pulse 0.5s infinite;
+        }
+
+        @keyframes ember-pulse {
+
+            0%,
+            100% {
+                box-shadow:
+                    0 0 20px #ff6b35,
+                    0 0 40px rgba(255, 107, 53, 0.5);
+                transform: translateX(-50%) scale(1);
+            }
+
+            50% {
+                box-shadow:
+                    0 0 30px #ff6b35,
+                    0 0 60px rgba(255, 107, 53, 0.8);
+                transform: translateX(-50%) scale(1.1);
+            }
+        }
+
+        .instruction {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            font-weight: 400;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Background particles -->
+    <div id="particles"></div>
+
+    <div class="scanner-container" id="scannerContainer">
+        <div class="joint-wrapper">
+            <div class="joint">
+                <div class="joint-tip">
+                    <div class="glow"></div>
+                </div>
+                <div class="joint-body">
+                    <div class="joint-line" style="top: 20px;"></div>
+                    <div class="joint-line" style="top: 40px;"></div>
+                    <div class="joint-line" style="top: 60px;"></div>
+                    <div class="joint-line" style="top: 80px;"></div>
+                    <div class="joint-line" style="top: 100px;"></div>
+                </div>
+                <div class="scan-line" id="scanLine"></div>
+            </div>
+        </div>
+
+        <h1>TAP TO SCAN</h1>
+        <p>Touch here, then scan your ID</p>
+
+        <div class="status pulse">
+            <span id="statusText">🎯 READY</span>
+        </div>
+    </div>
+
+    <!-- Hidden input for iOS HID focus - iPad REQUIRES an input element to receive Bluetooth keyboard input -->
+    <input type="text" id="hiddenScannerInput"
+        style="position: absolute; left: -9999px; opacity: 0; width: 1px; height: 1px;" autocomplete="off"
+        autocorrect="off" autocapitalize="off" spellcheck="false" />
+
+    <div class="instruction">Tap anywhere to activate scanner mode</div>
+
+    <script>
+        // Create floating particles
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('particle');
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particlesContainer.appendChild(particle);
+
+                // Animate particle
+                gsap.to(particle, {
+                    y: -100,
+                    x: Math.random() * 100 - 50,
+                    opacity: 0,
+                    duration: Math.random() * 3 + 2,
+                    repeat: -1,
+                    delay: Math.random() * 2
+                });
+            }
+        }
+
+        // Smoke animation
+        function createSmoke() {
+            const jointWrapper = document.querySelector('.joint-wrapper');
+            const smoke = document.createElement('div');
+            smoke.classList.add('smoke');
+            smoke.style.left = '50%';
+            smoke.style.top = '30px';
+            smoke.style.transform = 'translateX(-50%)';
+            jointWrapper.appendChild(smoke);
+
+            gsap.to(smoke, {
+                y: -100,
+                x: Math.random() * 40 - 20,
+                opacity: 0,
+                scale: 2,
+                duration: 3,
+                onComplete: () => smoke.remove()
+            });
+        }
+
+        // Continuous smoke
+        setInterval(createSmoke, 500);
+
+        // Joint floating animation
+        gsap.to('.joint', {
+            y: -10,
+            duration: 2,
+            ease: 'power1.inOut',
+            yoyo: true,
+            repeat: -1
+        });
+
+        // Joint rotation
+        gsap.to('.joint', {
+            rotationY: 360,
+            duration: 20,
+            ease: 'none',
+            repeat: -1
+        });
+
+        // Glow pulse
+        gsap.to('.glow', {
+            scale: 1.3,
+            opacity: 0.5,
+            duration: 1,
+            yoyo: true,
+            repeat: -1,
+            ease: 'power1.inOut'
+        });
+
+        // Ensure keyboard focus for scanner input
+        // iOS REQUIRES an input element to be focused to receive Bluetooth HID input
+        const hiddenInput = document.getElementById('hiddenScannerInput');
+
+        function ensureFocus() {
+            hiddenInput.focus();
+            console.log('[Scanner] Hidden input focused - ready to receive scans');
+        }
+
+        // Re-focus every 2 seconds (iPad fix - iOS can steal focus)
+        setInterval(ensureFocus, 2000);
+
+        // Listen for scanner input
+        let barcodeBuffer = '';
+        let scanTimeout = null;
+        const SCAN_DEBOUNCE_MS = 70;
+
+        document.addEventListener('keydown', (e) => {
+            const char = e.key;
+
+            if (char.length === 1) {
+                barcodeBuffer += char;
+                console.log('[Scanner] Keystroke:', char, '| Buffer length:', barcodeBuffer.length);
+                e.preventDefault();
+
+                // Show we're receiving data
+                if (barcodeBuffer.length === 1) {
+                    statusText.textContent = '📡 RECEIVING...';
+                    statusText.parentElement.style.borderColor = '#fb923c';
+                    statusText.parentElement.style.color = '#fb923c';
+                    container.classList.add('scanning');
+
+                    // Intense smoke
+                    for (let i = 0; i < 10; i++) {
+                        setTimeout(createSmoke, i * 100);
+                    }
+                }
+            }
+
+            clearTimeout(scanTimeout);
+            scanTimeout = setTimeout(() => {
+                if (barcodeBuffer.length >= 10) {
+                    console.log('[Scanner] Scan complete! Length:', barcodeBuffer.length);
+                    console.log('[Scanner] Data:', barcodeBuffer);
+
+                    // Success animation
+                    statusText.textContent = '✅ SCAN COMPLETE';
+                    statusText.parentElement.style.borderColor = '#10b981';
+                    statusText.parentElement.style.color = '#10b981';
+
+                    // Scan line sweep
+                    gsap.fromTo(scanLine,
+                        { left: '-100%', opacity: 0 },
+                        {
+                            left: '200%',
+                            opacity: 1,
+                            duration: 1.5,
+                            ease: 'power2.inOut',
+                            onComplete: () => {
+                                gsap.to(scanLine, { opacity: 0, duration: 0.3 });
+                                setTimeout(() => {
+                                    statusText.textContent = '🎯 READY';
+                                    statusText.parentElement.style.borderColor = '#10b981';
+                                    statusText.parentElement.style.color = '#10b981';
+                                    container.classList.remove('scanning');
+                                }, 2000);
+                            }
+                        }
+                    );
+                }
+                barcodeBuffer = '';
+            }, SCAN_DEBOUNCE_MS);
+        });
+
+        // Click to activate focus
+        const container = document.getElementById('scannerContainer');
+        const scanLine = document.getElementById('scanLine');
+        const statusText = document.getElementById('statusText');
+
+        container.addEventListener('click', () => {
+            ensureFocus();
+
+            // Visual feedback
+            statusText.textContent = '🎯 FOCUSED - SCAN NOW';
+            statusText.parentElement.style.borderColor = '#10b981';
+            statusText.parentElement.style.color = '#10b981';
+
+            // Brief animation
+            gsap.to(container, {
+                scale: 1.02,
+                duration: 0.1,
+                yoyo: true,
+                repeat: 1
+            });
+        });
+
+        container.addEventListener('touchstart', (e) => {
+            ensureFocus();
+            e.preventDefault();
+        });
+
+        // Initialize
+        createParticles();
+
+        // Entrance animation
+        gsap.from('.scanner-container', {
+            scale: 0.8,
+            opacity: 0,
+            duration: 1,
+            ease: 'back.out(1.7)'
+        });
+
+        gsap.from('h1', {
+            y: 30,
+            opacity: 0,
+            duration: 0.8,
+            delay: 0.3
+        });
+
+        gsap.from('p', {
+            y: 20,
+            opacity: 0,
+            duration: 0.8,
+            delay: 0.5
+        });
+
+        gsap.from('.status', {
+            scale: 0,
+            opacity: 0,
+            duration: 0.8,
+            delay: 0.7,
+            ease: 'back.out(2)'
+        });
+    </script>
+</body>
+
+</html>
