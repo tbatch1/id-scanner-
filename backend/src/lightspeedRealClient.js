@@ -160,48 +160,49 @@ async function searchCustomers({ dlNumber, firstName, lastName, email, phone }) 
       criteria: { dlNumber, firstName, lastName, email, phone }
     });
 
-    // Try searching by custom field (DL number) first if available
-    if (dlNumber) {
-      try {
-        // Search by custom field - Lightspeed allows custom fields on customers
-        const response = await api.get('/customers', {
-          params: {
-            'custom_field.dl_number': dlNumber,
-            page_size: 10
-          }
-        });
+    // STRATEGY: Search by name first, then filter by DL number in results
+    // Lightspeed's custom field search syntax is unreliable, so we do client-side filtering
 
-        if (response.data.data && response.data.data.length > 0) {
-          logger.info({
-            event: 'customer_found_by_dl',
-            count: response.data.data.length,
-            customerId: response.data.data[0].id
-          });
-          return response.data.data;
-        }
-      } catch (dlError) {
-        logger.debug({ event: 'dl_search_failed', error: dlError.message });
-        // Continue to name search
-      }
-    }
-
-    // Search by name if DL search didn't work
     if (firstName && lastName) {
       const response = await api.get('/customers', {
         params: {
           first_name: firstName,
           last_name: lastName,
-          page_size: 10
+          page_size: 50  // Get more results to filter through
         }
       });
 
       if (response.data.data && response.data.data.length > 0) {
+        const customers = response.data.data;
+
+        // If we have a DL number, find the customer with matching DL
+        if (dlNumber) {
+          const matchByDL = customers.find(c =>
+            c.custom_field_1 === dlNumber ||
+            c.custom_field_2 === dlNumber ||
+            c.custom_field_3 === dlNumber ||
+            c.custom_field_4 === dlNumber
+          );
+
+          if (matchByDL) {
+            logger.info({
+              event: 'customer_found_by_dl_and_name',
+              customerId: matchByDL.id,
+              name: `${matchByDL.first_name} ${matchByDL.last_name}`,
+              dlNumber: dlNumber
+            });
+            return [matchByDL];  // Return exact match
+          }
+        }
+
+        // No DL match found, but we have name matches
         logger.info({
-          event: 'customer_found_by_name',
-          count: response.data.data.length,
-          customerId: response.data.data[0].id
+          event: 'customer_found_by_name_only',
+          count: customers.length,
+          customerId: customers[0].id,
+          warning: 'Multiple customers with same name - returning first match'
         });
-        return response.data.data;
+        return customers;
       }
     }
 
