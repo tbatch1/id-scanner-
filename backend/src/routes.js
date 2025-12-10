@@ -869,7 +869,7 @@ router.get('/reports/overrides', async (req, res) => {
 
 const emailService = require('./emailService');
 
-router.post('/api/sales/:saleId/override', validateOverride, async (req, res) => {
+router.post('/sales/:saleId/override', validateOverride, async (req, res) => {
   const { saleId } = req.params;
   const { verificationId, managerPin, note, clerkId, registerId } = req.body;
 
