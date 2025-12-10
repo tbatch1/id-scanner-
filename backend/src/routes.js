@@ -239,6 +239,38 @@ router.get('/health', async (req, res) => {
   });
 });
 
+// Debug endpoint for troubleshooting (shows env config without secrets)
+router.get('/debug/config', async (req, res) => {
+  const dbUrl = process.env.DATABASE_URL;
+  let dbTest = { connected: false, error: null };
+
+  if (db.pool) {
+    try {
+      const result = await db.testConnection();
+      dbTest.connected = result;
+    } catch (e) {
+      dbTest.error = e.message;
+    }
+  }
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    environment: {
+      NODE_ENV: process.env.NODE_ENV || 'not set',
+      DATABASE_URL: dbUrl ? `configured (${dbUrl.substring(0, 20)}...)` : 'NOT CONFIGURED',
+      OVERRIDE_PIN: process.env.OVERRIDE_PIN ? 'configured' : 'using default 1417'
+    },
+    database: {
+      poolExists: Boolean(db.pool),
+      ...dbTest
+    },
+    lightspeed: {
+      mode: lightspeedMode,
+      configured: Boolean(config.lightspeed?.enableWrites)
+    }
+  });
+});
+
 router.post('/logs', (req, res) => {
   const { timestamp, level, message, meta } = req.body || {};
 
@@ -946,11 +978,18 @@ router.post('/sales/:saleId/override', validateOverride, async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Override failed', error);
+    logger.error('Override failed', { error: error.message, stack: error.stack });
+
+    // Check if it's a DATABASE_URL issue
+    const isDbError = error.message && error.message.includes('DATABASE_URL');
+
     res.status(500).json({
       success: false,
-      error: 'OVERRIDE_FAILED',
-      message: 'Banned customer management requires DATABASE_URL to be configured.'
+      error: isDbError ? 'DATABASE_NOT_CONFIGURED' : 'OVERRIDE_FAILED',
+      message: isDbError
+        ? 'Database not configured. Contact administrator.'
+        : `Override failed: ${error.message}`,
+      debug: process.env.NODE_ENV !== 'production' ? error.stack : undefined
     });
   }
 
