@@ -876,31 +876,33 @@
         }
 
         async function completeSale() {
+            // ID verified - now return to Lightspeed payment selection
+            // User can then tap Card (PAX) or Cash
             try {
                 await fetch(`/api/sales/${saleId}/complete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ approved: true })
+                    body: JSON.stringify({ approved: true, idVerified: true })
                 });
 
-                console.log('[Complete] Sending ACCEPT to Lightspeed parent...');
+                console.log('[Complete] ID verified - sending DECLINE to return to payment selection...');
 
-                // Try JSON format first (Lightspeed docs suggest this)
+                // Send DECLINE to return to payment selection screen
+                // (NOT to mark as paid - just to close this iframe and go back)
                 try {
-                    window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
-                    console.log('[Complete] Sent JSON: {step: ACCEPT}');
+                    window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
+                    console.log('[Complete] Sent JSON: {step: DECLINE}');
                 } catch (e) {
                     console.error('[Complete] JSON format failed:', e);
                 }
 
-                // Also try plain string formats
-                window.parent.postMessage('ACCEPT', '*');
-                window.parent.postMessage('COMPLETE', '*');
-                console.log('[Complete] Sent plain: ACCEPT and COMPLETE');
+                // Also try plain string
+                window.parent.postMessage('DECLINE', '*');
+                console.log('[Complete] Sent plain: DECLINE - returning to payment screen');
 
             } catch (e) {
                 console.error('Complete sale error:', e);
-                showError('Failed to complete sale.');
+                showError('Failed to complete verification.');
             }
         }
 
