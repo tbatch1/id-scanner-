@@ -867,46 +867,84 @@
 
         // iOS TOUCH FIX: Bind touchend handlers for all buttons (onclick doesn't work in WKWebView iframes)
         // Cancel button
-        document.querySelector('.btn-cancel')?.addEventListener('touchend', (e) => {
+        // Main page Cancel button
+        document.querySelector('#scanCard .btn-cancel')?.addEventListener('touchend', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             cancelVerification();
         });
 
-        // Override buttons (multiple on page)
-        document.querySelectorAll('.btn-override').forEach(btn => {
-            btn.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                if (btn.textContent.includes('Override') && !document.getElementById('overrideModal').classList.contains('active')) {
-                    showOverrideModal();
-                } else if (document.getElementById('overrideModal').classList.contains('active')) {
-                    submitOverride();
-                }
-            });
+        // Main page Override button (opens modal)
+        document.querySelector('#scanCard .btn-override')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showOverrideModal();
         });
 
-        // Modal cancel button
-        document.querySelector('#overrideModal .btn-cancel')?.addEventListener('touchend', (e) => {
+        // Error page Retry button
+        document.querySelector('#errorCard .btn-retry')?.addEventListener('touchend', (e) => {
             e.preventDefault();
-            closeOverrideModal();
-        });
-
-        // Modal submit button
-        document.querySelector('#overrideModal .btn-override')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            submitOverride();
-        });
-
-        // Retry button
-        document.querySelector('.btn-retry')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
+            e.stopPropagation();
             retry();
         });
 
-        // Success complete button
+        // Error page Override button
+        document.querySelector('#errorCard .btn-override')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showOverrideModal();
+        });
+
+        // Modal Cancel button
+        document.querySelector('#overrideModal .btn-cancel')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeOverrideModal();
+        });
+
+        // Modal Submit button
+        document.querySelector('#overrideModal .btn-override')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            submitOverride();
+        });
+
+        // Success Complete button
         document.querySelector('.btn-success')?.addEventListener('touchend', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             completeSale();
         });
+
+        // iOS Keyboard Fix: PIN input needs special handling
+        const pinInput = document.getElementById('managerPin');
+        if (pinInput) {
+            pinInput.addEventListener('touchend', (e) => {
+                e.stopPropagation();
+                // Delay focus slightly for iOS to register properly
+                setTimeout(() => {
+                    pinInput.focus();
+                    pinInput.click();
+                }, 100);
+            });
+
+            pinInput.addEventListener('click', (e) => {
+                e.stopPropagation();
+                pinInput.focus();
+            });
+        }
+
+        // Same for note input
+        const noteInput = document.getElementById('overrideNote');
+        if (noteInput) {
+            noteInput.addEventListener('touchend', (e) => {
+                e.stopPropagation();
+                setTimeout(() => {
+                    noteInput.focus();
+                    noteInput.click();
+                }, 100);
+            });
+        }
 
         // Entrance animation
         gsap.from('.scan-card', {
