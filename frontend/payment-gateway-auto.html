@@ -881,8 +881,24 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ approved: true })
                 });
+
+                console.log('[Complete] Sending ACCEPT to Lightspeed parent...');
+
+                // Try JSON format first (Lightspeed docs suggest this)
+                try {
+                    window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
+                    console.log('[Complete] Sent JSON: {step: ACCEPT}');
+                } catch (e) {
+                    console.error('[Complete] JSON format failed:', e);
+                }
+
+                // Also try plain string formats
                 window.parent.postMessage('ACCEPT', '*');
+                window.parent.postMessage('COMPLETE', '*');
+                console.log('[Complete] Sent plain: ACCEPT and COMPLETE');
+
             } catch (e) {
+                console.error('Complete sale error:', e);
                 showError('Failed to complete sale.');
             }
         }
