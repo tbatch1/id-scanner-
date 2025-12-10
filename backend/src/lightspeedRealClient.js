@@ -243,16 +243,48 @@ async function attachCustomerToSale(saleId, customerId) {
   try {
     logger.info({ event: 'attaching_customer_to_sale', saleId, customerId });
 
-    // Update the sale with the customer ID
-    await api.put(`/sales/${saleId}`, {
-      customer_id: customerId
+    // CRITICAL: Lightspeed API requires fetching the full sale first
+    // Then POST it back with the customer_id added to /api/register_sales
+
+    // Step 1: Get the current sale data
+    const saleResponse = await api.get(`/sales/${saleId}`);
+    const sale = saleResponse.data.data;
+
+    logger.info({
+      event: 'sale_fetched_for_update',
+      saleId,
+      currentCustomerId: sale.customer_id,
+      newCustomerId: customerId
     });
+
+    // Step 2: POST the sale back with customer_id using the v0.9 endpoint
+    // Note: Lightspeed requires the ENTIRE sale object to be sent back
+    const updatePayload = {
+      id: sale.id,
+      customer_id: customerId,
+      outlet_id: sale.outlet_id,
+      register_id: sale.register_id,
+      user_id: sale.user_id,
+      status: sale.status,
+      // Include line items (required by API)
+      register_sale_products: sale.line_items || [],
+      // Include payments if present
+      register_sale_payments: sale.register_sale_payments || [],
+      // Include other critical fields
+      sale_date: sale.sale_date,
+      note: sale.note,
+      total_price: sale.total_price,
+      total_tax: sale.total_tax
+    };
+
+    // Use v0.9 endpoint for sale updates
+    const updateResponse = await api.post('/register_sales', updatePayload);
 
     logger.info({
       event: 'customer_attached_success',
       saleId,
       customerId,
-      msg: 'Customer linked to sale for loyalty tracking'
+      msg: 'Customer linked to sale for loyalty tracking - will appear on iPad app'
     });
 
     return true;
@@ -263,6 +295,7 @@ async function attachCustomerToSale(saleId, customerId) {
       saleId,
       customerId,
       error: error.message,
+      response: error.response?.data,
       stack: error.stack
     });
     return false;
