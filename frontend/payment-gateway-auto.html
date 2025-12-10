@@ -885,20 +885,27 @@
                     body: JSON.stringify({ approved: true, idVerified: true })
                 });
 
-                console.log('[Complete] ID verified - sending DECLINE to return to payment selection...');
+                console.log('[Complete] ID verified - using return_to_pay_screen...');
 
-                // Send DECLINE to return to payment selection screen
-                // (NOT to mark as paid - just to close this iframe and go back)
+                // Use Lightspeed's return_to_pay_screen action to go back to payment selection
+                // This is the proper way to close the iframe and let user select Card/Cash
+                const returnMsg = JSON.stringify({
+                    step: 'return_to_pay_screen'
+                });
+
                 try {
-                    window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
-                    console.log('[Complete] Sent JSON: {step: DECLINE}');
+                    window.parent.postMessage(returnMsg, '*');
+                    console.log('[Complete] Sent: return_to_pay_screen');
                 } catch (e) {
-                    console.error('[Complete] JSON format failed:', e);
+                    console.error('[Complete] return_to_pay_screen failed:', e);
                 }
 
-                // Also try plain string
-                window.parent.postMessage('DECLINE', '*');
-                console.log('[Complete] Sent plain: DECLINE - returning to payment screen');
+                // Fallback: try CLEAN_EXIT if return_to_pay_screen doesn't work
+                setTimeout(() => {
+                    const cleanExitMsg = JSON.stringify({ step: 'CLEAN_EXIT' });
+                    window.parent.postMessage(cleanExitMsg, '*');
+                    console.log('[Complete] Fallback: sent CLEAN_EXIT');
+                }, 500);
 
             } catch (e) {
                 console.error('Complete sale error:', e);
