@@ -848,6 +848,53 @@
         // ========== INIT ==========
         createParticles();
 
+        // iOS TOUCH FIX: Add empty touchstart listener to wake up iOS touch handling
+        document.addEventListener('touchstart', {});
+        window.addEventListener('touchstart', {});
+
+        // iOS TOUCH FIX: Bind touchend handlers for all buttons (onclick doesn't work in WKWebView iframes)
+        // Cancel button
+        document.querySelector('.btn-cancel')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            cancelVerification();
+        });
+
+        // Override buttons (multiple on page)
+        document.querySelectorAll('.btn-override').forEach(btn => {
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                if (btn.textContent.includes('Override') && !document.getElementById('overrideModal').classList.contains('active')) {
+                    showOverrideModal();
+                } else if (document.getElementById('overrideModal').classList.contains('active')) {
+                    submitOverride();
+                }
+            });
+        });
+
+        // Modal cancel button
+        document.querySelector('#overrideModal .btn-cancel')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            closeOverrideModal();
+        });
+
+        // Modal submit button
+        document.querySelector('#overrideModal .btn-override')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            submitOverride();
+        });
+
+        // Retry button
+        document.querySelector('.btn-retry')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            retry();
+        });
+
+        // Success complete button
+        document.querySelector('.btn-success')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            completeSale();
+        });
+
         // Entrance animation
         gsap.from('.scan-card', {
             scale: 0.9,
