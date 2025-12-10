@@ -248,17 +248,126 @@
         <div class="status-waiting active" id="statusWaiting">
             <img src="/frontend/assets/thc-logo.png" alt="THC Club"
                 style="width: 280px; height: auto; margin-bottom: 40px; filter: drop-shadow(0 0 20px rgba(90, 84, 255, 0.3));">
-            <div class="spinner"></div>
-            <h1>Waiting for ID Scan...</h1>
-            <p style="font-size: 24px; color: rgba(255, 255, 255, 0.9); margin-bottom: 30px;">Tap screen, then scan ID</p>
+            <!-- Animated Joint Button -->
+            <button onclick="ensureFocus()" id="scanButton" style="
+                position: relative;
+                width: 100%;
+                max-width: 420px;
+                padding: 0;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border: none;
+                border-radius: 24px;
+                cursor: pointer;
+                box-shadow: 0 20px 60px rgba(102, 126, 234, 0.5);
+                overflow: hidden;
+                margin-bottom: 30px;
+                transition: all 0.3s ease;
+            " onmouseenter="this.style.transform='scale(1.05)'" onmouseleave="this.style.transform='scale(1)'">
 
-            <!-- Large tap-to-focus button -->
-            <button onclick="ensureFocus()" style="width: 100%; max-width: 400px; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 16px; color: white; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4); margin-bottom: 20px;">
-                👆 TAP HERE THEN SCAN
+                <!-- SVG Animation Container -->
+                <div style="padding: 40px 30px; position: relative;">
+                    <svg width="100%" height="180" viewBox="0 0 400 180" style="margin-bottom: 10px;">
+                        <!-- Puff Cloud (appears when scanning) -->
+                        <g id="puffCloud" opacity="0">
+                            <ellipse cx="200" cy="90" rx="60" ry="40" fill="rgba(255,255,255,0.3)">
+                                <animate attributeName="rx" values="60;80;60" dur="3s" repeatCount="indefinite"/>
+                                <animate attributeName="ry" values="40;50;40" dur="3s" repeatCount="indefinite"/>
+                                <animate attributeName="opacity" values="0.3;0.5;0.3" dur="3s" repeatCount="indefinite"/>
+                            </ellipse>
+                            <ellipse cx="170" cy="95" rx="40" ry="30" fill="rgba(255,255,255,0.2)">
+                                <animate attributeName="rx" values="40;55;40" dur="2.5s" repeatCount="indefinite"/>
+                                <animate attributeName="ry" values="30;40;30" dur="2.5s" repeatCount="indefinite"/>
+                            </ellipse>
+                            <ellipse cx="230" cy="95" rx="40" ry="30" fill="rgba(255,255,255,0.2)">
+                                <animate attributeName="rx" values="40;55;40" dur="2.8s" repeatCount="indefinite"/>
+                                <animate attributeName="ry" values="30;40;30" dur="2.8s" repeatCount="indefinite"/>
+                            </ellipse>
+                        </g>
+
+                        <!-- Joint Animation -->
+                        <g id="jointIcon">
+                            <!-- Joint body (white paper) -->
+                            <rect x="180" y="60" width="40" height="80" rx="3" fill="#f5f5f5">
+                                <animate attributeName="fill" values="#f5f5f5;#e8e8e8;#f5f5f5" dur="2s" repeatCount="indefinite"/>
+                            </rect>
+
+                            <!-- Joint tip (brown) -->
+                            <ellipse cx="200" cy="140" rx="20" ry="8" fill="#8b4513"/>
+
+                            <!-- Twist lines -->
+                            <line x1="180" y1="75" x2="220" y2="75" stroke="#666" stroke-width="1" opacity="0.3"/>
+                            <line x1="180" y1="90" x2="220" y2="90" stroke="#666" stroke-width="1" opacity="0.3"/>
+                            <line x1="180" y1="105" x2="220" y2="105" stroke="#666" stroke-width="1" opacity="0.3"/>
+                            <line x1="180" y1="120" x2="220" y2="120" stroke="#666" stroke-width="1" opacity="0.3"/>
+
+                            <!-- Burning ember at top -->
+                            <circle cx="200" cy="60" r="6" fill="#ff6b35">
+                                <animate attributeName="r" values="6;8;6" dur="1s" repeatCount="indefinite"/>
+                                <animate attributeName="opacity" values="0.8;1;0.8" dur="1s" repeatCount="indefinite"/>
+                            </circle>
+
+                            <!-- Smoke particles rising -->
+                            <circle cx="200" cy="50" r="3" fill="rgba(255,255,255,0.6)">
+                                <animate attributeName="cy" values="50;20;50" dur="3s" repeatCount="indefinite"/>
+                                <animate attributeName="opacity" values="0.6;0;0.6" dur="3s" repeatCount="indefinite"/>
+                            </circle>
+                            <circle cx="195" cy="45" r="2" fill="rgba(255,255,255,0.5)">
+                                <animate attributeName="cy" values="45;15;45" dur="3.5s" repeatCount="indefinite"/>
+                                <animate attributeName="opacity" values="0.5;0;0.5" dur="3.5s" repeatCount="indefinite"/>
+                            </circle>
+                            <circle cx="205" cy="48" r="2" fill="rgba(255,255,255,0.5)">
+                                <animate attributeName="cy" values="48;18;48" dur="2.8s" repeatCount="indefinite"/>
+                                <animate attributeName="opacity" values="0.5;0;0.5" dur="2.8s" repeatCount="indefinite"/>
+                            </circle>
+
+                            <!-- Morphing effect: Joint transforms to scanning rays -->
+                            <g id="scanRays" opacity="0">
+                                <line x1="200" y1="90" x2="150" y2="90" stroke="rgba(255,255,255,0.8)" stroke-width="3">
+                                    <animate attributeName="x1" values="200;150;200" dur="2s" repeatCount="indefinite"/>
+                                </line>
+                                <line x1="200" y1="90" x2="250" y2="90" stroke="rgba(255,255,255,0.8)" stroke-width="3">
+                                    <animate attributeName="x1" values="200;250;200" dur="2s" repeatCount="indefinite"/>
+                                </line>
+                                <line x1="200" y1="90" x2="200" y2="50" stroke="rgba(255,255,255,0.8)" stroke-width="3">
+                                    <animate attributeName="y1" values="90;50;90" dur="2s" repeatCount="indefinite"/>
+                                </line>
+                                <line x1="200" y1="90" x2="200" y2="130" stroke="rgba(255,255,255,0.8)" stroke-width="3">
+                                    <animate attributeName="y1" values="90;130;90" dur="2s" repeatCount="indefinite"/>
+                                </line>
+                            </g>
+                        </g>
+
+                        <!-- ID Card icon (appears when scanning) -->
+                        <g id="idCard" opacity="0">
+                            <rect x="140" y="70" width="120" height="80" rx="8" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.5)" stroke-width="2"/>
+                            <rect x="150" y="85" width="40" height="50" rx="4" fill="rgba(255,255,255,0.3)"/>
+                            <line x1="200" y1="90" x2="245" y2="90" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+                            <line x1="200" y1="100" x2="245" y2="100" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+                            <line x1="200" y1="110" x2="245" y2="110" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+                            <line x1="150" y1="145" x2="245" y2="145" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+                        </g>
+                    </svg>
+
+                    <h2 style="color: white; font-size: 28px; font-weight: bold; margin: 0; text-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+                        TAP TO SCAN
+                    </h2>
+                    <p style="color: rgba(255,255,255,0.9); font-size: 16px; margin: 10px 0 0 0;">
+                        Touch here, then scan your ID
+                    </p>
+                </div>
             </button>
 
             <!-- Focus indicator -->
-            <div id="focusIndicator" style="padding: 12px 24px; background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981; border-radius: 8px; font-size: 16px; color: #10b981;">
+            <div id="focusIndicator" style="
+                padding: 16px 32px;
+                background: rgba(16, 185, 129, 0.15);
+                border: 2px solid #10b981;
+                border-radius: 12px;
+                font-size: 18px;
+                color: #10b981;
+                font-weight: 600;
+                box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+            ">
                 🎯 Ready to receive scan
             </div>
 
@@ -405,6 +514,51 @@ Expected parameters:
                 indicator.style.color = '#10b981';
                 indicator.textContent = '🎯 Ready to receive scan';
             }
+
+            // Trigger button animation - joint starts smoking
+            triggerJointAnimation();
+        }
+
+        // Animate the joint button
+        function triggerJointAnimation() {
+            const jointIcon = document.getElementById('jointIcon');
+            const puffCloud = document.getElementById('puffCloud');
+            const scanRays = document.getElementById('scanRays');
+            const idCard = document.getElementById('idCard');
+
+            if (jointIcon) {
+                // Stage 1: Joint is visible and smoking (default state)
+                jointIcon.setAttribute('opacity', '1');
+                puffCloud.setAttribute('opacity', '0');
+                scanRays.setAttribute('opacity', '0');
+                idCard.setAttribute('opacity', '0');
+            }
+        }
+
+        // Trigger scanning animation when data starts coming in
+        function triggerScanningAnimation() {
+            const jointIcon = document.getElementById('jointIcon');
+            const puffCloud = document.getElementById('puffCloud');
+            const scanRays = document.getElementById('scanRays');
+            const idCard = document.getElementById('idCard');
+
+            if (!jointIcon) return;
+
+            // Stage 2: Puff cloud appears, joint starts fading
+            puffCloud.setAttribute('opacity', '1');
+
+            setTimeout(() => {
+                // Stage 3: Joint fades out, scanning rays appear through the smoke
+                jointIcon.setAttribute('opacity', '0.3');
+                scanRays.setAttribute('opacity', '1');
+            }, 500);
+
+            setTimeout(() => {
+                // Stage 4: ID card appears, being scanned
+                jointIcon.setAttribute('opacity', '0');
+                idCard.setAttribute('opacity', '1');
+                puffCloud.setAttribute('opacity', '0.5');
+            }, 1500);
         }
 
         window.addEventListener('load', () => {
@@ -436,13 +590,18 @@ Expected parameters:
                 barcodeBuffer += char;
                 console.log('[Scanner] Keystroke buffered (total: ' + barcodeBuffer.length + ' chars)');
 
-                // Update focus indicator to show we're receiving input
-                const indicator = document.getElementById('focusIndicator');
-                if (indicator && barcodeBuffer.length === 1) {
-                    indicator.style.background = 'rgba(251, 146, 60, 0.2)';
-                    indicator.style.borderColor = '#fb923c';
-                    indicator.style.color = '#fb923c';
-                    indicator.textContent = '📡 Receiving scan data...';
+                // Trigger morphing animation on first keystroke
+                if (barcodeBuffer.length === 1) {
+                    triggerScanningAnimation();
+
+                    // Update focus indicator to show we're receiving input
+                    const indicator = document.getElementById('focusIndicator');
+                    if (indicator) {
+                        indicator.style.background = 'rgba(251, 146, 60, 0.2)';
+                        indicator.style.borderColor = '#fb923c';
+                        indicator.style.color = '#fb923c';
+                        indicator.textContent = '📡 Receiving scan data...';
+                    }
                 }
 
                 // Prevent default to avoid browser UI interference
