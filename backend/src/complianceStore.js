@@ -428,17 +428,20 @@ async function markVerificationOverride({ verificationId, saleId, managerId, not
 
   // Handle "Pure" Manual Override (No previous scan)
   if (verificationId === 'MANUAL-OVERRIDE') {
+    // Generate a unique verification_id for manual override
+    const generatedVerificationId = `OVERRIDE-${saleId}-${Date.now()}`;
+
     const newVerification = await query(
       `
         INSERT INTO verifications (
-          sale_id, clerk_id, location_id, status, reason, 
+          verification_id, sale_id, clerk_id, location_id, status, reason, 
           document_type, document_number, age, approved, source
         )
-        VALUES ($1, $2, $3, 'approved_override', $4, 
+        VALUES ($1, $2, $3, $4, 'approved_override', $5, 
                 'manual', 'no-scan', 21, true, 'manual_override')
         RETURNING *
       `,
-      [saleId, clerkId || 'unknown-clerk', registerId || 'unknown-location', sanitizedNote]
+      [generatedVerificationId, saleId, clerkId || 'unknown-clerk', registerId || 'unknown-location', sanitizedNote]
     );
     finalVerificationId = newVerification.rows[0].verification_id;
     verificationRecord = newVerification.rows[0];
