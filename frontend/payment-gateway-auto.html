@@ -767,7 +767,20 @@
 
         function cancelVerification() {
             clearInterval(pollInterval);
+            console.log('[Cancel] Sending DECLINE to Lightspeed parent...');
+
+            // Try JSON format first (Lightspeed docs suggest this)
+            try {
+                window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
+                console.log('[Cancel] Sent JSON: {step: DECLINE}');
+            } catch (e) {
+                console.error('[Cancel] JSON format failed:', e);
+            }
+
+            // Also try plain string formats as fallback
             window.parent.postMessage('DECLINE', '*');
+            window.parent.postMessage('CANCEL', '*');
+            console.log('[Cancel] Sent plain: DECLINE and CANCEL');
         }
 
         // ========== STATE MANAGEMENT ==========
