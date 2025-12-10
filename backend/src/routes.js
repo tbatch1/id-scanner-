@@ -875,7 +875,7 @@ router.post('/api/sales/:saleId/override', validateOverride, async (req, res) =>
 
   // 1. Validate PIN (Simple check for now, can be DB backed later)
   // Hardcoded for demo/pilot. In production, check against a manager table.
-  const VALID_PINS = [process.env.OVERRIDE_PIN || '1419', '9999'];
+  const VALID_PINS = [process.env.OVERRIDE_PIN || '1417', '9999'];
 
   if (!VALID_PINS.includes(managerPin)) {
     logger.logSecurity('invalid_override_pin', { saleId, verificationId });
