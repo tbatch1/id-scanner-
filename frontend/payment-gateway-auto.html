@@ -252,6 +252,11 @@
             <h1>Waiting for ID Scan...</h1>
             <p style="font-size: 24px; color: rgba(255, 255, 255, 0.9);">Scan ID now</p>
 
+            <!-- Focus indicator -->
+            <div id="focusIndicator" style="margin-top: 20px; padding: 12px 24px; background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981; border-radius: 8px; font-size: 16px; color: #10b981;">
+                🎯 Ready to receive scan
+            </div>
+
             <button class="btn-warning" onclick="showOverrideModal()"
                 style="margin-top: 40px; padding: 16px 32px; font-size: 18px; cursor: pointer; background: #f97316; color: white; border: none; border-radius: 12px; font-weight: 600;">Manual
                 ID Override</button>
@@ -378,17 +383,43 @@ Expected parameters:
         const PDF417_PREFIX = ']L';
 
         // Ensure page can receive keyboard input
-        window.addEventListener('load', () => {
+        function ensureFocus() {
             window.focus();
             document.body.focus();
-            console.log('[Scanner] Page loaded and focused - ready to receive scans');
+            // Also try focusing the document
+            if (document.activeElement !== document.body) {
+                document.body.focus();
+            }
+            console.log('[Scanner] Page focused - ready to receive scans');
+
+            // Update focus indicator
+            const indicator = document.getElementById('focusIndicator');
+            if (indicator) {
+                indicator.style.background = 'rgba(16, 185, 129, 0.2)';
+                indicator.style.borderColor = '#10b981';
+                indicator.style.color = '#10b981';
+                indicator.textContent = '🎯 Ready to receive scan';
+            }
+        }
+
+        window.addEventListener('load', () => {
+            ensureFocus();
+            console.log('[Scanner] Page loaded and focused');
             console.log('[Scanner] Using debounced listener (70ms timeout) to handle rapid keystrokes');
+
+            // Re-focus every 2 seconds to ensure we don't lose focus (iPad issue)
+            setInterval(ensureFocus, 2000);
         });
 
         // Click anywhere to ensure focus (for iframe scenarios)
-        document.body.addEventListener('click', () => {
-            window.focus();
-            console.log('[Scanner] Page focused - ready to receive scans');
+        document.body.addEventListener('click', ensureFocus);
+        document.body.addEventListener('touchstart', ensureFocus);
+
+        // Try to grab focus when page becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                ensureFocus();
+            }
         });
 
         // Debounced keyboard listener - prevents browser overwhelm from rapid scanner input
@@ -399,6 +430,15 @@ Expected parameters:
             if (char.length === 1) {
                 barcodeBuffer += char;
                 console.log('[Scanner] Keystroke buffered (total: ' + barcodeBuffer.length + ' chars)');
+
+                // Update focus indicator to show we're receiving input
+                const indicator = document.getElementById('focusIndicator');
+                if (indicator && barcodeBuffer.length === 1) {
+                    indicator.style.background = 'rgba(251, 146, 60, 0.2)';
+                    indicator.style.borderColor = '#fb923c';
+                    indicator.style.color = '#fb923c';
+                    indicator.textContent = '📡 Receiving scan data...';
+                }
 
                 // Prevent default to avoid browser UI interference
                 e.preventDefault();
