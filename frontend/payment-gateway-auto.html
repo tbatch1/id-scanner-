@@ -559,10 +559,33 @@ Expected parameters:
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ approved: true })
                 });
+
+                // Send postMessage to parent iframe (Lightspeed)
                 window.parent.postMessage('ACCEPT', '*');
+
+                // Auto-close back to Lightspeed after 2 seconds
+                console.log('[Scanner] Sale completed - auto-closing in 2 seconds');
+                setTimeout(() => {
+                    closeScanner();
+                }, 2000);
             } catch (e) {
                 showError('Failed to complete sale. Please try again.');
             }
+        }
+
+        function closeScanner() {
+            console.log('[Scanner] Closing scanner and returning to Lightspeed');
+
+            // Check if running locally to avoid breaking dev workflow
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                console.log('[DEV] Would return to: https://retail.lightspeed.app/sell');
+                alert('Closing scanner → Returning to Lightspeed POS');
+                return;
+            }
+
+            // Force navigation back to the main Sell screen
+            // This works even inside the iOS app wrapper as it resets the webview
+            window.location.href = 'https://retail.lightspeed.app/sell';
         }
 
         function showSuccess(data) {
@@ -570,6 +593,15 @@ Expected parameters:
             document.getElementById('statusSuccess').classList.add('active');
             document.getElementById('successName').textContent = data.customerName || 'Customer';
             document.getElementById('successAge').textContent = data.age ? `Age: ${data.age}` : 'Age Verified';
+
+            // Add visual feedback that page will auto-close
+            const successContainer = document.getElementById('statusSuccess');
+            const autoCloseMsg = document.createElement('p');
+            autoCloseMsg.style.fontSize = '14px';
+            autoCloseMsg.style.color = 'rgba(255, 255, 255, 0.7)';
+            autoCloseMsg.style.marginTop = '16px';
+            autoCloseMsg.textContent = 'Returning to POS in 2 seconds...';
+            successContainer.appendChild(autoCloseMsg);
         }
 
         function showRejected(reason) {
