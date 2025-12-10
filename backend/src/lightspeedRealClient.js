@@ -143,9 +143,137 @@ async function listSales() {
   }
 }
 
+/**
+ * Search for customers in Lightspeed by various criteria
+ * @param {Object} searchCriteria - Search parameters
+ * @param {string} searchCriteria.dlNumber - Driver's license number
+ * @param {string} searchCriteria.firstName - First name
+ * @param {string} searchCriteria.lastName - Last name
+ * @param {string} searchCriteria.email - Email address
+ * @param {string} searchCriteria.phone - Phone number
+ * @returns {Promise<Array>} Array of matching customers
+ */
+async function searchCustomers({ dlNumber, firstName, lastName, email, phone }) {
+  try {
+    logger.info({
+      event: 'searching_customers',
+      criteria: { dlNumber, firstName, lastName, email, phone }
+    });
+
+    // Try searching by custom field (DL number) first if available
+    if (dlNumber) {
+      try {
+        // Search by custom field - Lightspeed allows custom fields on customers
+        const response = await api.get('/customers', {
+          params: {
+            'custom_field.dl_number': dlNumber,
+            page_size: 10
+          }
+        });
+
+        if (response.data.data && response.data.data.length > 0) {
+          logger.info({
+            event: 'customer_found_by_dl',
+            count: response.data.data.length,
+            customerId: response.data.data[0].id
+          });
+          return response.data.data;
+        }
+      } catch (dlError) {
+        logger.debug({ event: 'dl_search_failed', error: dlError.message });
+        // Continue to name search
+      }
+    }
+
+    // Search by name if DL search didn't work
+    if (firstName && lastName) {
+      const response = await api.get('/customers', {
+        params: {
+          first_name: firstName,
+          last_name: lastName,
+          page_size: 10
+        }
+      });
+
+      if (response.data.data && response.data.data.length > 0) {
+        logger.info({
+          event: 'customer_found_by_name',
+          count: response.data.data.length,
+          customerId: response.data.data[0].id
+        });
+        return response.data.data;
+      }
+    }
+
+    // Try email search
+    if (email) {
+      const response = await api.get('/customers', {
+        params: {
+          email: email,
+          page_size: 10
+        }
+      });
+
+      if (response.data.data && response.data.data.length > 0) {
+        logger.info({
+          event: 'customer_found_by_email',
+          count: response.data.data.length,
+          customerId: response.data.data[0].id
+        });
+        return response.data.data;
+      }
+    }
+
+    logger.info({ event: 'customer_not_found', criteria: { firstName, lastName, email } });
+    return [];
+
+  } catch (error) {
+    logger.error({ event: 'search_customers_failed', error: error.message, stack: error.stack });
+    return [];
+  }
+}
+
+/**
+ * Attach a customer to a sale for loyalty tracking
+ * @param {string} saleId - The sale ID
+ * @param {string} customerId - The customer ID
+ * @returns {Promise<boolean>} Success status
+ */
+async function attachCustomerToSale(saleId, customerId) {
+  try {
+    logger.info({ event: 'attaching_customer_to_sale', saleId, customerId });
+
+    // Update the sale with the customer ID
+    await api.put(`/sales/${saleId}`, {
+      customer_id: customerId
+    });
+
+    logger.info({
+      event: 'customer_attached_success',
+      saleId,
+      customerId,
+      msg: 'Customer linked to sale for loyalty tracking'
+    });
+
+    return true;
+
+  } catch (error) {
+    logger.error({
+      event: 'attach_customer_failed',
+      saleId,
+      customerId,
+      error: error.message,
+      stack: error.stack
+    });
+    return false;
+  }
+}
+
 module.exports = {
   getSaleById,
   recordVerification,
   completeSale,
-  listSales
+  listSales,
+  searchCustomers,
+  attachCustomerToSale
 };

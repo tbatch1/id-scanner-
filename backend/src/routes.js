@@ -498,6 +498,46 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     // 6. Update In-Memory Store (for Polling) - ONLY after DB save succeeds
     saleVerificationStore.updateVerification(saleId, verificationResult);
 
+    // 7. LOYALTY INTEGRATION: Search and attach customer to sale
+    // This allows customers to earn loyalty points automatically
+    if (approved && parsed.documentNumber && (parsed.firstName || parsed.lastName)) {
+      try {
+        console.log('🎯 LOYALTY: Searching for customer in Lightspeed');
+
+        const customers = await lightspeed.searchCustomers({
+          dlNumber: parsed.documentNumber,
+          firstName: parsed.firstName,
+          lastName: parsed.lastName,
+          email: null, // We don't have email from ID scan
+          phone: null
+        });
+
+        if (customers && customers.length > 0) {
+          const customer = customers[0];
+          console.log('✅ LOYALTY: Customer found!', {
+            customerId: customer.id,
+            name: `${customer.first_name} ${customer.last_name}`
+          });
+
+          // Attach customer to sale
+          const attached = await lightspeed.attachCustomerToSale(saleId, customer.id);
+
+          if (attached) {
+            console.log('🎉 LOYALTY: Customer linked to sale - points will be earned!');
+          } else {
+            console.log('⚠️ LOYALTY: Failed to attach customer to sale');
+          }
+        } else {
+          console.log('ℹ️ LOYALTY: Customer not found in system (first-time visitor or not registered)');
+          console.log('ℹ️ LOYALTY: Consider creating customer profile for future visits');
+        }
+      } catch (loyaltyError) {
+        // Don't fail the entire verification if loyalty integration fails
+        console.error('⚠️ LOYALTY ERROR:', loyaltyError.message);
+        console.error('Verification succeeded, but customer linking failed');
+      }
+    }
+
     // Final success logging
     console.log('===========================================');
     console.log('✅ SCAN PROCESSED SUCCESSFULLY');
