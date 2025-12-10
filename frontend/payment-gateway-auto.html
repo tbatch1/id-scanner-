@@ -532,15 +532,17 @@
 
     <!-- ========== OVERRIDE MODAL ========== -->
     <div id="overrideModal" class="modal-overlay">
-        <div class="modal">
+        <div class="modal" onclick="event.stopPropagation()">
             <h2>Manager Override</h2>
             <p>Enter manager PIN to bypass verification</p>
-            <input type="password" id="managerPin" class="pin-input" placeholder="••••" maxlength="4"
-                inputmode="numeric" />
-            <input type="text" id="overrideNote" class="note-input" placeholder="Reason (optional)" />
+            <!-- Use type=tel for iOS numeric keypad, not password which can have issues -->
+            <input type="tel" id="managerPin" class="pin-input" placeholder="1234" maxlength="4" autocomplete="off"
+                autocorrect="off" autocapitalize="off" spellcheck="false" />
+            <input type="text" id="overrideNote" class="note-input" placeholder="Reason (optional)" autocomplete="off"
+                autocorrect="off" autocapitalize="off" spellcheck="false" />
             <div class="modal-actions">
-                <button class="btn btn-cancel" onclick="closeOverrideModal()">Cancel</button>
-                <button class="btn btn-override" onclick="submitOverride()">Override</button>
+                <button class="btn btn-cancel">Cancel</button>
+                <button class="btn btn-override">Override</button>
             </div>
         </div>
     </div>
