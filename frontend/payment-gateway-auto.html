@@ -3,135 +3,284 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ID Verification - Lightspeed Payment Gateway</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ID Verification - THC Club</title>
+
+    <!-- GSAP Animation Library (Free CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: #0d111b;
-            color: white;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-gradient);
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            touch-action: manipulation;
         }
 
-        .container {
-            text-align: center;
-            max-width: 600px;
-            width: 100%;
-        }
-
-        /* Waiting State */
-        .status-waiting {
-            display: none;
-        }
-
-        .status-waiting.active {
-            display: block;
-        }
-
-        .spinner {
-            width: 80px;
-            height: 80px;
-            border: 6px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #5a54ff;
+        /* Animated background particles */
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 32px;
+            pointer-events: none;
         }
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .status-waiting h1 {
-            font-size: 36px;
-            margin-bottom: 16px;
-            font-weight: 700;
-        }
-
-        .status-waiting p {
-            font-size: 18px;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 24px;
-        }
-
-        .instruction {
-            background: rgba(90, 84, 255, 0.15);
-            border: 1px solid rgba(90, 84, 255, 0.3);
-            border-radius: 16px;
-            padding: 24px;
-            margin-top: 24px;
-        }
-
-        .instruction-icon {
-            font-size: 48px;
-            margin-bottom: 12px;
-        }
-
-        .instruction p {
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.8);
-            line-height: 1.6;
-        }
-
-        .instruction strong {
-            color: #5a54ff;
-            font-weight: 600;
-        }
-
-        /* Success State (GREEN) */
-        .status-success {
+        /* Main container for all states */
+        .state-container {
             display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+            width: 100%;
+            max-width: 500px;
         }
 
-        .status-success.active {
-            display: block;
-            animation: fadeIn 0.5s ease-in-out;
+        .state-container.active {
+            display: flex;
         }
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-        .success-container {
-            background: linear-gradient(135deg, #1fbf75 0%, #16a859 100%);
+        /* ========== TAP TO SCAN STATE ========== */
+        .scanner-container {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.15);
             border-radius: 32px;
-            padding: 64px 48px;
-            box-shadow: 0 30px 80px rgba(31, 191, 117, 0.4);
+            padding: 50px 60px;
+            box-shadow:
+                0 25px 50px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .scanner-container:active {
+            transform: scale(0.98);
+        }
+
+        /* 3D Joint */
+        .joint-wrapper {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            margin: 0 auto 30px;
+            perspective: 1000px;
+        }
+
+        .joint {
+            position: relative;
+            width: 70px;
+            height: 140px;
+            margin: 0 auto;
+            transform-style: preserve-3d;
+        }
+
+        .joint-body {
+            position: absolute;
+            width: 70px;
+            height: 120px;
+            background: linear-gradient(to right,
+                    #f5f5f5 0%,
+                    #fff 20%,
+                    #f5f5f5 40%,
+                    #fff 60%,
+                    #f5f5f5 80%,
+                    #fff 100%);
+            border-radius: 6px 6px 3px 3px;
+            box-shadow:
+                inset 2px 0 10px rgba(0, 0, 0, 0.1),
+                inset -2px 0 10px rgba(0, 0, 0, 0.1),
+                0 5px 20px rgba(0, 0, 0, 0.3);
+            top: 20px;
+        }
+
+        .joint-line {
+            position: absolute;
+            width: 70px;
+            height: 1.5px;
+            background: rgba(0, 0, 0, 0.1);
+            left: 0;
+        }
+
+        .joint-tip {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 26px;
+            height: 26px;
+            background: radial-gradient(circle, #ff6b35 0%, #ff4520 50%, #8b2500 100%);
+            border-radius: 50%;
+            box-shadow:
+                0 0 20px #ff6b35,
+                0 0 40px rgba(255, 107, 53, 0.5);
+            filter: brightness(1.2);
+        }
+
+        .glow {
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, rgba(255, 107, 53, 0.8) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .smoke {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.5) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(6px);
+            pointer-events: none;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 50%;
+            left: -100%;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent 0%, rgba(0, 255, 136, 0.9) 50%, transparent 100%);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.8);
+            opacity: 0;
+        }
+
+        .scanner-container h1 {
+            color: white;
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            text-shadow: 0 3px 15px rgba(0, 0, 0, 0.4);
+            letter-spacing: 1px;
+        }
+
+        .scanner-container p {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 18px;
+            font-weight: 400;
+            margin-bottom: 25px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 14px 35px;
+            background: rgba(16, 185, 129, 0.15);
+            border: 2px solid var(--success);
+            border-radius: 50px;
+            color: var(--success);
+            font-weight: 600;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(16, 185, 129, 0.5);
+            }
+        }
+
+        .scanning .joint-tip {
+            animation: ember-pulse 0.4s infinite;
+        }
+
+        @keyframes ember-pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px #ff6b35, 0 0 40px rgba(255, 107, 53, 0.5);
+                transform: translateX(-50%) scale(1);
+            }
+
+            50% {
+                box-shadow: 0 0 35px #ff6b35, 0 0 70px rgba(255, 107, 53, 0.8);
+                transform: translateX(-50%) scale(1.15);
+            }
+        }
+
+        /* Override Button */
+        .override-btn {
+            margin-top: 25px;
+            padding: 14px 28px;
+            background: rgba(245, 158, 11, 0.2);
+            border: 2px solid var(--warning);
+            border-radius: 12px;
+            color: var(--warning);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .override-btn:active {
+            background: rgba(245, 158, 11, 0.35);
+            transform: scale(0.98);
+        }
+
+        .cancel-link {
+            margin-top: 15px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        /* ========== SUCCESS STATE ========== */
+        #success-state {
+            animation: fadeIn 0.4s ease;
         }
 
         .success-icon {
-            font-size: 120px;
-            margin-bottom: 24px;
-            animation: successPop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            font-size: 100px;
+            margin-bottom: 20px;
+            animation: bounceIn 0.6s ease;
         }
 
-        @keyframes successPop {
+        @keyframes bounceIn {
             0% {
                 transform: scale(0);
             }
 
             50% {
-                transform: scale(1.1);
+                transform: scale(1.2);
             }
 
             100% {
@@ -139,346 +288,369 @@
             }
         }
 
-        .success-container h1 {
-            font-size: 48px;
-            margin-bottom: 16px;
-            font-weight: 800;
+        #success-state h1 {
+            color: var(--success);
+            font-size: 42px;
+            margin-bottom: 10px;
         }
 
-        .success-container .customer-info {
-            font-size: 24px;
-            margin-bottom: 12px;
-            opacity: 0.95;
-        }
-
-        .success-container .age-info {
+        #success-state p {
+            color: rgba(255, 255, 255, 0.8);
             font-size: 20px;
-            opacity: 0.9;
         }
 
-        /* Rejected State (RED) */
-        .status-rejected {
-            display: none;
+        /* ========== ERROR STATE ========== */
+        #error-state {
+            animation: fadeIn 0.4s ease;
         }
 
-        .status-rejected.active {
-            display: block;
-            animation: fadeIn 0.5s ease-in-out;
+        .error-icon {
+            font-size: 100px;
+            margin-bottom: 20px;
         }
 
-        .rejected-container {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-            border-radius: 32px;
-            padding: 64px 48px;
-            box-shadow: 0 30px 80px rgba(239, 68, 68, 0.4);
-        }
-
-        .rejected-icon {
-            font-size: 120px;
-            margin-bottom: 24px;
-            animation: shakeDeny 0.6s ease-in-out;
-        }
-
-        @keyframes shakeDeny {
-
-            0%,
-            100% {
-                transform: translateX(0);
-            }
-
-            10%,
-            30%,
-            50%,
-            70%,
-            90% {
-                transform: translateX(-10px);
-            }
-
-            20%,
-            40%,
-            60%,
-            80% {
-                transform: translateX(10px);
-            }
-        }
-
-        .rejected-container h1 {
-            font-size: 48px;
-            margin-bottom: 16px;
-            font-weight: 800;
-        }
-
-        .rejected-container .reason {
-            font-size: 24px;
-            margin-bottom: 12px;
-            opacity: 0.95;
-        }
-
-        .rejected-container .action {
-            font-size: 18px;
-            opacity: 0.9;
-            margin-top: 24px;
-        }
-
-        /* Error State */
-        .status-error {
-            display: none;
-        }
-
-        .status-error.active {
-            display: block;
-        }
-
-        .status-error h1 {
+        #error-state h1 {
+            color: var(--error);
             font-size: 36px;
-            margin-bottom: 16px;
-            color: #ef4444;
+            margin-bottom: 10px;
         }
 
-        .status-error p {
-            font-size: 18px;
+        #error-state p {
             color: rgba(255, 255, 255, 0.7);
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            padding: 14px 30px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            margin: 5px;
+        }
+
+        .btn-retry {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .btn-override {
+            background: rgba(245, 158, 11, 0.2);
+            border: 2px solid var(--warning);
+            color: var(--warning);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ========== MODAL ========== */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 340px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal h2 {
+            color: white;
+            margin-bottom: 10px;
+        }
+
+        .modal p {
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .pin-input {
+            width: 100%;
+            padding: 16px;
+            font-size: 28px;
+            letter-spacing: 8px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            margin-bottom: 15px;
+        }
+
+        .pin-input:focus {
+            outline: none;
+            border-color: var(--warning);
+        }
+
+        .note-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .hidden {
+            display: none !important;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <!-- Waiting State -->
-        <div class="status-waiting active" id="statusWaiting">
-            <img src="/frontend/assets/thc-logo.png" alt="THC Club"
-                style="width: 280px; height: auto; margin-bottom: 40px; filter: drop-shadow(0 0 20px rgba(90, 84, 255, 0.3));">
-            <!-- Animated Joint Button -->
-            <button onclick="ensureFocus()" id="scanButton" style="
-                position: relative;
-                width: 100%;
-                max-width: 420px;
-                padding: 0;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                border: none;
-                border-radius: 24px;
-                cursor: pointer;
-                box-shadow: 0 20px 60px rgba(102, 126, 234, 0.5);
-                overflow: hidden;
-                margin-bottom: 30px;
-                transition: all 0.3s ease;
-            " onmouseenter="this.style.transform='scale(1.05)'" onmouseleave="this.style.transform='scale(1)'">
+    <!-- Background particles container -->
+    <div id="particles"></div>
 
-                <!-- SVG Animation Container -->
-                <div style="padding: 40px 30px; position: relative;">
-                    <svg width="100%" height="180" viewBox="0 0 400 180" style="margin-bottom: 10px;">
-                        <!-- Puff Cloud (appears when scanning) -->
-                        <g id="puffCloud" opacity="0">
-                            <ellipse cx="200" cy="90" rx="60" ry="40" fill="rgba(255,255,255,0.3)">
-                                <animate attributeName="rx" values="60;80;60" dur="3s" repeatCount="indefinite"/>
-                                <animate attributeName="ry" values="40;50;40" dur="3s" repeatCount="indefinite"/>
-                                <animate attributeName="opacity" values="0.3;0.5;0.3" dur="3s" repeatCount="indefinite"/>
-                            </ellipse>
-                            <ellipse cx="170" cy="95" rx="40" ry="30" fill="rgba(255,255,255,0.2)">
-                                <animate attributeName="rx" values="40;55;40" dur="2.5s" repeatCount="indefinite"/>
-                                <animate attributeName="ry" values="30;40;30" dur="2.5s" repeatCount="indefinite"/>
-                            </ellipse>
-                            <ellipse cx="230" cy="95" rx="40" ry="30" fill="rgba(255,255,255,0.2)">
-                                <animate attributeName="rx" values="40;55;40" dur="2.8s" repeatCount="indefinite"/>
-                                <animate attributeName="ry" values="30;40;30" dur="2.8s" repeatCount="indefinite"/>
-                            </ellipse>
-                        </g>
+    <!-- Hidden input for iOS HID focus - Required for iPad Bluetooth scanner -->
+    <input type="text" id="hiddenScannerInput"
+        style="position: absolute; left: -9999px; opacity: 0; width: 1px; height: 1px;" autocomplete="off"
+        autocorrect="off" autocapitalize="off" spellcheck="false" />
 
-                        <!-- Joint Animation -->
-                        <g id="jointIcon">
-                            <!-- Joint body (white paper) -->
-                            <rect x="180" y="60" width="40" height="80" rx="3" fill="#f5f5f5">
-                                <animate attributeName="fill" values="#f5f5f5;#e8e8e8;#f5f5f5" dur="2s" repeatCount="indefinite"/>
-                            </rect>
-
-                            <!-- Joint tip (brown) -->
-                            <ellipse cx="200" cy="140" rx="20" ry="8" fill="#8b4513"/>
-
-                            <!-- Twist lines -->
-                            <line x1="180" y1="75" x2="220" y2="75" stroke="#666" stroke-width="1" opacity="0.3"/>
-                            <line x1="180" y1="90" x2="220" y2="90" stroke="#666" stroke-width="1" opacity="0.3"/>
-                            <line x1="180" y1="105" x2="220" y2="105" stroke="#666" stroke-width="1" opacity="0.3"/>
-                            <line x1="180" y1="120" x2="220" y2="120" stroke="#666" stroke-width="1" opacity="0.3"/>
-
-                            <!-- Burning ember at top -->
-                            <circle cx="200" cy="60" r="6" fill="#ff6b35">
-                                <animate attributeName="r" values="6;8;6" dur="1s" repeatCount="indefinite"/>
-                                <animate attributeName="opacity" values="0.8;1;0.8" dur="1s" repeatCount="indefinite"/>
-                            </circle>
-
-                            <!-- Smoke particles rising -->
-                            <circle cx="200" cy="50" r="3" fill="rgba(255,255,255,0.6)">
-                                <animate attributeName="cy" values="50;20;50" dur="3s" repeatCount="indefinite"/>
-                                <animate attributeName="opacity" values="0.6;0;0.6" dur="3s" repeatCount="indefinite"/>
-                            </circle>
-                            <circle cx="195" cy="45" r="2" fill="rgba(255,255,255,0.5)">
-                                <animate attributeName="cy" values="45;15;45" dur="3.5s" repeatCount="indefinite"/>
-                                <animate attributeName="opacity" values="0.5;0;0.5" dur="3.5s" repeatCount="indefinite"/>
-                            </circle>
-                            <circle cx="205" cy="48" r="2" fill="rgba(255,255,255,0.5)">
-                                <animate attributeName="cy" values="48;18;48" dur="2.8s" repeatCount="indefinite"/>
-                                <animate attributeName="opacity" values="0.5;0;0.5" dur="2.8s" repeatCount="indefinite"/>
-                            </circle>
-
-                            <!-- Morphing effect: Joint transforms to scanning rays -->
-                            <g id="scanRays" opacity="0">
-                                <line x1="200" y1="90" x2="150" y2="90" stroke="rgba(255,255,255,0.8)" stroke-width="3">
-                                    <animate attributeName="x1" values="200;150;200" dur="2s" repeatCount="indefinite"/>
-                                </line>
-                                <line x1="200" y1="90" x2="250" y2="90" stroke="rgba(255,255,255,0.8)" stroke-width="3">
-                                    <animate attributeName="x1" values="200;250;200" dur="2s" repeatCount="indefinite"/>
-                                </line>
-                                <line x1="200" y1="90" x2="200" y2="50" stroke="rgba(255,255,255,0.8)" stroke-width="3">
-                                    <animate attributeName="y1" values="90;50;90" dur="2s" repeatCount="indefinite"/>
-                                </line>
-                                <line x1="200" y1="90" x2="200" y2="130" stroke="rgba(255,255,255,0.8)" stroke-width="3">
-                                    <animate attributeName="y1" values="90;130;90" dur="2s" repeatCount="indefinite"/>
-                                </line>
-                            </g>
-                        </g>
-
-                        <!-- ID Card icon (appears when scanning) -->
-                        <g id="idCard" opacity="0">
-                            <rect x="140" y="70" width="120" height="80" rx="8" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.5)" stroke-width="2"/>
-                            <rect x="150" y="85" width="40" height="50" rx="4" fill="rgba(255,255,255,0.3)"/>
-                            <line x1="200" y1="90" x2="245" y2="90" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
-                            <line x1="200" y1="100" x2="245" y2="100" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
-                            <line x1="200" y1="110" x2="245" y2="110" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
-                            <line x1="150" y1="145" x2="245" y2="145" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
-                        </g>
-                    </svg>
-
-                    <h2 style="color: white; font-size: 28px; font-weight: bold; margin: 0; text-shadow: 0 2px 10px rgba(0,0,0,0.3);">
-                        TAP TO SCAN
-                    </h2>
-                    <p style="color: rgba(255,255,255,0.9); font-size: 16px; margin: 10px 0 0 0;">
-                        Touch here, then scan your ID
-                    </p>
+    <!-- ========== STATE 1: TAP TO SCAN ========== -->
+    <div id="scan-state" class="state-container active">
+        <div class="scanner-container" id="scannerContainer">
+            <div class="joint-wrapper">
+                <div class="joint">
+                    <div class="joint-tip">
+                        <div class="glow"></div>
+                    </div>
+                    <div class="joint-body">
+                        <div class="joint-line" style="top: 18px;"></div>
+                        <div class="joint-line" style="top: 36px;"></div>
+                        <div class="joint-line" style="top: 54px;"></div>
+                        <div class="joint-line" style="top: 72px;"></div>
+                        <div class="joint-line" style="top: 90px;"></div>
+                    </div>
+                    <div class="scan-line" id="scanLine"></div>
                 </div>
-            </button>
-
-            <!-- Focus indicator -->
-            <div id="focusIndicator" style="
-                padding: 16px 32px;
-                background: rgba(16, 185, 129, 0.15);
-                border: 2px solid #10b981;
-                border-radius: 12px;
-                font-size: 18px;
-                color: #10b981;
-                font-weight: 600;
-                box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
-            ">
-                🎯 Ready to receive scan
             </div>
 
-            <button class="btn-warning" onclick="showOverrideModal()"
-                style="margin-top: 40px; padding: 16px 32px; font-size: 18px; cursor: pointer; background: #f97316; color: white; border: none; border-radius: 12px; font-weight: 600;">Manual
-                ID Override</button>
-        </div>
+            <h1>TAP TO SCAN</h1>
+            <p>Touch here, then scan customer's ID</p>
 
-        <!-- Success State (GREEN) -->
-        <div class="status-success" id="statusSuccess">
-            <div class="success-container">
-                <div class="success-icon">✅</div>
-                <h1>ID VERIFIED</h1>
-                <div class="customer-info" id="successName"></div>
-                <div class="age-info" id="successAge"></div>
+            <div class="status-badge">
+                <span id="statusText">🎯 READY</span>
             </div>
         </div>
 
-        <!-- Rejected State (RED) -->
-        <div class="status-rejected" id="statusRejected">
-            <div class="rejected-container">
-                <div class="rejected-icon">🚫</div>
-                <h1>VERIFICATION FAILED</h1>
-                <div class="reason" id="rejectReason"></div>
-                <div class="action">Cannot complete transaction</div>
-                <button class="btn-warning" onclick="showOverrideModal()"
-                    style="margin-top: 24px; padding: 12px 24px; font-size: 16px; cursor: pointer; background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); border-radius: 8px;">Manual
-                    Override</button>
-                <button onclick="location.reload()"
-                    style="margin-top: 12px; padding: 12px 24px; font-size: 16px; cursor: pointer; background: transparent; color: white; border: 1px solid rgba(255,255,255,0.4); border-radius: 8px;">Try
-                    Again</button>
-            </div>
-        </div>
+        <button class="override-btn" onclick="showOverrideModal()">Manual ID Override</button>
+        <div class="cancel-link" onclick="cancelVerification()">Cancel</div>
+    </div>
 
-        <!-- Error State -->
-        <div class="status-error" id="statusError">
-            <h1>⚠️ Error</h1>
-            <p id="errorMessage">An error occurred during verification</p>
-            <button onclick="location.reload()"
-                style="margin-top: 20px; padding: 12px 24px; font-size: 16px; cursor: pointer; background: #374151; color: white; border: none; border-radius: 8px;">Reload</button>
+    <!-- ========== STATE 2: SUCCESS ========== -->
+    <div id="success-state" class="state-container">
+        <div class="success-icon">✅</div>
+        <h1>ID VERIFIED</h1>
+        <p id="success-details">Age 21+ Confirmed</p>
+    </div>
+
+    <!-- ========== STATE 3: ERROR ========== -->
+    <div id="error-state" class="state-container">
+        <div class="error-icon">❌</div>
+        <h1>Verification Failed</h1>
+        <p id="error-details">Customer is under 21</p>
+        <div>
+            <button class="btn btn-retry" onclick="retry()">Try Again</button>
+            <button class="btn btn-override" onclick="showOverrideModal()">Manual Override</button>
         </div>
     </div>
 
-    <!-- Override Modal -->
-    <div id="override-modal" class="modal-overlay"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 1000; align-items: center; justify-content: center;">
-        <div class="modal"
-            style="background: #1f2937; padding: 32px; border-radius: 24px; width: 90%; max-width: 400px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
-            <h2 style="margin-bottom: 16px; font-size: 24px;">Manual ID Override</h2>
-            <p style="margin-bottom: 24px; color: #9ca3af;">Enter Manager PIN</p>
-            <input type="password" id="manager-pin" placeholder="PIN" maxlength="4"
-                style="font-size: 32px; letter-spacing: 8px; text-align: center; width: 100%; padding: 16px; margin-bottom: 24px; background: #111827; border: 1px solid #374151; border-radius: 12px; color: white;" />
-            <input type="text" id="override-note" placeholder="Reason (Optional)"
-                style="width: 100%; padding: 12px; margin-bottom: 24px; background: #111827; border: 1px solid #374151; border-radius: 12px; color: white;" />
-            <div style="display: flex; gap: 12px;">
-                <button onclick="closeOverrideModal()"
-                    style="flex: 1; padding: 14px; background: transparent; border: 1px solid #4b5563; color: white; border-radius: 12px; cursor: pointer; font-weight: 600;">Cancel</button>
-                <button onclick="submitOverride()"
-                    style="flex: 1; padding: 14px; background: #f97316; border: none; color: white; border-radius: 12px; cursor: pointer; font-weight: 600;">Override</button>
+    <!-- ========== OVERRIDE MODAL ========== -->
+    <div id="override-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>Manager Override</h2>
+            <p>Enter manager PIN to bypass verification</p>
+            <input type="password" id="manager-pin" class="pin-input" placeholder="••••" maxlength="4"
+                inputmode="numeric" />
+            <input type="text" id="override-note" class="note-input" placeholder="Reason (optional)" />
+            <div class="modal-actions">
+                <button class="btn btn-retry" onclick="closeOverrideModal()">Cancel</button>
+                <button class="btn btn-override" onclick="submitOverride()">Override</button>
             </div>
         </div>
     </div>
 
     <script>
-        // Parse sale_id from URL - support multiple parameter names
-        const urlParams = new URLSearchParams(window.location.search);
-        // Lightspeed Custom Payments uses 'reference_id' as the transaction/sale ID
-        let saleId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
-
-        // Check if saleId is a template variable that wasn't replaced (like "{saleId}")
-        if (saleId && (saleId.includes('{') || saleId.includes('}'))) {
-            console.warn('Sale ID appears to be an unreplaced template variable:', saleId);
-            saleId = null; // Treat as missing
+        // ========== ANIMATION SETUP ==========
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 40; i++) {
+                const p = document.createElement('div');
+                p.classList.add('particle');
+                p.style.left = Math.random() * 100 + '%';
+                p.style.top = Math.random() * 100 + '%';
+                container.appendChild(p);
+                gsap.to(p, {
+                    y: -80,
+                    x: Math.random() * 60 - 30,
+                    opacity: 0,
+                    duration: Math.random() * 3 + 2,
+                    repeat: -1,
+                    delay: Math.random() * 2
+                });
+            }
         }
 
-        const registerId = urlParams.get('register_id') || urlParams.get('registerId') || urlParams.get('outlet_id');
-        const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
-        let amount = urlParams.get('amount') || '0.00';
-
-        // Check if amount is a template variable that wasn't replaced
-        if (amount && (amount.includes('{') || amount.includes('}'))) {
-            console.warn('Amount appears to be an unreplaced template variable:', amount);
-            amount = '0.00';
+        function createSmoke() {
+            const wrapper = document.querySelector('.joint-wrapper');
+            if (!wrapper) return;
+            const smoke = document.createElement('div');
+            smoke.classList.add('smoke');
+            smoke.style.left = '50%';
+            smoke.style.top = '25px';
+            smoke.style.transform = 'translateX(-50%)';
+            wrapper.appendChild(smoke);
+            gsap.to(smoke, {
+                y: -80,
+                x: Math.random() * 30 - 15,
+                opacity: 0,
+                scale: 1.8,
+                duration: 2.5,
+                onComplete: () => smoke.remove()
+            });
         }
 
-        // Debug logging to help diagnose parameter issues
-        console.log('Payment Gateway Parameters:', {
-            saleId,
-            registerId,
-            clerkId,
-            amount,
-            allParams: Object.fromEntries(urlParams.entries())
+        // Continuous smoke
+        setInterval(createSmoke, 600);
+
+        // Joint floating animation
+        gsap.to('.joint', { y: -8, duration: 2, ease: 'power1.inOut', yoyo: true, repeat: -1 });
+        gsap.to('.joint', { rotationY: 360, duration: 25, ease: 'none', repeat: -1 });
+        gsap.to('.glow', { scale: 1.3, opacity: 0.5, duration: 1, yoyo: true, repeat: -1, ease: 'power1.inOut' });
+
+        // Initialize particles
+        createParticles();
+
+        // Entrance animation
+        gsap.from('.scanner-container', { scale: 0.85, opacity: 0, duration: 0.8, ease: 'back.out(1.5)' });
+
+        // ========== iOS FOCUS HANDLING ==========
+        const hiddenInput = document.getElementById('hiddenScannerInput');
+        const container = document.getElementById('scannerContainer');
+        const statusText = document.getElementById('statusText');
+        const scanLine = document.getElementById('scanLine');
+
+        function ensureFocus() {
+            hiddenInput.focus();
+            console.log('[Scanner] Focus activated');
+        }
+
+        // Re-focus every 2 seconds (iOS steals focus)
+        setInterval(ensureFocus, 2000);
+
+        // Touch handling for iPad
+        container.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            activateScanner();
         });
 
-        let pollInterval = null;
+        container.addEventListener('click', activateScanner);
+
+        function activateScanner() {
+            ensureFocus();
+
+            statusText.textContent = '📡 SCANNING...';
+            statusText.parentElement.style.borderColor = '#f59e0b';
+            statusText.parentElement.style.color = '#f59e0b';
+            container.classList.add('scanning');
+
+            // Visual feedback
+            gsap.to(container, { scale: 1.02, duration: 0.1, yoyo: true, repeat: 1 });
+
+            // Smoke burst
+            for (let i = 0; i < 6; i++) {
+                setTimeout(createSmoke, i * 60);
+            }
+        }
+
+        // ========== BLUETOOTH SCANNER LISTENER ==========
+        let barcodeBuffer = '';
+        let lastKeyTime = 0;
+        const SCAN_TIMEOUT = 100;
+        const PDF417_PREFIX = ']L';
+
+        document.addEventListener('keydown', (e) => {
+            const currentTime = Date.now();
+            const isPrintable = e.key.length === 1;
+
+            if (currentTime - lastKeyTime > SCAN_TIMEOUT && barcodeBuffer.length > 0) {
+                if (!barcodeBuffer.startsWith(PDF417_PREFIX)) {
+                    barcodeBuffer = '';
+                }
+            }
+
+            lastKeyTime = currentTime;
+
+            if (e.key === 'Enter') {
+                if (barcodeBuffer.length > 10) {
+                    handleBluetoothScan(barcodeBuffer);
+                }
+                barcodeBuffer = '';
+            } else if (isPrintable) {
+                barcodeBuffer += e.key;
+
+                // Show receiving indicator
+                if (barcodeBuffer.length === 1) {
+                    statusText.textContent = '📡 RECEIVING...';
+                    statusText.parentElement.style.borderColor = '#f59e0b';
+                    statusText.parentElement.style.color = '#f59e0b';
+                    container.classList.add('scanning');
+                }
+            }
+        });
+
+        // ========== API INTEGRATION ==========
+        const urlParams = new URLSearchParams(window.location.search);
+        const saleId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
+        const registerId = urlParams.get('register_id') || urlParams.get('registerId') || urlParams.get('outlet_id');
+        const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
+
+        console.log('Payment Gateway:', { saleId, registerId, clerkId, allParams: Object.fromEntries(urlParams.entries()) });
+
+        let pollInterval;
 
         // Initialize
         if (!saleId) {
-            // Show detailed error message with all received parameters
-            const errorDetails = `Missing Sale ID. Please open from Lightspeed.
-
-Received parameters:
-${Object.entries(Object.fromEntries(urlParams.entries())).map(([k, v]) => `  ${k}: ${v}`).join('\n') || '  (none)'}
-
-Expected parameters:
-  - reference or sale_id or transaction_id (the sale ID)
-  - amount (optional)
-  - employee_id or clerk_id (optional)
-  - outlet_id or register_id (optional)`;
-
-            showError(errorDetails);
+            showError('Missing Sale ID. Please open from Lightspeed.');
         } else {
             startPolling();
         }
@@ -487,161 +659,8 @@ Expected parameters:
             pollInterval = setInterval(checkStatus, 2000);
         }
 
-        // --- HID Scanner Logic (Netum / Keyboard Mode) ---
-        // CRITICAL: Scanner sends 50-100 keystrokes in <200ms which can overwhelm the browser
-        // Solution: Use debounced listener with 70ms timeout (safe for Low Speed scanner setting)
-        let barcodeBuffer = '';
-        let scanTimeout = null;
-        const SCAN_DEBOUNCE_MS = 70; // Wait 70ms after last keystroke before processing
-        const MIN_SCAN_LENGTH = 10; // Minimum characters to be considered a valid scan
-        const PDF417_PREFIX = ']L';
-
-        // Ensure page can receive keyboard input
-        function ensureFocus() {
-            window.focus();
-            document.body.focus();
-            // Also try focusing the document
-            if (document.activeElement !== document.body) {
-                document.body.focus();
-            }
-            console.log('[Scanner] Page focused - ready to receive scans');
-
-            // Update focus indicator
-            const indicator = document.getElementById('focusIndicator');
-            if (indicator) {
-                indicator.style.background = 'rgba(16, 185, 129, 0.2)';
-                indicator.style.borderColor = '#10b981';
-                indicator.style.color = '#10b981';
-                indicator.textContent = '🎯 Ready to receive scan';
-            }
-
-            // Trigger button animation - joint starts smoking
-            triggerJointAnimation();
-        }
-
-        // Animate the joint button
-        function triggerJointAnimation() {
-            const jointIcon = document.getElementById('jointIcon');
-            const puffCloud = document.getElementById('puffCloud');
-            const scanRays = document.getElementById('scanRays');
-            const idCard = document.getElementById('idCard');
-
-            if (jointIcon) {
-                // Stage 1: Joint is visible and smoking (default state)
-                jointIcon.setAttribute('opacity', '1');
-                puffCloud.setAttribute('opacity', '0');
-                scanRays.setAttribute('opacity', '0');
-                idCard.setAttribute('opacity', '0');
-            }
-        }
-
-        // Trigger scanning animation when data starts coming in
-        function triggerScanningAnimation() {
-            const jointIcon = document.getElementById('jointIcon');
-            const puffCloud = document.getElementById('puffCloud');
-            const scanRays = document.getElementById('scanRays');
-            const idCard = document.getElementById('idCard');
-
-            if (!jointIcon) return;
-
-            // Stage 2: Puff cloud appears, joint starts fading
-            puffCloud.setAttribute('opacity', '1');
-
-            setTimeout(() => {
-                // Stage 3: Joint fades out, scanning rays appear through the smoke
-                jointIcon.setAttribute('opacity', '0.3');
-                scanRays.setAttribute('opacity', '1');
-            }, 500);
-
-            setTimeout(() => {
-                // Stage 4: ID card appears, being scanned
-                jointIcon.setAttribute('opacity', '0');
-                idCard.setAttribute('opacity', '1');
-                puffCloud.setAttribute('opacity', '0.5');
-            }, 1500);
-        }
-
-        window.addEventListener('load', () => {
-            ensureFocus();
-            console.log('[Scanner] Page loaded and focused');
-            console.log('[Scanner] Using debounced listener (70ms timeout) to handle rapid keystrokes');
-
-            // Re-focus every 2 seconds to ensure we don't lose focus (iPad issue)
-            setInterval(ensureFocus, 2000);
-        });
-
-        // Click anywhere to ensure focus (for iframe scenarios)
-        document.body.addEventListener('click', ensureFocus);
-        document.body.addEventListener('touchstart', ensureFocus);
-
-        // Try to grab focus when page becomes visible
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                ensureFocus();
-            }
-        });
-
-        // Debounced keyboard listener - prevents browser overwhelm from rapid scanner input
-        document.addEventListener('keydown', (e) => {
-            const char = e.key;
-
-            // Build buffer from printable characters
-            if (char.length === 1) {
-                barcodeBuffer += char;
-                console.log('[Scanner] Keystroke buffered (total: ' + barcodeBuffer.length + ' chars)');
-
-                // Trigger morphing animation on first keystroke
-                if (barcodeBuffer.length === 1) {
-                    triggerScanningAnimation();
-
-                    // Update focus indicator to show we're receiving input
-                    const indicator = document.getElementById('focusIndicator');
-                    if (indicator) {
-                        indicator.style.background = 'rgba(251, 146, 60, 0.2)';
-                        indicator.style.borderColor = '#fb923c';
-                        indicator.style.color = '#fb923c';
-                        indicator.textContent = '📡 Receiving scan data...';
-                    }
-                }
-
-                // Prevent default to avoid browser UI interference
-                e.preventDefault();
-            }
-
-            // Clear existing timeout
-            if (scanTimeout) {
-                clearTimeout(scanTimeout);
-            }
-
-            // Set new timeout - if no more keystrokes come in 70ms, scan is complete
-            scanTimeout = setTimeout(() => {
-                if (barcodeBuffer.length >= MIN_SCAN_LENGTH) {
-                    console.log('[Scanner] Scan complete (debounce timeout reached)');
-                    console.log('[Scanner] Buffer length:', barcodeBuffer.length);
-                    console.log('[Scanner] Buffer preview:', barcodeBuffer.substring(0, 100));
-
-                    // Process the complete scan
-                    handleBluetoothScan(barcodeBuffer);
-                } else if (barcodeBuffer.length > 0) {
-                    console.warn('[Scanner] Buffer too short, ignoring:', barcodeBuffer.length, 'chars');
-                }
-
-                // Reset buffer
-                barcodeBuffer = '';
-                scanTimeout = null;
-            }, SCAN_DEBOUNCE_MS);
-        });
-
         async function handleBluetoothScan(barcodeData) {
-            console.log('[Scanner] handleBluetoothScan called with data:', {
-                length: barcodeData.length,
-                preview: barcodeData.substring(0, 100),
-                startsWithPrefix: barcodeData.startsWith(PDF417_PREFIX)
-            });
-
-            // Visual feedback
-            const statusText = document.querySelector('.status-waiting p');
-            if (statusText) statusText.textContent = "Processing Scan...";
+            statusText.textContent = '⏳ Processing...';
 
             let cleanData = barcodeData;
             if (cleanData.startsWith(PDF417_PREFIX)) {
@@ -650,14 +669,6 @@ Expected parameters:
                     cleanData = cleanData.substring(1);
                 }
             }
-
-            console.log('[Scanner] Cleaned barcode data:', {
-                originalLength: barcodeData.length,
-                cleanedLength: cleanData.length,
-                preview: cleanData.substring(0, 100)
-            });
-
-            console.log('[Scanner] Sending POST request to:', `/api/sales/${saleId}/verify-bluetooth`);
 
             try {
                 const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
@@ -670,35 +681,96 @@ Expected parameters:
                     })
                 });
 
-                console.log('[Scanner] Response status:', response.status);
                 const data = await response.json();
-                console.log('[Scanner] Response data:', data);
 
                 if (data.success && data.approved) {
-                    console.log('[Scanner] ✓ Scan approved - proceeding to complete sale');
                     clearInterval(pollInterval);
-                    showSuccess(data);
-                    setTimeout(completeSale, 1000);
+                    showSuccess({ customerName: data.customerName || 'Customer' });
+                    setTimeout(completeSale, 1500);
                 } else {
-                    console.warn('[Scanner] ✗ Scan rejected:', data.reason);
-                    showRejected(data.reason || 'Verification Failed');
+                    showError(data.reason || 'Verification Failed');
                 }
             } catch (e) {
-                console.error('[Scanner] ✗ Bluetooth scan error:', e);
-                showError('Scan processing failed: ' + e.message);
+                console.error('Bluetooth scan error', e);
+                showError('Scan processing failed');
             }
         }
 
-        // --- Override Logic ---
+        async function checkStatus() {
+            try {
+                const response = await fetch(`/api/sales/${saleId}/status`);
+                const data = await response.json();
+
+                if (data.status === 'approved' || data.status === 'approved_override') {
+                    clearInterval(pollInterval);
+                    showSuccess(data);
+                    setTimeout(completeSale, 1500);
+                } else if (data.status === 'rejected') {
+                    clearInterval(pollInterval);
+                    showError(data.reason || 'ID Verification Failed');
+                }
+            } catch (e) {
+                console.error('Polling error', e);
+            }
+        }
+
+        async function completeSale() {
+            try {
+                await fetch(`/api/sales/${saleId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ approved: true })
+                });
+                window.parent.postMessage('ACCEPT', '*');
+            } catch (e) {
+                showError('Failed to complete sale.');
+            }
+        }
+
+        function cancelVerification() {
+            clearInterval(pollInterval);
+            window.parent.postMessage('DECLINE', '*');
+        }
+
+        // ========== STATE MANAGEMENT ==========
+        function showSuccess(data) {
+            document.getElementById('scan-state').classList.remove('active');
+            document.getElementById('error-state').classList.remove('active');
+            document.getElementById('success-state').classList.add('active');
+            document.getElementById('success-details').textContent = `${data.customerName || 'Customer'} verified ✓`;
+        }
+
+        function showError(message) {
+            document.getElementById('scan-state').classList.remove('active');
+            document.getElementById('success-state').classList.remove('active');
+            document.getElementById('error-state').classList.add('active');
+            document.getElementById('error-details').textContent = message;
+        }
+
+        function retry() {
+            document.getElementById('error-state').classList.remove('active');
+            document.getElementById('scan-state').classList.add('active');
+
+            statusText.textContent = '🎯 READY';
+            statusText.parentElement.style.borderColor = '#10b981';
+            statusText.parentElement.style.color = '#10b981';
+            container.classList.remove('scanning');
+
+            startPolling();
+            ensureFocus();
+        }
+
+        // ========== OVERRIDE MODAL ==========
         function showOverrideModal() {
-            document.getElementById('override-modal').style.display = 'flex';
+            document.getElementById('override-modal').classList.add('active');
             document.getElementById('manager-pin').value = '';
             document.getElementById('override-note').value = '';
             document.getElementById('manager-pin').focus();
         }
 
         function closeOverrideModal() {
-            document.getElementById('override-modal').style.display = 'none';
+            document.getElementById('override-modal').classList.remove('active');
+            ensureFocus();
         }
 
         async function submitOverride() {
@@ -727,8 +799,8 @@ Expected parameters:
 
                 if (data.success) {
                     closeOverrideModal();
-                    showSuccess({ customerName: 'Manual Override', age: '21+' });
-                    setTimeout(completeSale, 1000);
+                    showSuccess({ customerName: 'Manual Override' });
+                    setTimeout(completeSale, 1500);
                 } else {
                     alert(data.message || 'Override Failed');
                 }
@@ -736,86 +808,6 @@ Expected parameters:
                 console.error('Override error', e);
                 alert('Failed to process override');
             }
-        }
-
-        async function checkStatus() {
-            try {
-                const response = await fetch(`/api/sales/${saleId}/status`);
-                const data = await response.json();
-
-                if (data.status === 'approved' || data.status === 'approved_override') {
-                    clearInterval(pollInterval);
-                    showSuccess(data);
-                    setTimeout(completeSale, 1000);
-                } else if (data.status === 'rejected') {
-                    clearInterval(pollInterval);
-                    showRejected(data.reason || 'ID Verification Failed');
-                }
-            } catch (e) {
-                console.error('Polling error', e);
-            }
-        }
-
-        async function completeSale() {
-            try {
-                await fetch(`/api/sales/${saleId}/complete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ approved: true })
-                });
-
-                // Send postMessage to parent iframe (Lightspeed)
-                window.parent.postMessage('ACCEPT', '*');
-
-                // Auto-close back to Lightspeed after 2 seconds
-                console.log('[Scanner] Sale completed - auto-closing in 2 seconds');
-                setTimeout(() => {
-                    closeScanner();
-                }, 2000);
-            } catch (e) {
-                showError('Failed to complete sale. Please try again.');
-            }
-        }
-
-        function closeScanner() {
-            console.log('[Scanner] Closing scanner and returning to Lightspeed');
-
-            // Force navigation back to the main Sell screen
-            // This works even inside the iOS app wrapper as it resets the webview
-            window.location.href = 'https://retail.lightspeed.app/sell';
-        }
-
-        function showSuccess(data) {
-            document.getElementById('statusWaiting').classList.remove('active');
-            document.getElementById('statusSuccess').classList.add('active');
-            document.getElementById('successName').textContent = data.customerName || 'Customer';
-            document.getElementById('successAge').textContent = data.age ? `Age: ${data.age}` : 'Age Verified';
-
-            // Add visual feedback that page will auto-close
-            const successContainer = document.getElementById('statusSuccess');
-            const autoCloseMsg = document.createElement('p');
-            autoCloseMsg.style.fontSize = '14px';
-            autoCloseMsg.style.color = 'rgba(255, 255, 255, 0.7)';
-            autoCloseMsg.style.marginTop = '16px';
-            autoCloseMsg.textContent = 'Returning to POS in 2 seconds...';
-            successContainer.appendChild(autoCloseMsg);
-        }
-
-        function showRejected(reason) {
-            document.getElementById('statusWaiting').classList.remove('active');
-            document.getElementById('statusRejected').classList.add('active');
-            document.getElementById('rejectReason').textContent = reason;
-        }
-
-        function showError(message) {
-            document.getElementById('statusWaiting').classList.remove('active');
-            document.getElementById('statusError').classList.add('active');
-            const errorEl = document.getElementById('errorMessage');
-            errorEl.style.whiteSpace = 'pre-wrap';
-            errorEl.style.textAlign = 'left';
-            errorEl.style.fontFamily = 'monospace';
-            errorEl.style.fontSize = '14px';
-            errorEl.textContent = message;
         }
     </script>
 </body>
