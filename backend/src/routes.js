@@ -369,13 +369,33 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
   const { saleId } = req.params;
   const { barcodeData, registerId, clerkId } = req.body;
 
+  // DEBUG LOGGING - Log every scan attempt
+  console.log('===========================================');
+  console.log('🔫 BLUETOOTH SCANNER SCAN RECEIVED');
+  console.log('===========================================');
+  console.log('Sale ID:', saleId);
+  console.log('Register ID:', registerId);
+  console.log('Clerk ID:', clerkId);
+  console.log('Barcode Length:', barcodeData ? barcodeData.length : 0);
+  console.log('Barcode First 100 chars:', barcodeData ? barcodeData.substring(0, 100) : 'EMPTY');
+  console.log('Barcode Last 50 chars:', barcodeData && barcodeData.length > 50 ? barcodeData.substring(barcodeData.length - 50) : barcodeData);
+  console.log('Has ]L prefix:', barcodeData ? barcodeData.startsWith(']L') : false);
+  console.log('Has @ANSI prefix:', barcodeData ? barcodeData.startsWith('@ANSI') : false);
+  console.log('Line breaks (\\n):', barcodeData ? (barcodeData.match(/\n/g) || []).length : 0);
+  console.log('Carriage returns (\\r):', barcodeData ? (barcodeData.match(/\r/g) || []).length : 0);
+  console.log('===========================================');
+
   if (!barcodeData) {
+    console.log('❌ ERROR: No barcode data provided');
     return res.status(400).json({ success: false, error: 'Barcode data is required.' });
   }
 
   try {
     // 1. Parse the Barcode
     let parsed = parseAAMVA(barcodeData);
+
+    // Log parse result
+    console.log('📊 PARSE RESULT:', JSON.stringify(parsed, null, 2));
 
     // Fallback if parsing failed (or not AAMVA)
     if (!parsed || !parsed.age) {
@@ -478,6 +498,15 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     // 6. Update In-Memory Store (for Polling) - ONLY after DB save succeeds
     saleVerificationStore.updateVerification(saleId, verificationResult);
 
+    // Final success logging
+    console.log('===========================================');
+    console.log('✅ SCAN PROCESSED SUCCESSFULLY');
+    console.log('Approved:', approved);
+    console.log('Customer:', verificationResult.customerName);
+    console.log('Age:', parsed.age);
+    console.log('Reason:', reason || 'N/A');
+    console.log('===========================================\n');
+
     res.json({
       success: true,
       approved,
@@ -487,7 +516,11 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error processing Bluetooth scan:', error);
+    console.error('===========================================');
+    console.error('❌ ERROR PROCESSING BLUETOOTH SCAN');
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('===========================================\n');
     res.status(500).json({ success: false, error: 'Internal server error during Bluetooth scan processing.' });
   }
 });
