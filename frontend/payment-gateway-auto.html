@@ -616,13 +616,6 @@ Expected parameters:
         function closeScanner() {
             console.log('[Scanner] Closing scanner and returning to Lightspeed');
 
-            // Check if running locally to avoid breaking dev workflow
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                console.log('[DEV] Would return to: https://retail.lightspeed.app/sell');
-                alert('Closing scanner → Returning to Lightspeed POS');
-                return;
-            }
-
             // Force navigation back to the main Sell screen
             // This works even inside the iOS app wrapper as it resets the webview
             window.location.href = 'https://retail.lightspeed.app/sell';

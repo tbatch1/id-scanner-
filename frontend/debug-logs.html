@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Scanner Debug Logs</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #0f172a;
+            color: #f4f6ff;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        h1 {
+            color: #3b82f6;
+            margin-bottom: 20px;
+        }
+        #logs {
+            background: #1e293b;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            padding: 20px;
+            height: 80vh;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-left: 3px solid #10b981;
+            background: #334155;
+            border-radius: 4px;
+        }
+        .log-entry.error {
+            border-left-color: #ef4444;
+            background: #450a0a;
+        }
+        .log-entry.scan {
+            border-left-color: #f59e0b;
+            background: #422006;
+        }
+        .timestamp {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .clear-btn {
+            background: #ef4444;
+        }
+        .clear-btn:hover {
+            background: #dc2626;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔫 Live Scanner Debug Logs</h1>
+
+    <div class="controls">
+        <button onclick="location.href='/frontend/payment-gateway-auto.html?reference_id=test123'">Open Payment Gateway</button>
+        <button class="clear-btn" onclick="clearLogs()">Clear Logs</button>
+    </div>
+
+    <div id="logs">
+        <div class="log-entry">
+            <span class="timestamp">[System]</span> Waiting for scanner events...
+        </div>
+    </div>
+
+    <script>
+        const logsContainer = document.getElementById('logs');
+        let eventSource = null;
+
+        // Create a custom event logger that listens to scanner events
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+
+            const timestamp = new Date().toLocaleTimeString('en-US', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                fractionalSecondDigits: 3
+            });
+
+            entry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+            logsContainer.appendChild(entry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+
+            // Keep only last 100 entries
+            while (logsContainer.children.length > 100) {
+                logsContainer.removeChild(logsContainer.firstChild);
+            }
+        }
+
+        function clearLogs() {
+            logsContainer.innerHTML = '<div class="log-entry"><span class="timestamp">[System]</span> Logs cleared</div>';
+        }
+
+        // Poll for recent scans
+        let lastCheckTime = Date.now();
+
+        async function pollForScans() {
+            try {
+                const response = await fetch('/api/admin/scans?limit=1');
+                const scans = await response.json();
+
+                if (scans.length > 0) {
+                    const scan = scans[0];
+                    const scanTime = new Date(scan.created_at).getTime();
+
+                    if (scanTime > lastCheckTime) {
+                        addLog(`🔫 SCAN RECEIVED: ${scan.first_name} ${scan.last_name}, Age: ${scan.age}, Status: ${scan.status}`, 'scan');
+                        lastCheckTime = scanTime;
+                    }
+                }
+            } catch (e) {
+                // Silently ignore polling errors
+            }
+        }
+
+        // Poll every 2 seconds
+        setInterval(pollForScans, 2000);
+
+        // Listen for storage events from the payment gateway page
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'scanner_debug_log') {
+                const logData = JSON.parse(e.newValue);
+                addLog(logData.message, logData.type);
+            }
+        });
+
+        // Also listen for postMessage from payment gateway
+        window.addEventListener('message', (e) => {
+            if (e.data && e.data.type === 'scanner_log') {
+                addLog(e.data.message, e.data.level || 'info');
+            }
+        });
+
+        addLog('✅ Debug logger ready', 'info');
+        addLog('Open payment gateway in another tab/window to see logs', 'info');
+    </script>
+</body>
+</html>
