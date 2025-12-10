@@ -448,8 +448,26 @@
         });
 
         container.addEventListener('touchstart', (e) => {
-            ensureFocus();
             e.preventDefault();
+            ensureFocus();
+
+            // Visual feedback - same as click handler
+            statusText.textContent = '🎯 FOCUSED - SCAN NOW';
+            statusText.parentElement.style.borderColor = '#10b981';
+            statusText.parentElement.style.color = '#10b981';
+
+            // Tactile animation on touch
+            gsap.to(container, {
+                scale: 1.02,
+                duration: 0.1,
+                yoyo: true,
+                repeat: 1
+            });
+
+            // Extra smoke burst on tap
+            for (let i = 0; i < 5; i++) {
+                setTimeout(createSmoke, i * 50);
+            }
         });
 
         // Initialize
