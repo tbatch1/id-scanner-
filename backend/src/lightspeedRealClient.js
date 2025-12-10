@@ -234,6 +234,67 @@ async function searchCustomers({ dlNumber, firstName, lastName, email, phone }) 
 }
 
 /**
+ * Create a new customer in Lightspeed
+ * @param {Object} customerData - Customer information from ID scan
+ * @param {string} customerData.firstName - First name
+ * @param {string} customerData.lastName - Last name
+ * @param {string} customerData.documentNumber - Driver's license number
+ * @param {string} customerData.dob - Date of birth
+ * @param {string} customerData.email - Email (optional)
+ * @param {string} customerData.phone - Phone (optional)
+ * @returns {Promise<Object|null>} Created customer object or null
+ */
+async function createCustomer({ firstName, lastName, documentNumber, dob, email, phone }) {
+  try {
+    logger.info({
+      event: 'creating_customer',
+      firstName,
+      lastName,
+      documentNumber
+    });
+
+    // Prepare customer payload
+    const customerPayload = {
+      first_name: firstName,
+      last_name: lastName,
+      // Store DL number in custom field for future searches
+      custom_field_1: documentNumber,
+      custom_field_1_name: 'DL Number',
+      // Optional fields
+      email: email || null,
+      phone: phone || null,
+      date_of_birth: dob || null,
+      // Enable loyalty by default
+      enable_loyalty: true
+    };
+
+    // Create customer via API
+    const response = await api.post('/customers', customerPayload);
+    const customer = response.data.data;
+
+    logger.info({
+      event: 'customer_created_success',
+      customerId: customer.id,
+      name: `${customer.first_name} ${customer.last_name}`,
+      msg: 'New customer created in Lightspeed - will appear in customer picker'
+    });
+
+    return customer;
+
+  } catch (error) {
+    logger.error({
+      event: 'create_customer_failed',
+      firstName,
+      lastName,
+      error: error.message,
+      response: error.response?.data,
+      stack: error.stack
+    });
+    return null;
+  }
+}
+
+/**
  * Attach a customer to a sale for loyalty tracking
  * @param {string} saleId - The sale ID
  * @param {string} customerId - The customer ID
@@ -308,5 +369,6 @@ module.exports = {
   completeSale,
   listSales,
   searchCustomers,
+  createCustomer,
   attachCustomerToSale
 };

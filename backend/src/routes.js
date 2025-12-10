@@ -512,24 +512,49 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
           phone: null
         });
 
+        let customer = null;
+
         if (customers && customers.length > 0) {
-          const customer = customers[0];
+          // Customer exists - use them
+          customer = customers[0];
           console.log('✅ LOYALTY: Customer found!', {
             customerId: customer.id,
             name: `${customer.first_name} ${customer.last_name}`
           });
+        } else {
+          // Customer doesn't exist - create them!
+          console.log('📝 LOYALTY: Customer not found - creating new customer profile');
+          customer = await lightspeed.createCustomer({
+            firstName: parsed.firstName,
+            lastName: parsed.lastName,
+            documentNumber: parsed.documentNumber,
+            dob: parsed.dob ? parsed.dob.toISOString().split('T')[0] : null,
+            email: null,
+            phone: null
+          });
 
-          // Attach customer to sale
+          if (customer) {
+            console.log('🆕 LOYALTY: New customer created!', {
+              customerId: customer.id,
+              name: `${customer.first_name} ${customer.last_name}`,
+              msg: 'Customer will now appear in iPad customer picker'
+            });
+          } else {
+            console.log('⚠️ LOYALTY: Failed to create customer');
+          }
+        }
+
+        // Attach customer to sale (whether found or newly created)
+        if (customer && customer.id) {
           const attached = await lightspeed.attachCustomerToSale(saleId, customer.id);
 
           if (attached) {
-            console.log('🎉 LOYALTY: Customer linked to sale - points will be earned!');
+            console.log('🎉 LOYALTY: Customer linked to sale!');
+            console.log('💎 Customer name will appear on iPad screen');
+            console.log('⭐ Loyalty points will be earned automatically');
           } else {
             console.log('⚠️ LOYALTY: Failed to attach customer to sale');
           }
-        } else {
-          console.log('ℹ️ LOYALTY: Customer not found in system (first-time visitor or not registered)');
-          console.log('ℹ️ LOYALTY: Consider creating customer profile for future visits');
         }
       } catch (loyaltyError) {
         // Don't fail the entire verification if loyalty integration fails
