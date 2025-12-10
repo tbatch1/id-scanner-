@@ -3,162 +3,425 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ID Verification</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ID Verification - THC Club</title>
+
+    <!-- GSAP Animation Library (Free CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         :root {
-            --bg-color: #f4f6f8;
-            --card-bg: #ffffff;
-            --text-primary: #212b36;
-            --text-secondary: #637381;
-            --success: #36b37e;
-            --error: #ff5630;
-            --warning: #ffab00;
-            --border: #dfe3e8;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-primary);
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-gradient);
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            margin: 0;
-            padding: 20px;
-            text-align: center;
+            overflow: hidden;
+            position: relative;
+            touch-action: manipulation;
         }
 
-        .card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            padding: 40px;
-            max-width: 400px;
-            width: 100%;
-        }
-
-        h1 {
-            font-size: 24px;
-            margin-bottom: 10px;
-        }
-
-        p {
-            color: var(--text-secondary);
-            margin-bottom: 30px;
-            line-height: 1.5;
-        }
-
-        .status-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-            display: block;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(0, 0, 0, 0.1);
+        /* Animated background particles */
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
             border-radius: 50%;
-            border-top-color: var(--success);
-            animation: spin 1s ease-in-out infinite;
-            margin-bottom: 20px;
+            pointer-events: none;
         }
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
+        /* Main container for all states */
+        .state-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .state-container.active {
+            display: flex;
+        }
+
+        /* ========== TAP TO SCAN STATE ========== */
+        .scanner-container {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 32px;
+            padding: 50px 60px;
+            box-shadow:
+                0 25px 50px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .scanner-container:active {
+            transform: scale(0.98);
+        }
+
+        /* 3D Joint */
+        .joint-wrapper {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            margin: 0 auto 30px;
+            perspective: 1000px;
+        }
+
+        .joint {
+            position: relative;
+            width: 70px;
+            height: 140px;
+            margin: 0 auto;
+            transform-style: preserve-3d;
+        }
+
+        .joint-body {
+            position: absolute;
+            width: 70px;
+            height: 120px;
+            background: linear-gradient(to right,
+                    #f5f5f5 0%,
+                    #fff 20%,
+                    #f5f5f5 40%,
+                    #fff 60%,
+                    #f5f5f5 80%,
+                    #fff 100%);
+            border-radius: 6px 6px 3px 3px;
+            box-shadow:
+                inset 2px 0 10px rgba(0, 0, 0, 0.1),
+                inset -2px 0 10px rgba(0, 0, 0, 0.1),
+                0 5px 20px rgba(0, 0, 0, 0.3);
+            top: 20px;
+        }
+
+        .joint-line {
+            position: absolute;
+            width: 70px;
+            height: 1.5px;
+            background: rgba(0, 0, 0, 0.1);
+            left: 0;
+        }
+
+        .joint-tip {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 26px;
+            height: 26px;
+            background: radial-gradient(circle, #ff6b35 0%, #ff4520 50%, #8b2500 100%);
+            border-radius: 50%;
+            box-shadow:
+                0 0 20px #ff6b35,
+                0 0 40px rgba(255, 107, 53, 0.5);
+            filter: brightness(1.2);
+        }
+
+        .glow {
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, rgba(255, 107, 53, 0.8) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .smoke {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.5) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(6px);
+            pointer-events: none;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 50%;
+            left: -100%;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent 0%, rgba(0, 255, 136, 0.9) 50%, transparent 100%);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.8);
+            opacity: 0;
+        }
+
+        .scanner-container h1 {
+            color: white;
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            text-shadow: 0 3px 15px rgba(0, 0, 0, 0.4);
+            letter-spacing: 1px;
+        }
+
+        .scanner-container p {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 18px;
+            font-weight: 400;
+            margin-bottom: 25px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 14px 35px;
+            background: rgba(16, 185, 129, 0.15);
+            border: 2px solid var(--success);
+            border-radius: 50px;
+            color: var(--success);
+            font-weight: 600;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(16, 185, 129, 0.5);
             }
         }
 
+        .scanning .joint-tip {
+            animation: ember-pulse 0.4s infinite;
+        }
+
+        @keyframes ember-pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px #ff6b35, 0 0 40px rgba(255, 107, 53, 0.5);
+                transform: translateX(-50%) scale(1);
+            }
+
+            50% {
+                box-shadow: 0 0 35px #ff6b35, 0 0 70px rgba(255, 107, 53, 0.8);
+                transform: translateX(-50%) scale(1.15);
+            }
+        }
+
+        /* Override Button */
+        .override-btn {
+            margin-top: 25px;
+            padding: 14px 28px;
+            background: rgba(245, 158, 11, 0.2);
+            border: 2px solid var(--warning);
+            border-radius: 12px;
+            color: var(--warning);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .override-btn:active {
+            background: rgba(245, 158, 11, 0.35);
+            transform: scale(0.98);
+        }
+
+        .cancel-link {
+            margin-top: 15px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        /* ========== SUCCESS STATE ========== */
+        #success-state {
+            animation: fadeIn 0.4s ease;
+        }
+
+        .success-icon {
+            font-size: 100px;
+            margin-bottom: 20px;
+            animation: bounceIn 0.6s ease;
+        }
+
+        @keyframes bounceIn {
+            0% {
+                transform: scale(0);
+            }
+
+            50% {
+                transform: scale(1.2);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        #success-state h1 {
+            color: var(--success);
+            font-size: 42px;
+            margin-bottom: 10px;
+        }
+
+        #success-state p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 20px;
+        }
+
+        /* ========== ERROR STATE ========== */
+        #error-state {
+            animation: fadeIn 0.4s ease;
+        }
+
+        .error-icon {
+            font-size: 100px;
+            margin-bottom: 20px;
+        }
+
+        #error-state h1 {
+            color: var(--error);
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+
+        #error-state p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
         .btn {
-            background-color: var(--text-secondary);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
+            padding: 14px 30px;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: opacity 0.2s;
-            margin-top: 20px;
-        }
-
-        .btn:hover {
-            opacity: 0.9;
-        }
-
-        .btn-cancel {
-            background-color: transparent;
-            color: var(--text-secondary);
-            border: 1px solid var(--border);
-            margin-top: 10px;
-        }
-
-        .btn-warning {
-            background-color: var(--warning);
-            color: white;
             border: none;
-            margin-top: 10px;
+            transition: all 0.2s;
+            margin: 5px;
         }
 
-        .btn-warning:hover {
-            background-color: #e69500;
+        .btn-retry {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
         }
 
-        #status-text {
-            font-weight: 600;
-            font-size: 18px;
+        .btn-override {
+            background: rgba(245, 158, 11, 0.2);
+            border: 2px solid var(--warning);
+            color: var(--warning);
         }
 
-        .hidden {
-            display: none;
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
-        /* Modal Styles */
+        /* ========== MODAL ========== */
         .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
             align-items: center;
             justify-content: center;
             z-index: 1000;
         }
 
+        .modal-overlay.active {
+            display: flex;
+        }
+
         .modal {
-            background: white;
-            padding: 24px;
-            border-radius: 12px;
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 20px;
             width: 90%;
-            max-width: 320px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            max-width: 340px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal h2 {
+            color: white;
+            margin-bottom: 10px;
+        }
+
+        .modal p {
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 20px;
+            font-size: 14px;
         }
 
         .pin-input {
-            font-size: 24px;
-            letter-spacing: 4px;
-            text-align: center;
             width: 100%;
-            padding: 12px;
-            margin: 16px 0;
-            border: 1px solid var(--border);
-            border-radius: 8px;
+            padding: 16px;
+            font-size: 28px;
+            letter-spacing: 8px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            margin-bottom: 15px;
+        }
+
+        .pin-input:focus {
+            outline: none;
+            border-color: var(--warning);
         }
 
         .note-input {
             width: 100%;
-            padding: 10px;
-            margin-bottom: 16px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
+            padding: 12px;
             font-size: 14px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: white;
+            margin-bottom: 20px;
         }
 
         .modal-actions {
@@ -167,66 +430,347 @@
             justify-content: flex-end;
         }
 
-        .modal-actions .btn {
-            margin-top: 0;
-            font-size: 14px;
-            padding: 10px 16px;
+        .hidden {
+            display: none !important;
         }
     </style>
 </head>
 
 <body>
+    <!-- Background particles container -->
+    <div id="particles"></div>
 
-    <div class="card" id="loading-card">
-        <img src="/frontend/assets/thc-logo.png" alt="THC Club"
-            style="width: 280px; height: auto; margin-bottom: 40px; filter: drop-shadow(0 0 20px rgba(90, 84, 255, 0.3));">
-        <div class="spinner"></div>
-        <h1>Waiting for ID Scan...</h1>
-        <p style="font-size: 24px; color: rgba(33, 43, 54, 0.9);">Scan ID now</p>
-        <div id="status-text">Listening for verification...</div>
-        <button class="btn btn-warning" onclick="showOverrideModal()"
-            style="margin-top: 40px; padding: 16px 32px; font-size: 18px; cursor: pointer;">Manual ID Override</button>
-        <button class="btn btn-cancel" onclick="cancelVerification()">Cancel</button>
+    <!-- Hidden input for iOS HID focus - Required for iPad Bluetooth scanner -->
+    <input type="text" id="hiddenScannerInput"
+        style="position: absolute; left: -9999px; opacity: 0; width: 1px; height: 1px;" autocomplete="off"
+        autocorrect="off" autocapitalize="off" spellcheck="false" />
+
+    <!-- ========== STATE 1: TAP TO SCAN ========== -->
+    <div id="scan-state" class="state-container active">
+        <div class="scanner-container" id="scannerContainer">
+            <div class="joint-wrapper">
+                <div class="joint">
+                    <div class="joint-tip">
+                        <div class="glow"></div>
+                    </div>
+                    <div class="joint-body">
+                        <div class="joint-line" style="top: 18px;"></div>
+                        <div class="joint-line" style="top: 36px;"></div>
+                        <div class="joint-line" style="top: 54px;"></div>
+                        <div class="joint-line" style="top: 72px;"></div>
+                        <div class="joint-line" style="top: 90px;"></div>
+                    </div>
+                    <div class="scan-line" id="scanLine"></div>
+                </div>
+            </div>
+
+            <h1>TAP TO SCAN</h1>
+            <p>Touch here, then scan customer's ID</p>
+
+            <div class="status-badge">
+                <span id="statusText">🎯 READY</span>
+            </div>
+        </div>
+
+        <button class="override-btn" onclick="showOverrideModal()">Manual ID Override</button>
+        <div class="cancel-link" onclick="cancelVerification()">Cancel</div>
     </div>
 
-    <div class="card hidden" id="success-card">
-        <span class="status-icon">✅</span>
-        <h1>ID Verified</h1>
-        <p id="success-details">Age 21+ confirmed.</p>
-        <button class="btn" style="background-color: var(--success);" onclick="completeSale()">Complete Sale</button>
+    <!-- ========== STATE 2: SUCCESS ========== -->
+    <div id="success-state" class="state-container">
+        <div class="success-icon">✅</div>
+        <h1>ID VERIFIED</h1>
+        <p id="success-details">Age 21+ Confirmed</p>
     </div>
 
-    <div class="card hidden" id="error-card">
-        <span class="status-icon">❌</span>
+    <!-- ========== STATE 3: ERROR ========== -->
+    <div id="error-state" class="state-container">
+        <div class="error-icon">❌</div>
         <h1>Verification Failed</h1>
-        <p id="error-details">Customer is under 21.</p>
-        <button class="btn btn-cancel" onclick="retry()">Try Again</button>
-        <button class="btn btn-warning" onclick="showOverrideModal()">Manual ID Override</button>
+        <p id="error-details">Customer is under 21</p>
+        <div>
+            <button class="btn btn-retry" onclick="retry()">Try Again</button>
+            <button class="btn btn-override" onclick="showOverrideModal()">Manual Override</button>
+        </div>
     </div>
 
-    <div id="override-modal" class="modal-overlay hidden">
+    <!-- ========== OVERRIDE MODAL ========== -->
+    <div id="override-modal" class="modal-overlay">
         <div class="modal">
-            <h2>Manual ID Override</h2>
-            <p>Enter Manager PIN to bypass verification.</p>
-            <input type="password" id="manager-pin" class="pin-input" placeholder="Enter PIN" maxlength="4" />
-            <input type="text" id="override-note" class="note-input" placeholder="Reason (Optional)" />
+            <h2>Manager Override</h2>
+            <p>Enter manager PIN to bypass verification</p>
+            <input type="password" id="manager-pin" class="pin-input" placeholder="••••" maxlength="4"
+                inputmode="numeric" />
+            <input type="text" id="override-note" class="note-input" placeholder="Reason (optional)" />
             <div class="modal-actions">
-                <button class="btn btn-cancel" onclick="closeOverrideModal()">Cancel</button>
-                <button class="btn btn-warning" onclick="submitOverride()">Override</button>
+                <button class="btn btn-retry" onclick="closeOverrideModal()">Cancel</button>
+                <button class="btn btn-override" onclick="submitOverride()">Override</button>
             </div>
         </div>
     </div>
 
     <script>
+        // ========== ANIMATION SETUP ==========
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 40; i++) {
+                const p = document.createElement('div');
+                p.classList.add('particle');
+                p.style.left = Math.random() * 100 + '%';
+                p.style.top = Math.random() * 100 + '%';
+                container.appendChild(p);
+                gsap.to(p, {
+                    y: -80,
+                    x: Math.random() * 60 - 30,
+                    opacity: 0,
+                    duration: Math.random() * 3 + 2,
+                    repeat: -1,
+                    delay: Math.random() * 2
+                });
+            }
+        }
+
+        function createSmoke() {
+            const wrapper = document.querySelector('.joint-wrapper');
+            if (!wrapper) return;
+            const smoke = document.createElement('div');
+            smoke.classList.add('smoke');
+            smoke.style.left = '50%';
+            smoke.style.top = '25px';
+            smoke.style.transform = 'translateX(-50%)';
+            wrapper.appendChild(smoke);
+            gsap.to(smoke, {
+                y: -80,
+                x: Math.random() * 30 - 15,
+                opacity: 0,
+                scale: 1.8,
+                duration: 2.5,
+                onComplete: () => smoke.remove()
+            });
+        }
+
+        // Continuous smoke
+        setInterval(createSmoke, 600);
+
+        // Joint floating animation
+        gsap.to('.joint', { y: -8, duration: 2, ease: 'power1.inOut', yoyo: true, repeat: -1 });
+        gsap.to('.joint', { rotationY: 360, duration: 25, ease: 'none', repeat: -1 });
+        gsap.to('.glow', { scale: 1.3, opacity: 0.5, duration: 1, yoyo: true, repeat: -1, ease: 'power1.inOut' });
+
+        // Initialize particles
+        createParticles();
+
+        // Entrance animation
+        gsap.from('.scanner-container', { scale: 0.85, opacity: 0, duration: 0.8, ease: 'back.out(1.5)' });
+
+        // ========== iOS FOCUS HANDLING ==========
+        const hiddenInput = document.getElementById('hiddenScannerInput');
+        const container = document.getElementById('scannerContainer');
+        const statusText = document.getElementById('statusText');
+        const scanLine = document.getElementById('scanLine');
+
+        function ensureFocus() {
+            hiddenInput.focus();
+            console.log('[Scanner] Focus activated');
+        }
+
+        // Re-focus every 2 seconds (iOS steals focus)
+        setInterval(ensureFocus, 2000);
+
+        // Touch handling for iPad
+        container.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            activateScanner();
+        });
+
+        container.addEventListener('click', activateScanner);
+
+        function activateScanner() {
+            ensureFocus();
+
+            statusText.textContent = '📡 SCANNING...';
+            statusText.parentElement.style.borderColor = '#f59e0b';
+            statusText.parentElement.style.color = '#f59e0b';
+            container.classList.add('scanning');
+
+            // Visual feedback
+            gsap.to(container, { scale: 1.02, duration: 0.1, yoyo: true, repeat: 1 });
+
+            // Smoke burst
+            for (let i = 0; i < 6; i++) {
+                setTimeout(createSmoke, i * 60);
+            }
+        }
+
+        // ========== BLUETOOTH SCANNER LISTENER ==========
+        let barcodeBuffer = '';
+        let lastKeyTime = 0;
+        const SCAN_TIMEOUT = 100;
+        const PDF417_PREFIX = ']L';
+
+        document.addEventListener('keydown', (e) => {
+            const currentTime = Date.now();
+            const isPrintable = e.key.length === 1;
+
+            if (currentTime - lastKeyTime > SCAN_TIMEOUT && barcodeBuffer.length > 0) {
+                if (!barcodeBuffer.startsWith(PDF417_PREFIX)) {
+                    barcodeBuffer = '';
+                }
+            }
+
+            lastKeyTime = currentTime;
+
+            if (e.key === 'Enter') {
+                if (barcodeBuffer.length > 10) {
+                    handleBluetoothScan(barcodeBuffer);
+                }
+                barcodeBuffer = '';
+            } else if (isPrintable) {
+                barcodeBuffer += e.key;
+
+                // Show receiving indicator
+                if (barcodeBuffer.length === 1) {
+                    statusText.textContent = '📡 RECEIVING...';
+                    statusText.parentElement.style.borderColor = '#f59e0b';
+                    statusText.parentElement.style.color = '#f59e0b';
+                    container.classList.add('scanning');
+                }
+            }
+        });
+
+        // ========== API INTEGRATION ==========
+        const urlParams = new URLSearchParams(window.location.search);
+        const saleId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
+        const registerId = urlParams.get('register_id') || urlParams.get('registerId') || urlParams.get('outlet_id');
+        const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
+
+        console.log('Payment Gateway:', { saleId, registerId, clerkId, allParams: Object.fromEntries(urlParams.entries()) });
+
+        let pollInterval;
+
+        // Initialize
+        if (!saleId) {
+            showError('Missing Sale ID. Please open from Lightspeed.');
+        } else {
+            startPolling();
+        }
+
+        function startPolling() {
+            pollInterval = setInterval(checkStatus, 2000);
+        }
+
+        async function handleBluetoothScan(barcodeData) {
+            statusText.textContent = '⏳ Processing...';
+
+            let cleanData = barcodeData;
+            if (cleanData.startsWith(PDF417_PREFIX)) {
+                cleanData = cleanData.substring(PDF417_PREFIX.length);
+                if (cleanData.length > 0 && !isNaN(parseInt(cleanData[0]))) {
+                    cleanData = cleanData.substring(1);
+                }
+            }
+
+            try {
+                const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        barcodeData: cleanData,
+                        registerId: registerId || 'NETUM-NT1200',
+                        clerkId: clerkId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.approved) {
+                    clearInterval(pollInterval);
+                    showSuccess({ customerName: data.customerName || 'Customer' });
+                    setTimeout(completeSale, 1500);
+                } else {
+                    showError(data.reason || 'Verification Failed');
+                }
+            } catch (e) {
+                console.error('Bluetooth scan error', e);
+                showError('Scan processing failed');
+            }
+        }
+
+        async function checkStatus() {
+            try {
+                const response = await fetch(`/api/sales/${saleId}/status`);
+                const data = await response.json();
+
+                if (data.status === 'approved' || data.status === 'approved_override') {
+                    clearInterval(pollInterval);
+                    showSuccess(data);
+                    setTimeout(completeSale, 1500);
+                } else if (data.status === 'rejected') {
+                    clearInterval(pollInterval);
+                    showError(data.reason || 'ID Verification Failed');
+                }
+            } catch (e) {
+                console.error('Polling error', e);
+            }
+        }
+
+        async function completeSale() {
+            try {
+                await fetch(`/api/sales/${saleId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ approved: true })
+                });
+                window.parent.postMessage('ACCEPT', '*');
+            } catch (e) {
+                showError('Failed to complete sale.');
+            }
+        }
+
+        function cancelVerification() {
+            clearInterval(pollInterval);
+            window.parent.postMessage('DECLINE', '*');
+        }
+
+        // ========== STATE MANAGEMENT ==========
+        function showSuccess(data) {
+            document.getElementById('scan-state').classList.remove('active');
+            document.getElementById('error-state').classList.remove('active');
+            document.getElementById('success-state').classList.add('active');
+            document.getElementById('success-details').textContent = `${data.customerName || 'Customer'} verified ✓`;
+        }
+
+        function showError(message) {
+            document.getElementById('scan-state').classList.remove('active');
+            document.getElementById('success-state').classList.remove('active');
+            document.getElementById('error-state').classList.add('active');
+            document.getElementById('error-details').textContent = message;
+        }
+
+        function retry() {
+            document.getElementById('error-state').classList.remove('active');
+            document.getElementById('scan-state').classList.add('active');
+
+            statusText.textContent = '🎯 READY';
+            statusText.parentElement.style.borderColor = '#10b981';
+            statusText.parentElement.style.color = '#10b981';
+            container.classList.remove('scanning');
+
+            startPolling();
+            ensureFocus();
+        }
+
+        // ========== OVERRIDE MODAL ==========
         function showOverrideModal() {
-            document.getElementById('override-modal').classList.remove('hidden');
+            document.getElementById('override-modal').classList.add('active');
             document.getElementById('manager-pin').value = '';
             document.getElementById('override-note').value = '';
             document.getElementById('manager-pin').focus();
         }
 
         function closeOverrideModal() {
-            document.getElementById('override-modal').classList.add('hidden');
+            document.getElementById('override-modal').classList.remove('active');
+            ensureFocus();
         }
 
         async function submitOverride() {
@@ -256,7 +800,7 @@
                 if (data.success) {
                     closeOverrideModal();
                     showSuccess({ customerName: 'Manual Override' });
-                    setTimeout(completeSale, 1000);
+                    setTimeout(completeSale, 1500);
                 } else {
                     alert(data.message || 'Override Failed');
                 }
@@ -264,169 +808,6 @@
                 console.error('Override error', e);
                 alert('Failed to process override');
             }
-        }
-
-        // Parse query parameters from Lightspeed - support multiple parameter names
-        const urlParams = new URLSearchParams(window.location.search);
-        // Lightspeed Custom Payments uses 'reference_id' as the transaction/sale ID
-        const saleId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
-        const registerId = urlParams.get('register_id') || urlParams.get('registerId') || urlParams.get('outlet_id');
-        const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
-        const amount = urlParams.get('amount');
-
-        // Debug logging to help diagnose parameter issues
-        console.log('Payment Gateway Parameters:', {
-            saleId,
-            registerId,
-            clerkId,
-            amount,
-            allParams: Object.fromEntries(urlParams.entries())
-        });
-
-        let pollInterval;
-
-        // Initialize
-        if (!saleId) {
-            showError('Missing Sale ID. Please open from Lightspeed.');
-        } else {
-            startPolling();
-        }
-
-        function startPolling() {
-            // Poll the backend every 2 seconds to see if the Companion App has scanned an ID
-            pollInterval = setInterval(checkStatus, 2000);
-        }
-
-        // Bluetooth Scanner Listener (HID Mode)
-        // Optimized for NETUM NT-1200 and standard PDF417 Scanners
-        let barcodeBuffer = '';
-        let lastKeyTime = 0;
-        const SCAN_TIMEOUT = 100; // Increased to 100ms to be safe for Bluetooth latency
-        const PDF417_PREFIX = ']L'; // Common AIM ID for PDF417
-
-        document.addEventListener('keydown', (e) => {
-            const currentTime = Date.now();
-            const isPrintable = e.key.length === 1;
-
-            // Reset buffer if too much time has passed (manual typing)
-            if (currentTime - lastKeyTime > SCAN_TIMEOUT && barcodeBuffer.length > 0) {
-                // Exception: If the buffer starts with the PDF417 prefix, keep it (some scanners are slow)
-                if (!barcodeBuffer.startsWith(PDF417_PREFIX)) {
-                    barcodeBuffer = '';
-                }
-            }
-
-            lastKeyTime = currentTime;
-
-            if (e.key === 'Enter') {
-                // Scanner sent the "Enter" terminator
-                if (barcodeBuffer.length > 10) { // Valid ID barcodes are long
-                    handleBluetoothScan(barcodeBuffer);
-                }
-                barcodeBuffer = '';
-            } else if (isPrintable) {
-                barcodeBuffer += e.key;
-            }
-        });
-
-        async function handleBluetoothScan(barcodeData) {
-            document.getElementById('status-text').textContent = 'Processing Scan...';
-
-            // Clean up the data (remove AIM ID prefix if present)
-            let cleanData = barcodeData;
-            if (cleanData.startsWith(PDF417_PREFIX)) {
-                cleanData = cleanData.substring(PDF417_PREFIX.length);
-                // Remove the modifier char if it's there (e.g., ]L1)
-                if (cleanData.length > 0 && !isNaN(parseInt(cleanData[0]))) {
-                    cleanData = cleanData.substring(1);
-                }
-            }
-
-            // Send to backend
-            try {
-                const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        barcodeData: cleanData,
-                        registerId: registerId || 'NETUM-NT1200',
-                        clerkId: clerkId
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success && data.approved) {
-                    clearInterval(pollInterval);
-                    showSuccess({ customerName: data.customerName || 'Customer' });
-                    setTimeout(completeSale, 1000);
-                } else {
-                    showError(data.reason || 'Verification Failed');
-                }
-            } catch (e) {
-                console.error('Bluetooth scan error', e);
-                showError('Scan processing failed');
-            }
-        }
-
-        async function checkStatus() {
-            try {
-                const response = await fetch(`/api/sales/${saleId}/status`);
-                const data = await response.json();
-
-                if (data.status === 'approved' || data.status === 'approved_override') {
-                    clearInterval(pollInterval);
-                    showSuccess(data);
-                    // Auto-complete after 1 second for speed
-                    setTimeout(completeSale, 1000);
-                } else if (data.status === 'rejected') {
-                    clearInterval(pollInterval);
-                    showError(data.reason || 'ID Verification Failed');
-                }
-            } catch (e) {
-                console.error('Polling error', e);
-            }
-        }
-
-        async function completeSale() {
-            try {
-                // Tell backend to unlock the sale
-                await fetch(`/api/sales/${saleId}/complete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ approved: true })
-                });
-
-                // Tell Lightspeed to close the modal and accept payment
-                // (This uses the postMessage API for Custom Payments)
-                window.parent.postMessage('ACCEPT', '*');
-            } catch (e) {
-                showError('Failed to complete sale. Please try again.');
-            }
-        }
-
-        function cancelVerification() {
-            clearInterval(pollInterval);
-            window.parent.postMessage('DECLINE', '*');
-        }
-
-        function retry() {
-            document.getElementById('error-card').classList.add('hidden');
-            document.getElementById('loading-card').classList.remove('hidden');
-            startPolling();
-        }
-
-        function showSuccess(data) {
-            document.getElementById('loading-card').classList.add('hidden');
-            document.getElementById('success-card').classList.remove('hidden');
-            document.getElementById('success-details').textContent =
-                `${data.customerName || 'Customer'} is verified.`;
-        }
-
-        function showError(message) {
-            document.getElementById('loading-card').classList.add('hidden');
-            document.getElementById('error-card').classList.remove('hidden');
-            document.getElementById('error-details').textContent = message;
         }
     </script>
 </body>
