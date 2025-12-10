@@ -417,27 +417,51 @@ async function listBannedCustomers() {
   return rows;
 }
 
-async function markVerificationOverride({ verificationId, saleId, managerId, note }) {
+async function markVerificationOverride({ verificationId, saleId, managerId, note, clerkId, registerId }) {
   if (!verificationId || !saleId) {
     throw new Error('VERIFICATION_REQUIRED');
   }
 
   const sanitizedNote = sanitizeNote(note);
+  let finalVerificationId = verificationId;
+  let verificationRecord = null;
 
-  const updateResult = await query(
-    `
-      UPDATE verifications
-      SET status = 'approved_override',
-          reason = COALESCE($1, reason),
-          updated_at = NOW()
-      WHERE verification_id = $2
-      RETURNING *
-    `,
-    [sanitizedNote, verificationId]
-  );
+  // Handle "Pure" Manual Override (No previous scan)
+  if (verificationId === 'MANUAL-OVERRIDE') {
+    const newVerification = await query(
+      `
+        INSERT INTO verifications (
+          sale_id, clerk_id, location_id, status, reason, 
+          document_type, document_number, age, approved, source
+        )
+        VALUES ($1, $2, $3, 'approved_override', $4, 
+                'manual', 'no-scan', 21, true, 'manual_override')
+        RETURNING *
+      `,
+      [saleId, clerkId || 'unknown-clerk', registerId || 'unknown-location', sanitizedNote]
+    );
+    finalVerificationId = newVerification.rows[0].verification_id;
+    verificationRecord = newVerification.rows[0];
+  } else {
+    // Existing logic for updating a rejected scan
+    const updateResult = await query(
+      `
+        UPDATE verifications
+        SET status = 'approved_override',
+            reason = COALESCE($1, reason),
+            clerk_id = COALESCE($3, clerk_id),
+            location_id = COALESCE($4, location_id),
+            updated_at = NOW()
+        WHERE verification_id = $2
+        RETURNING *
+      `,
+      [sanitizedNote, verificationId, clerkId, registerId]
+    );
 
-  if (!updateResult.rows.length) {
-    throw new Error('VERIFICATION_NOT_FOUND');
+    if (!updateResult.rows.length) {
+      throw new Error('VERIFICATION_NOT_FOUND');
+    }
+    verificationRecord = updateResult.rows[0];
   }
 
   const overrideInsert = await query(
@@ -451,7 +475,7 @@ async function markVerificationOverride({ verificationId, saleId, managerId, not
       VALUES ($1,$2,$3,$4)
       RETURNING id, verification_id, sale_id, manager_id, note, created_at
     `,
-    [verificationId, saleId, managerId || 'unknown-manager', sanitizedNote]
+    [finalVerificationId, saleId, managerId || 'unknown-manager', sanitizedNote]
   );
 
   logger.info({
@@ -462,7 +486,7 @@ async function markVerificationOverride({ verificationId, saleId, managerId, not
   }, 'Verification override recorded');
 
   return {
-    verification: updateResult.rows[0],
+    verification: verificationRecord,
     override: overrideInsert.rows[0]
   };
 }
