@@ -1168,10 +1168,17 @@
                 btn.className = 'quick-amount-btn' + (idx === 0 && amt === total ? ' exact' : '');
                 btn.textContent = '$' + amt.toFixed(2);
                 // Use inline onclick which works better in iOS WKWebView
-                btn.setAttribute('onclick', `selectCashAmount(${amt})`);
+                btn.setAttribute('onclick', `selectQuickAmount(${amt})`);
                 btn.setAttribute('ontouchstart', ''); // Empty to enable touch
                 quickAmounts.appendChild(btn);
             });
+        }
+
+        function selectQuickAmount(amount) {
+            // Clear custom input when a quick amount is selected
+            customCashString = "";
+            updateCustomDisplay();
+            selectCashAmount(amount);
         }
 
         function selectCashAmount(amount) {
