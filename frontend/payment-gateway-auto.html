@@ -1089,9 +1089,14 @@
                 btn.textContent = '$' + amt.toFixed(2);
                 btn.addEventListener('touchend', (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
+                    console.log('[Quick Amount] Tapped:', amt);
                     selectCashAmount(amt);
                 });
-                btn.addEventListener('click', () => selectCashAmount(amt));
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectCashAmount(amt);
+                });
                 quickAmounts.appendChild(btn);
             });
         }
