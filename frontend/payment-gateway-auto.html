@@ -603,6 +603,7 @@
             grid-template-columns: repeat(2, 1fr);
             gap: 12px;
             margin-bottom: 20px;
+            touch-action: manipulation;
         }
 
         .quick-amount-btn {
@@ -615,6 +616,10 @@
             color: white;
             cursor: pointer;
             transition: all 0.2s ease;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            user-select: none;
         }
 
         .quick-amount-btn:active {
