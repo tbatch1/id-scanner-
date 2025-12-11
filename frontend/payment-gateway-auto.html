@@ -958,9 +958,9 @@
                         <button class="cash-num-btn" data-num="7">7</button>
                         <button class="cash-num-btn" data-num="8">8</button>
                         <button class="cash-num-btn" data-num="9">9</button>
-                        <button class="cash-num-btn cash-num-clear" data-action="clear">⌫</button>
+                        <button class="cash-num-btn" data-action="decimal">.</button>
                         <button class="cash-num-btn" data-num="0">0</button>
-                        <button class="cash-num-btn cash-num-apply" data-action="apply">✓</button>
+                        <button class="cash-num-btn cash-num-clear" data-action="clear">⌫</button>
                     </div>
                 </div>
             </div>
@@ -1202,27 +1202,74 @@
         }
 
         // Custom cash numpad
-        let customCashCents = 0; // Track cents for precision
+        let customCashString = ""; // Track input as string for calculator-style entry
 
         function updateCustomDisplay() {
-            const dollars = customCashCents / 100;
-            customAmountDisplay.textContent = '$' + dollars.toFixed(2);
+            let displayVal = "$0.00";
+            if (customCashString.length > 0) {
+                // If ending with dot, show it
+                if (customCashString.endsWith('.')) {
+                    displayVal = '$' + customCashString;
+                } else if (customCashString.includes('.')) {
+                    // Has decimal, ensure max 2 decimal places shown if typed
+                    displayVal = '$' + customCashString;
+                } else {
+                    // Integer only
+                    displayVal = '$' + customCashString + (customCashString ? '.00' : '');
+                }
+            }
+            customAmountDisplay.textContent = displayVal;
+
+            // Update the actual calculation
+            const floatVal = parseFloat(customCashString || "0");
+            // Only update selection if we have a valid number
+            if (!isNaN(floatVal) && floatVal > 0) {
+                // Don't auto-select if just typing "0" or "."
+                if (customCashString !== "." && parseFloat(customCashString) > 0) {
+                    // We don't call selectCashAmount here fully because it highlights buttons
+                    // Instead we partially replicate functionality or just update complete button?
+                    // Actually better to call selectCashAmount but avoid clearing custom input
+                    // Let's modify selectCashAmount to handle this or just call it:
+                    selectCashAmount(floatVal);
+                }
+            } else {
+                // Reset
+                changeDisplay.style.display = 'none';
+                completeCashBtn.disabled = true;
+            }
         }
 
         function handleCashNumpad(value) {
             if (value === 'clear') {
-                // Backspace - remove last digit
-                customCashCents = Math.floor(customCashCents / 10);
-            } else if (value === 'apply') {
-                // Apply custom amount
-                const dollars = customCashCents / 100;
-                if (dollars > 0) {
-                    selectCashAmount(dollars);
+                // Backspace
+                if (customCashString.length > 0) {
+                    customCashString = customCashString.slice(0, -1);
                 }
+            } else if (value === 'decimal') {
+                // Add decimal if not present
+                if (!customCashString.includes('.')) {
+                    if (customCashString === "") customCashString = "0";
+                    customCashString += '.';
+                }
+            } else if (value === 'apply') {
+                // Legacy apply - button removed but handle just in case
+                const val = parseFloat(customCashString || "0");
+                if (val > 0) selectCashAmount(val);
             } else {
-                // Add digit (shift left and add)
-                if (customCashCents < 1000000) { // Max $10,000
-                    customCashCents = customCashCents * 10 + parseInt(value);
+                // Digit 0-9
+                // Prevent multiple leading zeros
+                if (customCashString === "0" && value === "0") return;
+                if (customCashString === "0" && value !== ".") customCashString = value; // Replace 0
+                else {
+                    // Limit max length
+                    if (customCashString.length < 8) {
+                        // Limit decimal places to 2
+                        if (customCashString.includes('.')) {
+                            const parts = customCashString.split('.');
+                            if (parts[1] && parts[1].length >= 2) return;
+                        }
+                        customCashString += value;
+                    }
                 }
             }
             updateCustomDisplay();
