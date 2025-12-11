@@ -603,6 +603,21 @@
             flex: 1;
         }
 
+        .cash-logo-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 15px;
+            padding: 10px;
+        }
+
+        .cash-logo {
+            width: 100px;
+            height: auto;
+            opacity: 0.7;
+            filter: drop-shadow(0 0 15px rgba(66, 180, 230, 0.3));
+        }
+
         .cash-footer {
             display: flex;
             gap: 15px;
@@ -919,6 +934,10 @@
                     <div class="cash-label">Quick Select</div>
                     <div class="quick-amounts" id="quickAmounts">
                         <!-- Populated by JavaScript -->
+                    </div>
+                    <!-- THC Logo -->
+                    <div class="cash-logo-container">
+                        <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="cash-logo">
                     </div>
                 </div>
 
