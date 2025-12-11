@@ -1087,19 +1087,30 @@
                 const btn = document.createElement('button');
                 btn.className = 'quick-amount-btn' + (idx === 0 && amt === total ? ' exact' : '');
                 btn.textContent = '$' + amt.toFixed(2);
-                btn.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('[Quick Amount] Tapped:', amt);
-                    selectCashAmount(amt);
-                });
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    selectCashAmount(amt);
-                });
+                btn.setAttribute('data-amount', amt);
                 quickAmounts.appendChild(btn);
             });
         }
+
+        // Event delegation for quick amount buttons - more reliable on iOS
+        quickAmounts.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const btn = e.target.closest('.quick-amount-btn');
+            if (btn) {
+                const amt = parseFloat(btn.getAttribute('data-amount'));
+                console.log('[Quick Amount] Delegation tapped:', amt);
+                selectCashAmount(amt);
+            }
+        });
+        quickAmounts.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const btn = e.target.closest('.quick-amount-btn');
+            if (btn) {
+                const amt = parseFloat(btn.getAttribute('data-amount'));
+                selectCashAmount(amt);
+            }
+        });
 
         function selectCashAmount(amount) {
             selectedCashAmount = amount;
