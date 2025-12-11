@@ -1161,6 +1161,8 @@
         completeCashBtn.addEventListener('click', completeCashSale);
         completeCashBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
+            e.stopPropagation();
+            console.log('[Complete Cash] Button tapped, selectedAmount:', selectedCashAmount, 'saleAmount:', saleAmount);
             completeCashSale();
         });
 
