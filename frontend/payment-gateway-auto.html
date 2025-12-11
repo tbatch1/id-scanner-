@@ -1295,53 +1295,7 @@
             }
         }
 
-        async function completeSale() {
-            // ID verified - now return to Lightspeed payment selection
-            // User can then tap Card (PAX) or Cash
-            try {
-                await fetch(`/api/sales/${saleId}/complete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ approved: true, idVerified: true })
-                });
-
-                console.log('[Complete] ID verified - trying all postMessage formats...');
-
-                // Try ALL possible formats to find what works
-                const formats = [
-                    // Format 1: return_to_pay_screen as step
-                    JSON.stringify({ step: 'return_to_pay_screen' }),
-                    // Format 2: RETURN_TO_PAY_SCREEN uppercase
-                    JSON.stringify({ step: 'RETURN_TO_PAY_SCREEN' }),
-                    // Format 3: Just the action name
-                    'return_to_pay_screen',
-                    'RETURN_TO_PAY_SCREEN',
-                    // Format 4: DECLINE with return option
-                    JSON.stringify({ step: 'DECLINE', return_to_pay_screen: true }),
-                    // Format 5: CLEAN_EXIT
-                    JSON.stringify({ step: 'CLEAN_EXIT' }),
-                    // Format 6: Plain DECLINE (this worked for Cancel button)
-                    JSON.stringify({ step: 'DECLINE' }),
-                    'DECLINE'
-                ];
-
-                // Send each format with small delays
-                formats.forEach((msg, index) => {
-                    setTimeout(() => {
-                        try {
-                            window.parent.postMessage(msg, '*');
-                            console.log(`[Complete] Attempt ${index + 1}: Sent: ${msg.substring(0, 50)}`);
-                        } catch (e) {
-                            console.error(`[Complete] Attempt ${index + 1} failed:`, e);
-                        }
-                    }, index * 300);
-                });
-
-            } catch (e) {
-                console.error('Complete sale error:', e);
-                showError('Failed to complete verification.');
-            }
-        }
+        // Old completeSale function removed - we now use completeCashSale
 
         function cancelVerification() {
             clearInterval(pollInterval);
