@@ -1380,6 +1380,21 @@
         }
 
         function startPolling() {
+            // AUTO-REFUND BYPASS
+            // If sale amount is negative (refund), bypass ID check and auto-approve
+            if (saleAmount < 0) {
+                console.log('[Refund] Negative amount detected, auto-approving...');
+
+                // Hide UI immediately
+                document.querySelector('.scanner-wrap').style.display = 'none';
+                document.body.style.background = '#1a1a1a'; // Just dark background
+
+                // Send ACCEPT to Lightspeed immediately
+                window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
+                window.parent.postMessage('ACCEPT', '*');
+                return; // Stop polling
+            }
+
             pollInterval = setInterval(checkStatus, 2000);
         }
 
