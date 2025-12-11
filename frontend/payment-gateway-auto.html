@@ -885,27 +885,37 @@
                     body: JSON.stringify({ approved: true, idVerified: true })
                 });
 
-                console.log('[Complete] ID verified - using return_to_pay_screen...');
+                console.log('[Complete] ID verified - trying all postMessage formats...');
 
-                // Use Lightspeed's return_to_pay_screen action to go back to payment selection
-                // This is the proper way to close the iframe and let user select Card/Cash
-                const returnMsg = JSON.stringify({
-                    step: 'return_to_pay_screen'
+                // Try ALL possible formats to find what works
+                const formats = [
+                    // Format 1: return_to_pay_screen as step
+                    JSON.stringify({ step: 'return_to_pay_screen' }),
+                    // Format 2: RETURN_TO_PAY_SCREEN uppercase
+                    JSON.stringify({ step: 'RETURN_TO_PAY_SCREEN' }),
+                    // Format 3: Just the action name
+                    'return_to_pay_screen',
+                    'RETURN_TO_PAY_SCREEN',
+                    // Format 4: DECLINE with return option
+                    JSON.stringify({ step: 'DECLINE', return_to_pay_screen: true }),
+                    // Format 5: CLEAN_EXIT
+                    JSON.stringify({ step: 'CLEAN_EXIT' }),
+                    // Format 6: Plain DECLINE (this worked for Cancel button)
+                    JSON.stringify({ step: 'DECLINE' }),
+                    'DECLINE'
+                ];
+
+                // Send each format with small delays
+                formats.forEach((msg, index) => {
+                    setTimeout(() => {
+                        try {
+                            window.parent.postMessage(msg, '*');
+                            console.log(`[Complete] Attempt ${index + 1}: Sent: ${msg.substring(0, 50)}`);
+                        } catch (e) {
+                            console.error(`[Complete] Attempt ${index + 1} failed:`, e);
+                        }
+                    }, index * 300);
                 });
-
-                try {
-                    window.parent.postMessage(returnMsg, '*');
-                    console.log('[Complete] Sent: return_to_pay_screen');
-                } catch (e) {
-                    console.error('[Complete] return_to_pay_screen failed:', e);
-                }
-
-                // Fallback: try CLEAN_EXIT if return_to_pay_screen doesn't work
-                setTimeout(() => {
-                    const cleanExitMsg = JSON.stringify({ step: 'CLEAN_EXIT' });
-                    window.parent.postMessage(cleanExitMsg, '*');
-                    console.log('[Complete] Fallback: sent CLEAN_EXIT');
-                }, 500);
 
             } catch (e) {
                 console.error('Complete sale error:', e);
