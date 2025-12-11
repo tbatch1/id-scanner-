@@ -708,6 +708,58 @@
             cursor: not-allowed;
         }
 
+        /* Cash numpad for custom amounts */
+        .custom-amount-display {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--thc-blue);
+            padding: 15px;
+            background: rgba(66, 180, 230, 0.1);
+            border: 2px solid rgba(66, 180, 230, 0.3);
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        .cash-numpad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .cash-num-btn {
+            padding: 18px;
+            font-size: 24px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .cash-num-btn:active {
+            background: rgba(255, 255, 255, 0.25);
+            transform: scale(0.95);
+        }
+
+        .cash-num-clear {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        .cash-num-apply {
+            background: rgba(46, 167, 80, 0.3);
+            border-color: var(--thc-green);
+            color: var(--thc-green);
+        }
+
+        .cash-num-apply:active {
+            background: rgba(46, 167, 80, 0.5);
+        }
+
         .hidden {
             display: none !important;
         }
@@ -819,9 +871,21 @@
                 <!-- Populated by JavaScript -->
             </div>
 
-            <div class="cash-input-row">
-                <input type="number" class="cash-input" id="cashInput" placeholder="Custom amount" step="0.01" min="0">
-                <button class="cash-enter-btn" id="cashEnterBtn">Enter</button>
+            <div class="cash-label" style="margin-top: 15px;">Or Enter Custom Amount</div>
+            <div class="custom-amount-display" id="customAmountDisplay">$0.00</div>
+            <div class="cash-numpad" id="cashNumpad">
+                <button class="cash-num-btn" data-num="1">1</button>
+                <button class="cash-num-btn" data-num="2">2</button>
+                <button class="cash-num-btn" data-num="3">3</button>
+                <button class="cash-num-btn" data-num="4">4</button>
+                <button class="cash-num-btn" data-num="5">5</button>
+                <button class="cash-num-btn" data-num="6">6</button>
+                <button class="cash-num-btn" data-num="7">7</button>
+                <button class="cash-num-btn" data-num="8">8</button>
+                <button class="cash-num-btn" data-num="9">9</button>
+                <button class="cash-num-btn cash-num-clear" data-action="clear">⌫</button>
+                <button class="cash-num-btn" data-num="0">0</button>
+                <button class="cash-num-btn cash-num-apply" data-action="apply">✓</button>
             </div>
 
             <div class="change-display" id="changeDisplay" style="display: none;">
@@ -982,8 +1046,7 @@
         const cashScreenWrap = document.getElementById('cashScreenWrap');
         const cashTotal = document.getElementById('cashTotal');
         const quickAmounts = document.getElementById('quickAmounts');
-        const cashInput = document.getElementById('cashInput');
-        const cashEnterBtn = document.getElementById('cashEnterBtn');
+        const customAmountDisplay = document.getElementById('customAmountDisplay');
         const changeDisplay = document.getElementById('changeDisplay');
         const changeAmount = document.getElementById('changeAmount');
         const completeCashBtn = document.getElementById('completeCashBtn');
@@ -1049,18 +1112,49 @@
             }
         }
 
-        // Custom cash input
-        cashEnterBtn.addEventListener('click', () => {
-            const customAmount = parseFloat(cashInput.value);
-            if (!isNaN(customAmount) && customAmount > 0) {
-                selectCashAmount(customAmount);
-            }
-        });
+        // Custom cash numpad
+        let customCashCents = 0; // Track cents for precision
 
-        cashInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                cashEnterBtn.click();
+        function updateCustomDisplay() {
+            const dollars = customCashCents / 100;
+            customAmountDisplay.textContent = '$' + dollars.toFixed(2);
+        }
+
+        function handleCashNumpad(value) {
+            if (value === 'clear') {
+                // Backspace - remove last digit
+                customCashCents = Math.floor(customCashCents / 10);
+            } else if (value === 'apply') {
+                // Apply custom amount
+                const dollars = customCashCents / 100;
+                if (dollars > 0) {
+                    selectCashAmount(dollars);
+                }
+            } else {
+                // Add digit (shift left and add)
+                if (customCashCents < 1000000) { // Max $10,000
+                    customCashCents = customCashCents * 10 + parseInt(value);
+                }
             }
+            updateCustomDisplay();
+        }
+
+        // Bind cash numpad buttons
+        document.querySelectorAll('.cash-num-btn').forEach(btn => {
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const num = btn.getAttribute('data-num');
+                const action = btn.getAttribute('data-action');
+                handleCashNumpad(num || action);
+            });
+
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const num = btn.getAttribute('data-num');
+                const action = btn.getAttribute('data-action');
+                handleCashNumpad(num || action);
+            });
         });
 
         // Complete cash sale
@@ -1119,7 +1213,8 @@
             changeDisplay.style.display = 'none';
             completeCashBtn.disabled = true;
             completeCashBtn.textContent = 'Complete Sale';
-            cashInput.value = '';
+            customCashCents = 0;
+            updateCustomDisplay();
         }
 
         let pollInterval;
