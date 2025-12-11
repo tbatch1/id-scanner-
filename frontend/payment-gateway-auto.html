@@ -1211,11 +1211,20 @@
             // Reset state
             selectedCashAmount = 0;
             changeDisplay.style.display = 'none';
+            changeAmount.style.color = 'var(--thc-green)'; // Reset color
             completeCashBtn.disabled = true;
             completeCashBtn.textContent = 'Complete Sale';
             customCashCents = 0;
             updateCustomDisplay();
         }
+
+        // Prevent cash screen events from bubbling to document handlers
+        document.getElementById('cashScreenWrap').addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+        });
+        document.getElementById('cashScreenWrap').addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
 
         let pollInterval;
 
