@@ -10,6 +10,7 @@ const { authenticateRequest, optionalAuth, adminAuth } = require('./auth');
 const apiRoutes = require('./routes');
 const adminRoutes = require('./adminRoutes');
 const scanSessionRoutes = require('./scanSessionRoutes');
+const terminalRoutes = require('./terminalRoutes');
 
 const app = express();
 
@@ -133,6 +134,7 @@ app.use('/admin', adminAuth, adminRoutes);
 // API routes - enforce authentication when API_SECRET_KEY is configured
 // Note: Sale verification routes (/api/sales/*) use optionalAuth to allow iframe access
 app.use('/api/scan-sessions', authenticateRequest, scanSessionRoutes);
+app.use('/api/terminal', optionalAuth, terminalRoutes);
 app.use('/api', optionalAuth, apiRoutes);
 
 const frontendDir = path.resolve(__dirname, '..', '..', 'frontend');
