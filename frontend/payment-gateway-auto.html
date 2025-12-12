@@ -589,7 +589,25 @@
         }
 
         .cash-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 15px;
+        }
+
+        .btn-close-cash {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #f87171;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-close-cash:active {
+            background: rgba(239, 68, 68, 0.3);
         }
 
         .cash-columns {
@@ -924,8 +942,9 @@
     <!-- ========== CASH PAYMENT SCREEN ========== -->
     <div class="scanner-wrap cash-wrap" id="cashScreenWrap" style="display: none;">
         <div class="cash-screen active" id="cashScreen">
-            <!-- Header row: Total amount -->
+            <!-- Header row: Total amount with Close button -->
             <div class="cash-header">
+                <button class="btn-close-cash" id="btnCloseCash" onclick="cancelVerification()">✕ Close</button>
                 <div class="cash-label">Amount Due</div>
                 <div class="cash-total" id="cashTotal">$0.00</div>
             </div>
@@ -1508,6 +1527,31 @@
             ensureFocus();
         }
 
+        // ========== CANCEL/CLOSE ==========
+        function cancelVerification() {
+            clearInterval(pollInterval);
+            console.log('[Cancel] Trying to bypass red screen...');
+
+            // Try various signals that might skip the red "Payment Failed" screen
+            try {
+                window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
+                window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
+                window.parent.postMessage(JSON.stringify({ step: 'ABORT' }), '*');
+                window.parent.postMessage(JSON.stringify({ step: 'BACK' }), '*');
+                window.parent.postMessage(JSON.stringify({ step: 'CANCEL' }), '*');
+            } catch (e) { }
+
+            window.parent.postMessage('CLOSE', '*');
+            window.parent.postMessage('EXIT', '*');
+            window.parent.postMessage('CANCEL', '*');
+
+            // Fallback: If nothing else works after 500ms, force DECLINE
+            setTimeout(() => {
+                window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
+                window.parent.postMessage('DECLINE', '*');
+            }, 500);
+        }
+
         // ========== NUMBER PAD OVERRIDE ==========
         let currentPin = '';
         const pinDots = document.querySelectorAll('.pin-dot');
@@ -1683,6 +1727,13 @@
             e.preventDefault();
             e.stopPropagation();
             completeSale();
+        });
+
+        // Cash Screen Close button
+        document.getElementById('btnCloseCash')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            cancelVerification();
         });
 
         // iOS Keyboard Fix: PIN input needs special handling
