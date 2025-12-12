@@ -1137,27 +1137,35 @@
         function generateQuickAmounts(total) {
             quickAmounts.innerHTML = '';
 
-            // Generate: Exact, and 3 rounded up amounts
+            // Lightspeed-style quick amounts:
+            // 1. Exact amount
+            // 2. Round up to next whole dollar
+            // 3. Round up to next $5 increment
+            // 4. Round up to next $10 increment (if needed)
             const amounts = [total]; // Exact first
 
-            // Round up to nearest $5, $10, $20 increments
-            const roundTo5 = Math.ceil(total / 5) * 5;
-            const roundTo10 = Math.ceil(total / 10) * 10;
-            const roundTo20 = Math.ceil(total / 20) * 20;
-
-            // Add unique rounded amounts
-            if (roundTo5 > total && !amounts.includes(roundTo5)) amounts.push(roundTo5);
-            if (roundTo10 > total && !amounts.includes(roundTo10)) amounts.push(roundTo10);
-            if (roundTo20 > total && !amounts.includes(roundTo20)) amounts.push(roundTo20);
-
-            // If we don't have 4 amounts, add more
-            if (amounts.length < 4) {
-                const next5 = roundTo5 + 5;
-                if (!amounts.includes(next5)) amounts.push(next5);
+            // Next whole dollar
+            const nextDollar = Math.ceil(total);
+            if (nextDollar > total && !amounts.includes(nextDollar)) {
+                amounts.push(nextDollar);
             }
+
+            // Next $5 increment
+            const next5 = Math.ceil(total / 5) * 5;
+            if (next5 > total && !amounts.includes(next5)) {
+                amounts.push(next5);
+            }
+
+            // Next $10 increment
+            const next10 = Math.ceil(total / 10) * 10;
+            if (next10 > total && !amounts.includes(next10)) {
+                amounts.push(next10);
+            }
+
+            // If we still need more options, add $20 increment
             if (amounts.length < 4) {
-                const next10 = roundTo10 + 10;
-                if (!amounts.includes(next10)) amounts.push(next10);
+                const next20 = Math.ceil(total / 20) * 20;
+                if (next20 > total && !amounts.includes(next20)) amounts.push(next20);
             }
 
             // Take first 4 and sort
