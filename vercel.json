@@ -23,6 +23,10 @@
       "destination": "/frontend/payment-gateway-auto.html"
     },
     {
+      "source": "/payment-gateway-card.html",
+      "destination": "/frontend/payment-gateway-card.html"
+    },
+    {
       "source": "/scanner.html",
       "destination": "/frontend/scanner.html"
     },
@@ -69,6 +73,19 @@
     },
     {
       "source": "/scanner.html",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=*, microphone=*, geolocation=*"
+        },
+        {
+          "key": "Feature-Policy",
+          "value": "camera *; microphone *; geolocation *"
+        }
+      ]
+    },
+    {
+      "source": "/payment-gateway-card.html",
       "headers": [
         {
           "key": "Permissions-Policy",
