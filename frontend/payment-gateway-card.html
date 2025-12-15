@@ -1613,7 +1613,7 @@
             console.log('[Override] Starting override submission');
             console.log('[Override] saleId:', saleId);
             console.log('[Override] PIN length:', currentPin.length);
-            
+
             if (currentPin.length !== 4) {
                 pinError.textContent = 'Enter 4 digits';
                 return;
@@ -1621,7 +1621,7 @@
 
             const apiUrl = `/api/sales/${saleId}/override`;
             console.log('[Override] API URL:', apiUrl);
-            
+
             try {
                 const payload = {
                     verificationId: 'MANUAL-OVERRIDE',
@@ -1631,7 +1631,7 @@
                     registerId: registerId
                 };
                 console.log('[Override] Payload:', JSON.stringify(payload));
-                
+
                 const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1712,43 +1712,6 @@
             e.stopPropagation();
             closeOverrideModal();
         });
-
-        async function submitOverride() {
-            if (currentPin.length !== 4) {
-                pinError.textContent = 'Enter 4 digits';
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/sales/${saleId}/override`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        verificationId: 'MANUAL-OVERRIDE',
-                        managerPin: currentPin,
-                        note: 'Number pad entry',
-                        clerkId: clerkId,
-                        registerId: registerId
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    closeOverrideModal();
-                    showSuccess({ customerName: 'Manual Override' });
-                    // After brief success animation, show card waiting screen
-                    setTimeout(showCardWaitingScreen, 1500);
-                } else {
-                    pinError.textContent = data.message || 'Invalid PIN';
-                    currentPin = '';
-                    updatePinDisplay();
-                }
-            } catch (e) {
-                console.error('Override error', e);
-                pinError.textContent = 'Connection error';
-            }
-        }
 
         // ========== INIT ==========
         createParticles();
