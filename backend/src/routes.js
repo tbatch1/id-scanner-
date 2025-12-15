@@ -992,17 +992,6 @@ router.post('/sales/:saleId/override', validateOverride, async (req, res) => {
       debug: process.env.NODE_ENV !== 'production' ? error.stack : undefined
     });
   }
-
-  try {
-    const entries = await complianceStore.listBannedCustomers();
-    res.json({ data: entries });
-  } catch (error) {
-    logger.logAPIError('list_banned_customers', error);
-    res.status(500).json({
-      error: 'INTERNAL_ERROR',
-      message: 'Unable to fetch banned customers.'
-    });
-  }
 });
 
 router.post('/banned', validateBannedCreate, async (req, res) => {
