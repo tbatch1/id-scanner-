@@ -262,8 +262,7 @@ const validateOverride = [
   param('saleId')
     .isString()
     .trim()
-    .isLength({ min: 1, max: 100 })
-    .matches(/^[a-zA-Z0-9\-_]+$/)
+    .isLength({ min: 1, max: 200 })
     .withMessage('Invalid sale ID format'),
 
   body('verificationId')
