@@ -842,6 +842,167 @@
         .hidden {
             display: none !important;
         }
+
+        /* ========== CARD PAYMENT SCREENS ========== */
+        .card-wrap {
+            max-width: 480px;
+            padding: 20px;
+        }
+
+        .card-waiting-screen {
+            background: linear-gradient(145deg, rgba(26, 26, 46, 0.95), rgba(15, 20, 25, 0.98));
+            border: 2px solid rgba(66, 180, 230, 0.3);
+            border-radius: 24px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 0 60px rgba(66, 180, 230, 0.2), 0 25px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .card-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
+        }
+
+        .card-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--thc-blue);
+            margin-bottom: 10px;
+        }
+
+        .card-subtitle {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 30px;
+        }
+
+        .card-amount {
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--thc-green);
+            margin-bottom: 20px;
+        }
+
+        .card-timer {
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+        }
+
+        .card-timer span {
+            color: var(--warning);
+            font-weight: 700;
+        }
+
+        .card-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(66, 180, 230, 0.2);
+            border-top-color: var(--thc-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 30px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .card-cancel-btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            background: rgba(239, 68, 68, 0.15);
+            border: 2px solid rgba(239, 68, 68, 0.4);
+            border-radius: 12px;
+            color: #f87171;
+            cursor: pointer;
+        }
+
+        /* Timeout Screen */
+        .card-timeout-screen {
+            background: linear-gradient(145deg, rgba(46, 26, 26, 0.95), rgba(25, 15, 15, 0.98));
+            border: 2px solid rgba(245, 158, 11, 0.4);
+            border-radius: 24px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 0 60px rgba(245, 158, 11, 0.2), 0 25px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .timeout-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+
+        .timeout-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--warning);
+            margin-bottom: 10px;
+        }
+
+        .timeout-subtitle {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 30px;
+        }
+
+        .card-retry-btn {
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--thc-blue) 0%, #1e90ff 100%);
+            border: none;
+            border-radius: 15px;
+            color: white;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+
+        /* Card Success Screen */
+        .card-success-screen {
+            background: linear-gradient(145deg, rgba(26, 46, 26, 0.95), rgba(15, 25, 15, 0.98));
+            border: 2px solid rgba(46, 167, 80, 0.4);
+            border-radius: 24px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 0 60px rgba(46, 167, 80, 0.2), 0 25px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .card-success-icon {
+            font-size: 100px;
+            margin-bottom: 20px;
+        }
+
+        .card-success-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--thc-green);
+            margin-bottom: 15px;
+        }
+
+        .card-success-details {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 30px;
+        }
     </style>
 </head>
 
@@ -998,6 +1159,39 @@
         </div>
     </div>
 
+    <!-- ========== CARD PAYMENT WAITING SCREEN ========== -->
+    <div class="card-wrap" id="cardWaitingWrap" style="display: none;">
+        <div class="card-waiting-screen" id="cardWaitingScreen">
+            <div class="card-icon">💳</div>
+            <h1 class="card-title">Waiting for Card</h1>
+            <p class="card-subtitle">Insert, tap, or swipe card on terminal</p>
+            <div class="card-amount" id="cardAmount">$0.00</div>
+            <div class="card-spinner"></div>
+            <div class="card-timer">Time remaining: <span id="cardTimer">20</span>s</div>
+            <button class="card-cancel-btn" id="cardCancelBtn">Cancel</button>
+        </div>
+    </div>
+
+    <!-- ========== CARD PAYMENT TIMEOUT SCREEN ========== -->
+    <div class="card-wrap" id="cardTimeoutWrap" style="display: none;">
+        <div class="card-timeout-screen" id="cardTimeoutScreen">
+            <div class="timeout-icon">⏰</div>
+            <h1 class="timeout-title">Card Not Detected</h1>
+            <p class="timeout-subtitle">No card was detected within the time limit</p>
+            <button class="card-retry-btn" id="cardRetryBtn">Try Again</button>
+            <button class="card-cancel-btn" id="cardTimeoutCancelBtn">Cancel Sale</button>
+        </div>
+    </div>
+
+    <!-- ========== CARD PAYMENT SUCCESS SCREEN ========== -->
+    <div class="card-wrap" id="cardSuccessWrap" style="display: none;">
+        <div class="card-success-screen" id="cardSuccessScreen">
+            <div class="card-success-icon">✅</div>
+            <h1 class="card-success-title">Payment Approved!</h1>
+            <p class="card-success-details" id="cardSuccessDetails">Transaction complete</p>
+        </div>
+    </div>
+
     <script>
         // ========== ELEMENTS ==========
         const scanCard = document.getElementById('scanCard');
@@ -1052,6 +1246,121 @@
         }
 
         setInterval(ensureFocus, 2500);
+
+        // ========== CARD PAYMENT SCREEN FUNCTIONS ==========
+        let cardTimerInterval = null;
+        let cardTimeRemaining = 20;
+
+        // Card screen elements
+        const cardWaitingWrap = document.getElementById('cardWaitingWrap');
+        const cardTimeoutWrap = document.getElementById('cardTimeoutWrap');
+        const cardSuccessWrap = document.getElementById('cardSuccessWrap');
+        const cardAmountEl = document.getElementById('cardAmount');
+        const cardTimerEl = document.getElementById('cardTimer');
+
+        function showCardWaitingScreen() {
+            console.log('[Card] Showing card waiting screen');
+
+            // Hide other screens
+            document.querySelector('.scanner-wrap').style.display = 'none';
+            document.getElementById('cashScreenWrap').style.display = 'none';
+            cardTimeoutWrap.style.display = 'none';
+            cardSuccessWrap.style.display = 'none';
+
+            // Show card waiting screen
+            cardWaitingWrap.style.display = 'flex';
+            cardWaitingWrap.style.justifyContent = 'center';
+            cardWaitingWrap.style.alignItems = 'center';
+            cardWaitingWrap.style.width = '100%';
+
+            // Set amount
+            cardAmountEl.textContent = '$' + saleAmount.toFixed(2);
+
+            // Start countdown timer
+            cardTimeRemaining = 20;
+            cardTimerEl.textContent = cardTimeRemaining;
+
+            cardTimerInterval = setInterval(() => {
+                cardTimeRemaining--;
+                cardTimerEl.textContent = cardTimeRemaining;
+
+                if (cardTimeRemaining <= 0) {
+                    clearInterval(cardTimerInterval);
+                    showCardTimeout();
+                }
+            }, 1000);
+
+            // For demo/testing - simulate success after 5 seconds
+            // In production, this would be triggered by the NMI terminal response
+            // setTimeout(showCardSuccess, 5000);
+        }
+
+        function showCardTimeout() {
+            console.log('[Card] Showing timeout screen');
+            clearInterval(cardTimerInterval);
+
+            cardWaitingWrap.style.display = 'none';
+            cardTimeoutWrap.style.display = 'flex';
+            cardTimeoutWrap.style.justifyContent = 'center';
+            cardTimeoutWrap.style.alignItems = 'center';
+            cardTimeoutWrap.style.width = '100%';
+        }
+
+        function showCardSuccess() {
+            console.log('[Card] Showing success screen');
+            clearInterval(cardTimerInterval);
+
+            cardWaitingWrap.style.display = 'none';
+            cardTimeoutWrap.style.display = 'none';
+            cardSuccessWrap.style.display = 'flex';
+            cardSuccessWrap.style.justifyContent = 'center';
+            cardSuccessWrap.style.alignItems = 'center';
+            cardSuccessWrap.style.width = '100%';
+
+            // Auto-complete after showing success
+            setTimeout(completeCardSale, 2000);
+        }
+
+        function retryCardPayment() {
+            console.log('[Card] Retrying payment');
+            showCardWaitingScreen();
+        }
+
+        function cancelCardPayment() {
+            console.log('[Card] Payment cancelled');
+            clearInterval(cardTimerInterval);
+
+            // Send DECLINE to Lightspeed
+            window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
+            window.parent.postMessage('DECLINE', '*');
+        }
+
+        function completeCardSale() {
+            console.log('[Card] Completing sale - sending ACCEPT');
+
+            // Send ACCEPT to Lightspeed
+            window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
+            window.parent.postMessage('ACCEPT', '*');
+        }
+
+        // Bind card screen button events
+        document.getElementById('cardCancelBtn')?.addEventListener('click', cancelCardPayment);
+        document.getElementById('cardCancelBtn')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            cancelCardPayment();
+        });
+
+        document.getElementById('cardRetryBtn')?.addEventListener('click', retryCardPayment);
+        document.getElementById('cardRetryBtn')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            retryCardPayment();
+        });
+
+        document.getElementById('cardTimeoutCancelBtn')?.addEventListener('click', cancelCardPayment);
+        document.getElementById('cardTimeoutCancelBtn')?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            cancelCardPayment();
+        });
 
         // ========== TOUCH HANDLING ==========
         scanCard.addEventListener('touchstart', (e) => {
@@ -1452,8 +1761,8 @@
                 if (data.success && data.approved) {
                     clearInterval(pollInterval);
                     showSuccess({ customerName: data.customerName || 'Customer' });
-                    // After brief success animation, show cash screen
-                    setTimeout(showCashScreen, 1500);
+                    // After brief success animation, show card waiting screen
+                    setTimeout(showCardWaitingScreen, 1500);
                 } else {
                     showError(data.reason || 'Verification Failed');
                 }
@@ -1471,8 +1780,8 @@
                 if (data.status === 'approved' || data.status === 'approved_override') {
                     clearInterval(pollInterval);
                     showSuccess(data);
-                    // After brief success animation, show cash screen
-                    setTimeout(showCashScreen, 1500);
+                    // After brief success animation, show card waiting screen
+                    setTimeout(showCardWaitingScreen, 1500);
                 } else if (data.status === 'rejected') {
                     clearInterval(pollInterval);
                     showError(data.reason || 'Verification Failed');
