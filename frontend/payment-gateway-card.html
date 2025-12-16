@@ -1131,22 +1131,31 @@
     <!-- ========== CARD PAYMENT WAITING SCREEN ========== -->
     <div class="scanner-wrap" id="cardWaitingWrap" style="display: none;">
         <div class="card-waiting-screen">
-            <div class="card-icon">💳</div>
-            <div class="card-title">Insert or Tap Card</div>
-            <div class="card-subtitle">Please complete payment on the terminal</div>
+            <!-- THC Club Logo -->
+            <div class="logo-container" style="margin-bottom: 20px;">
+                <div class="logo-glow"></div>
+                <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="logo" style="width: 80px; height: 80px;">
+            </div>
+
+            <div class="card-title">Waiting for Card Payment</div>
+            <div class="card-subtitle">Please insert, tap, or swipe on the terminal</div>
             <div class="card-amount" id="cardAmount">$0.00</div>
             <div class="card-timer">Time remaining: <span id="cardTimer">60</span>s</div>
             <div class="card-spinner"></div>
-            <button class="card-cancel-btn" id="cardCancelBtn">Cancel</button>
+            <button class="card-cancel-btn" id="cardCancelBtn">Cancel Sale</button>
         </div>
     </div>
 
     <!-- ========== CARD TIMEOUT SCREEN ========== -->
     <div class="scanner-wrap" id="cardTimeoutWrap" style="display: none;">
         <div class="card-timeout-screen">
+            <div class="logo-container" style="margin-bottom: 20px;">
+                <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="logo"
+                    style="width: 60px; height: 60px; opacity: 0.7;">
+            </div>
             <div class="timeout-icon">⏰</div>
             <div class="timeout-title">No Card Detected</div>
-            <div class="card-subtitle">The terminal timed out waiting for payment</div>
+            <div class="card-subtitle">Please try again or use a different payment method</div>
             <button class="card-retry-btn" id="cardRetryBtn">Try Again</button>
             <button class="card-cancel-btn" id="cardTimeoutCancelBtn">Cancel Sale</button>
         </div>
@@ -1155,9 +1164,13 @@
     <!-- ========== CARD SUCCESS SCREEN ========== -->
     <div class="scanner-wrap" id="cardSuccessWrap" style="display: none;">
         <div class="card-success-screen">
+            <div class="logo-container" style="margin-bottom: 20px;">
+                <div class="logo-glow"></div>
+                <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="logo" style="width: 80px; height: 80px;">
+            </div>
             <div class="card-success-icon">✅</div>
             <div class="card-success-title">Payment Approved!</div>
-            <div class="card-subtitle" id="cardSuccessDetails">Transaction Complete</div>
+            <div class="card-subtitle" id="cardSuccessDetails">Thank you for your purchase</div>
         </div>
     </div>
 
@@ -1975,21 +1988,27 @@
                 });
                 const data = await response.json();
                 console.log('[Card] Terminal response:', data);
-                clearInterval(cardTimerInterval);
+
                 if (data.success) {
+                    // Only clear timer on actual success
+                    clearInterval(cardTimerInterval);
                     document.getElementById('cardSuccessDetails').textContent =
                         'Transaction ' + (data.transaction_id || '') + ' - ' + (data.message || 'APPROVED');
                     showCardSuccess();
                 } else if (data.pending) {
-                    console.log('[Card] Terminal pending:', data.message);
+                    // Terminal call sent, waiting for customer - let timer continue
+                    console.log('[Card] Terminal pending - waiting for customer to pay...');
                 } else {
-                    console.error('[Card] Terminal declined:', data.error);
-                    showCardTimeout();
+                    // Declined - but still let timer run for retry opportunity
+                    console.log('[Card] Terminal response (will retry):', data.error || 'Unknown');
+                    // Don't show timeout yet - let user see card screen and timer can retry
                 }
             } catch (e) {
-                console.error('[Card] Terminal API error:', e);
+                // API error - let timer continue, don't auto-timeout
+                console.error('[Card] Terminal API error (will retry):', e);
             }
         }
+
 
         function showCardTimeout() {
             console.log('[Card] Showing timeout screen');
