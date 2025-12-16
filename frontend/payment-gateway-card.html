@@ -1140,7 +1140,7 @@
             <div class="card-title">Waiting for Card Payment</div>
             <div class="card-subtitle">Please insert, tap, or swipe on the terminal</div>
             <div class="card-amount" id="cardAmount">$0.00</div>
-            <div class="card-timer">Time remaining: <span id="cardTimer">60</span>s</div>
+            <div class="card-timer">Time remaining: <span id="cardTimer">120</span>s</div>
             <div class="card-spinner"></div>
             <button class="card-cancel-btn" id="cardCancelBtn">Cancel Sale</button>
         </div>
@@ -1949,7 +1949,7 @@
         const cardAmountEl = document.getElementById('cardAmount');
         const cardTimerEl = document.getElementById('cardTimer');
         let cardTimerInterval = null;
-        let cardTimeRemaining = 60;
+        let cardTimeRemaining = 120;
 
         function showCardWaitingScreen() {
             console.log('[Card] Showing card waiting screen');
@@ -1961,7 +1961,7 @@
             cardWaitingWrap.style.justifyContent = 'center';
             cardWaitingWrap.style.alignItems = 'center';
             cardAmountEl.textContent = '$' + saleAmount.toFixed(2);
-            cardTimeRemaining = 60;
+            cardTimeRemaining = 120;
             cardTimerEl.textContent = cardTimeRemaining;
             cardTimerInterval = setInterval(() => {
                 cardTimeRemaining--;
