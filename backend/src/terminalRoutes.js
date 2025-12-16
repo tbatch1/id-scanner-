@@ -14,9 +14,10 @@ const NMI_API_URL = 'https://secure.nmi.com/api/transact.php';
 
 // Terminal IDs by location
 const TERMINALS = {
+    'WEST_OAKS': process.env.NMI_TERMINAL_WEST_OAKS || '90851',
     '290': process.env.NMI_TERMINAL_290 || '86646',
     'BUSH': process.env.NMI_TERMINAL_BUSH || '86552',
-    'default': process.env.NMI_TERMINAL_290 || '86646'
+    'default': process.env.NMI_TERMINAL_WEST_OAKS || '90851'
 };
 
 /**

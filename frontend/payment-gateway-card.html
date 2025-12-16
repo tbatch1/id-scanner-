@@ -1204,7 +1204,6 @@
 
             // Hide other screens
             document.querySelector('.scanner-wrap').style.display = 'none';
-            document.getElementById('cashScreenWrap').style.display = 'none';
             cardTimeoutWrap.style.display = 'none';
             cardSuccessWrap.style.display = 'none';
 
@@ -1218,7 +1217,7 @@
             cardAmountEl.textContent = '$' + saleAmount.toFixed(2);
 
             // Start countdown timer
-            cardTimeRemaining = 20;
+            cardTimeRemaining = 60; // 60 seconds for terminal response
             cardTimerEl.textContent = cardTimeRemaining;
 
             cardTimerInterval = setInterval(() => {
@@ -1231,10 +1230,50 @@
                 }
             }, 1000);
 
-            // For demo/testing - simulate success after 5 seconds
-            // In production, this would be triggered by the NMI terminal response
-            // setTimeout(showCardSuccess, 5000);
+            // Trigger the card terminal via API
+            triggerCardTerminal();
         }
+
+        async function triggerCardTerminal() {
+            console.log('[Card] Triggering terminal for amount:', saleAmount);
+
+            try {
+                const response = await fetch('/api/terminal/sale', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount: saleAmount.toFixed(2),
+                        sale_id: saleId,
+                        register_id: registerId || 'WEST_OAKS',
+                        clerk_id: clerkId
+                    })
+                });
+
+                const data = await response.json();
+                console.log('[Card] Terminal response:', data);
+
+                clearInterval(cardTimerInterval);
+
+                if (data.success) {
+                    // Payment approved
+                    document.getElementById('cardSuccessDetails').textContent =
+                        `Transaction ${data.transaction_id || ''} - ${data.message || 'APPROVED'}`;
+                    showCardSuccess();
+                } else if (data.pending) {
+                    // API not configured yet - show message but don't error
+                    console.log('[Card] Terminal pending:', data.message);
+                    // Let the timer run out naturally for testing
+                } else {
+                    // Payment declined or error
+                    console.error('[Card] Terminal declined:', data.error);
+                    showCardTimeout();
+                }
+            } catch (e) {
+                console.error('[Card] Terminal API error:', e);
+                // Don't immediately show error - let timer run for testing
+            }
+        }
+
 
         function showCardTimeout() {
             console.log('[Card] Showing timeout screen');
