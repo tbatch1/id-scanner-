@@ -1653,6 +1653,9 @@
         });
 
         async function submitOverride() {
+            // DEBUG: Show what saleId we're using
+            alert('DEBUG: saleId = ' + saleId);
+
             if (currentPin.length !== 4) {
                 pinError.textContent = 'Enter 4 digits';
                 return;
@@ -1673,6 +1676,9 @@
 
                 const data = await response.json();
 
+                // DEBUG: Show the API response
+                alert('DEBUG Response: status=' + response.status + ', success=' + data.success + ', message=' + (data.message || 'none'));
+
                 if (data.success) {
                     closeOverrideModal();
                     showSuccess({ customerName: 'Manual Override' });
@@ -1684,6 +1690,8 @@
                     updatePinDisplay();
                 }
             } catch (e) {
+                // DEBUG: Show errors
+                alert('DEBUG ERROR: ' + e.message);
                 console.error('Override error', e);
                 pinError.textContent = 'Connection error';
             }
