@@ -1679,13 +1679,7 @@
             updateCustomDisplay();
         }
 
-        // Prevent cash screen events from bubbling to document handlers
-        document.getElementById('cashScreenWrap').addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-        });
-        document.getElementById('cashScreenWrap').addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
+        
 
         let pollInterval;
 
