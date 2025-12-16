@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>THC Club - ID Card Verification</title>
+    <title>THC Club - ID Verification</title>
 
     <!-- GSAP Animation Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
@@ -842,170 +842,6 @@
         .hidden {
             display: none !important;
         }
-
-        /* ========== CARD WAITING SCREEN ========== */
-        .card-wrap {
-            max-width: 500px;
-            padding: 20px;
-        }
-
-        .card-screen {
-            background: linear-gradient(145deg, rgba(26, 26, 46, 0.95), rgba(15, 20, 25, 0.98));
-            border: 2px solid rgba(66, 180, 230, 0.3);
-            border-radius: 24px;
-            padding: 40px 30px;
-            text-align: center;
-            box-shadow: 0 0 60px rgba(66, 180, 230, 0.15), 0 25px 50px rgba(0, 0, 0, 0.5);
-        }
-
-        .card-icon {
-            font-size: 80px;
-            margin-bottom: 20px;
-            animation: cardPulse 2s ease-in-out infinite;
-        }
-
-        @keyframes cardPulse {
-
-            0%,
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
-
-            50% {
-                transform: scale(1.1);
-                opacity: 0.8;
-            }
-        }
-
-        .card-title {
-            font-size: 28px;
-            font-weight: 700;
-            color: white;
-            margin-bottom: 10px;
-        }
-
-        .card-subtitle {
-            font-size: 18px;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 30px;
-        }
-
-        .card-amount {
-            font-size: 48px;
-            font-weight: 700;
-            color: var(--thc-blue);
-            margin-bottom: 30px;
-        }
-
-        .card-spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid rgba(66, 180, 230, 0.2);
-            border-top-color: var(--thc-blue);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 30px;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .card-timer {
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.5);
-            margin-bottom: 20px;
-        }
-
-        .card-cancel-btn {
-            padding: 12px 30px;
-            font-size: 16px;
-            font-weight: 600;
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-            border-radius: 12px;
-            color: #f87171;
-            cursor: pointer;
-        }
-
-        .card-cancel-btn:active {
-            background: rgba(239, 68, 68, 0.3);
-        }
-
-        /* Card Timeout Screen */
-        .card-timeout-screen {
-            background: linear-gradient(145deg, rgba(26, 26, 46, 0.95), rgba(15, 20, 25, 0.98));
-            border: 2px solid rgba(245, 158, 11, 0.3);
-            border-radius: 24px;
-            padding: 40px 30px;
-            text-align: center;
-            box-shadow: 0 0 60px rgba(245, 158, 11, 0.15), 0 25px 50px rgba(0, 0, 0, 0.5);
-        }
-
-        .timeout-icon {
-            font-size: 80px;
-            margin-bottom: 20px;
-        }
-
-        .timeout-title {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--warning);
-            margin-bottom: 10px;
-        }
-
-        .timeout-subtitle {
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 30px;
-        }
-
-        .card-retry-btn {
-            padding: 15px 40px;
-            font-size: 18px;
-            font-weight: 600;
-            background: linear-gradient(135deg, var(--thc-blue) 0%, #1e90ff 100%);
-            border: none;
-            border-radius: 15px;
-            color: white;
-            cursor: pointer;
-            margin-right: 10px;
-        }
-
-        .card-retry-btn:active {
-            transform: scale(0.98);
-        }
-
-        /* Card Success Screen */
-        .card-success-screen {
-            background: linear-gradient(145deg, rgba(26, 46, 26, 0.95), rgba(15, 25, 15, 0.98));
-            border: 2px solid rgba(46, 167, 80, 0.4);
-            border-radius: 24px;
-            padding: 40px 30px;
-            text-align: center;
-            box-shadow: 0 0 60px rgba(46, 167, 80, 0.2), 0 25px 50px rgba(0, 0, 0, 0.5);
-        }
-
-        .card-success-icon {
-            font-size: 100px;
-            margin-bottom: 20px;
-        }
-
-        .card-success-title {
-            font-size: 32px;
-            font-weight: 700;
-            color: var(--thc-green);
-            margin-bottom: 15px;
-        }
-
-        .card-success-details {
-            font-size: 18px;
-            color: rgba(255, 255, 255, 0.8);
-            margin-bottom: 30px;
-        }
     </style>
 </head>
 
@@ -1103,41 +939,64 @@
         </div>
     </div>
 
-    <!-- ========== CARD WAITING SCREEN ========== -->
-    <div class="scanner-wrap card-wrap" id="cardWaitingWrap" style="display: none;">
-        <div class="card-screen" id="cardWaitingScreen">
-            <div class="card-icon">💳</div>
-            <h1 class="card-title">Waiting for Card...</h1>
-            <p class="card-subtitle">Please tap, insert, or swipe your card</p>
-            <div class="card-amount" id="cardAmount">$0.00</div>
-            <div class="card-spinner"></div>
-            <div class="card-timer" id="cardTimer">Waiting... (60s)</div>
-            <button class="card-cancel-btn" onclick="cancelCardPayment()">✕ Cancel</button>
+    <!-- ========== CASH PAYMENT SCREEN ========== -->
+    <div class="scanner-wrap cash-wrap" id="cashScreenWrap" style="display: none;">
+        <div class="cash-screen active" id="cashScreen">
+            <!-- Header row: Total amount with Close button -->
+            <div class="cash-header">
+                <button class="btn-close-cash" id="btnCloseCash" onclick="cancelVerification()">✕ Close</button>
+                <div class="cash-label">Amount Due</div>
+                <div class="cash-total" id="cashTotal">$0.00</div>
+            </div>
+
+            <!-- Two column layout -->
+            <div class="cash-columns">
+                <!-- Left: Quick select buttons -->
+                <div class="cash-left">
+                    <div class="cash-label">Quick Select</div>
+                    <div class="quick-amounts" id="quickAmounts">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                    <!-- THC Logo -->
+                    <div class="cash-logo-container">
+                        <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="cash-logo">
+                    </div>
+                </div>
+
+                <!-- Right: Custom numpad -->
+                <div class="cash-right">
+                    <div class="cash-label">Custom Amount</div>
+                    <div class="custom-amount-display" id="customAmountDisplay">$0.00</div>
+                    <div class="cash-numpad" id="cashNumpad">
+                        <button class="cash-num-btn" data-num="1">1</button>
+                        <button class="cash-num-btn" data-num="2">2</button>
+                        <button class="cash-num-btn" data-num="3">3</button>
+                        <button class="cash-num-btn" data-num="4">4</button>
+                        <button class="cash-num-btn" data-num="5">5</button>
+                        <button class="cash-num-btn" data-num="6">6</button>
+                        <button class="cash-num-btn" data-num="7">7</button>
+                        <button class="cash-num-btn" data-num="8">8</button>
+                        <button class="cash-num-btn" data-num="9">9</button>
+                        <button class="cash-num-btn" data-action="decimal">.</button>
+                        <button class="cash-num-btn" data-num="0">0</button>
+                        <button class="cash-num-btn cash-num-clear" data-action="clear">⌫</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom: Change and Complete -->
+            <div class="cash-footer">
+                <div class="change-display" id="changeDisplay" style="display: none;">
+                    <div class="change-label">Change Due</div>
+                    <div class="change-amount" id="changeAmount">$0.00</div>
+                </div>
+
+                <button class="complete-cash-btn" id="completeCashBtn" disabled>
+                    Complete Sale
+                </button>
+            </div>
         </div>
     </div>
-
-    <!-- ========== CARD TIMEOUT SCREEN ========== -->
-    <div class="scanner-wrap card-wrap" id="cardTimeoutWrap" style="display: none;">
-        <div class="card-timeout-screen">
-            <div class="timeout-icon">⏱️</div>
-            <h1 class="timeout-title">No Card Detected</h1>
-            <p class="timeout-subtitle">The transaction timed out. Would you like to try again?</p>
-            <div class="card-amount" id="cardTimeoutAmount">$0.00</div>
-            <button class="card-retry-btn" onclick="retryCardPayment()">🔄 Try Again</button>
-            <button class="card-cancel-btn" onclick="cancelVerification()">✕ Cancel</button>
-        </div>
-    </div>
-
-    <!-- ========== CARD SUCCESS SCREEN ========== -->
-    <div class="scanner-wrap card-wrap" id="cardSuccessWrap" style="display: none;">
-        <div class="card-success-screen">
-            <div class="card-success-icon">✅</div>
-            <h1 class="card-success-title">Payment Approved!</h1>
-            <p class="card-success-details" id="cardSuccessDetails">Transaction Complete</p>
-            <div class="card-amount" style="color: var(--thc-green);" id="cardSuccessAmount">$0.00</div>
-        </div>
-    </div>
-
 
     <script>
         // ========== ELEMENTS ==========
@@ -1280,151 +1139,264 @@
         const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
         const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount); // Handle cents vs dollars
 
-        console.log('THC Payment Gateway (Card):', { saleId, registerId, clerkId, saleAmount });
+        console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount });
 
-        // ========== CARD SCREEN ELEMENTS ==========
-        const cardWaitingWrap = document.getElementById('cardWaitingWrap');
-        const cardTimeoutWrap = document.getElementById('cardTimeoutWrap');
-        const cardSuccessWrap = document.getElementById('cardSuccessWrap');
-        const cardAmount = document.getElementById('cardAmount');
-        const cardTimer = document.getElementById('cardTimer');
-        const cardTimeoutAmount = document.getElementById('cardTimeoutAmount');
-        const cardSuccessAmount = document.getElementById('cardSuccessAmount');
-        const cardSuccessDetails = document.getElementById('cardSuccessDetails');
+        // ========== CASH SCREEN ELEMENTS ==========
+        const cashScreenWrap = document.getElementById('cashScreenWrap');
+        const cashTotal = document.getElementById('cashTotal');
+        const quickAmounts = document.getElementById('quickAmounts');
+        const customAmountDisplay = document.getElementById('customAmountDisplay');
+        const changeDisplay = document.getElementById('changeDisplay');
+        const changeAmount = document.getElementById('changeAmount');
+        const completeCashBtn = document.getElementById('completeCashBtn');
 
-        let cardTimeoutId = null;
-        let cardTimerInterval = null;
-        let cardSecondsRemaining = 60;
+        let selectedCashAmount = 0;
 
-        // ========== CARD PAYMENT FUNCTIONS ==========
+        // Generate quick-select cash amounts
+        function generateQuickAmounts(total) {
+            quickAmounts.innerHTML = '';
 
-        // Show the card waiting screen and trigger terminal
-        function showCardWaitingScreen() {
-            console.log('[Card] Showing card waiting screen...');
+            // Lightspeed-style quick amounts:
+            // 1. Exact amount
+            // 2. Round up to next whole dollar
+            // 3. Round up to next $5 increment
+            // 4. Round up to next $10 increment (if needed)
+            const amounts = [total]; // Exact first
 
-            // Hide other screens
-            document.querySelector('.scanner-wrap').style.display = 'none';
-            successCard.classList.remove('active');
-            cardTimeoutWrap.style.display = 'none';
-            cardSuccessWrap.style.display = 'none';
+            // Next whole dollar
+            const nextDollar = Math.ceil(total);
+            if (nextDollar > total && !amounts.includes(nextDollar)) {
+                amounts.push(nextDollar);
+            }
 
-            // Show card waiting screen
-            cardWaitingWrap.style.display = 'flex';
-            cardAmount.textContent = '$' + saleAmount.toFixed(2);
+            // Next $5 increment
+            const next5 = Math.ceil(total / 5) * 5;
+            if (next5 > total && !amounts.includes(next5)) {
+                amounts.push(next5);
+            }
 
-            // Start countdown timer
-            cardSecondsRemaining = 60;
-            updateCardTimer();
-            cardTimerInterval = setInterval(() => {
-                cardSecondsRemaining--;
-                updateCardTimer();
-                if (cardSecondsRemaining <= 0) {
-                    clearInterval(cardTimerInterval);
-                    showCardTimeout();
-                }
-            }, 1000);
+            // Next $10 increment
+            const next10 = Math.ceil(total / 10) * 10;
+            if (next10 > total && !amounts.includes(next10)) {
+                amounts.push(next10);
+            }
 
-            // Call the terminal API
-            triggerCardTerminal();
+            // If we still need more options, add $20 increment
+            if (amounts.length < 4) {
+                const next20 = Math.ceil(total / 20) * 20;
+                if (next20 > total && !amounts.includes(next20)) amounts.push(next20);
+            }
+
+            // Take first 4 and sort
+            const finalAmounts = amounts.slice(0, 4).sort((a, b) => a - b);
+
+            finalAmounts.forEach((amt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'quick-amount-btn' + (idx === 0 && amt === total ? ' exact' : '');
+                btn.textContent = '$' + amt.toFixed(2);
+                // Use inline onclick which works better in iOS WKWebView
+                btn.setAttribute('onclick', `selectQuickAmount(${amt})`);
+                btn.setAttribute('ontouchstart', ''); // Empty to enable touch
+                quickAmounts.appendChild(btn);
+            });
         }
 
-        function updateCardTimer() {
-            cardTimer.textContent = `Waiting... (${cardSecondsRemaining}s)`;
+        function selectQuickAmount(amount) {
+            // Clear custom input when a quick amount is selected
+            customCashString = "";
+            updateCustomDisplay();
+            selectCashAmount(amount);
         }
 
-        // Trigger the card terminal via API
-        async function triggerCardTerminal() {
-            console.log('[Card] Triggering terminal...');
+        function selectCashAmount(amount) {
+            selectedCashAmount = amount;
+            const change = amount - saleAmount;
 
-            // Determine terminal ID based on register (if multiple locations)
-            // For now, use the register_id to look up terminal or default
-            const terminalId = registerId === 'BUSH' ? '86552' : '86646';
-
-            try {
-                const response = await fetch('/api/terminal/sale', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        terminal_id: terminalId,
-                        amount: saleAmount.toFixed(2),
-                        sale_id: saleId,
-                        register_id: registerId
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    console.log('[Card] Transaction approved!', data);
-                    clearInterval(cardTimerInterval);
-                    showCardSuccess(data);
-                } else if (data.pending) {
-                    // Terminal is waiting for card - keep timer running
-                    console.log('[Card] Terminal waiting for card...');
-                } else {
-                    console.log('[Card] Transaction failed:', data.error);
-                    clearInterval(cardTimerInterval);
-                    showCardTimeout(data.error || 'Transaction declined');
+            // Highlight the selected button
+            document.querySelectorAll('.quick-amount-btn').forEach(btn => {
+                btn.classList.remove('selected', 'exact');
+            });
+            document.querySelectorAll('.quick-amount-btn').forEach(btn => {
+                if (btn.textContent === '$' + amount.toFixed(2)) {
+                    btn.classList.add('selected');
                 }
-            } catch (e) {
-                console.error('[Card] Terminal API error:', e);
-                // For now, keep waiting - the terminal might still work
-                // In production, you might want to show an error
+            });
+
+            if (change >= 0) {
+                changeDisplay.style.display = 'block';
+                changeAmount.textContent = '$' + change.toFixed(2);
+                changeAmount.style.color = 'var(--thc-green)';
+                completeCashBtn.disabled = false;
+            } else {
+                changeDisplay.style.display = 'block';
+                changeAmount.textContent = '-$' + Math.abs(change).toFixed(2) + ' (not enough)';
+                changeAmount.style.color = '#ef4444';
+                completeCashBtn.disabled = true;
             }
         }
 
-        // Show timeout/error screen
-        function showCardTimeout(message) {
-            console.log('[Card] Showing timeout screen');
-            clearInterval(cardTimerInterval);
+        // Custom cash numpad
+        let customCashString = ""; // Track input as string for calculator-style entry
 
-            cardWaitingWrap.style.display = 'none';
-            cardTimeoutWrap.style.display = 'flex';
-            cardTimeoutAmount.textContent = '$' + saleAmount.toFixed(2);
+        function updateCustomDisplay() {
+            let displayVal = "$0.00";
+            if (customCashString.length > 0) {
+                // If ending with dot, show it
+                if (customCashString.endsWith('.')) {
+                    displayVal = '$' + customCashString;
+                } else if (customCashString.includes('.')) {
+                    // Has decimal, ensure max 2 decimal places shown if typed
+                    displayVal = '$' + customCashString;
+                } else {
+                    // Integer only
+                    displayVal = '$' + customCashString + (customCashString ? '.00' : '');
+                }
+            }
+            customAmountDisplay.textContent = displayVal;
+
+            // Update the actual calculation
+            const floatVal = parseFloat(customCashString || "0");
+            // Only update selection if we have a valid number
+            if (!isNaN(floatVal) && floatVal > 0) {
+                // Don't auto-select if just typing "0" or "."
+                if (customCashString !== "." && parseFloat(customCashString) > 0) {
+                    // We don't call selectCashAmount here fully because it highlights buttons
+                    // Instead we partially replicate functionality or just update complete button?
+                    // Actually better to call selectCashAmount but avoid clearing custom input
+                    // Let's modify selectCashAmount to handle this or just call it:
+                    selectCashAmount(floatVal);
+                }
+            } else {
+                // Reset
+                changeDisplay.style.display = 'none';
+                completeCashBtn.disabled = true;
+            }
         }
 
-        // Show success screen and complete sale
-        function showCardSuccess(data) {
-            console.log('[Card] Showing success screen');
-
-            cardWaitingWrap.style.display = 'none';
-            cardTimeoutWrap.style.display = 'none';
-            cardSuccessWrap.style.display = 'flex';
-            cardSuccessAmount.textContent = '$' + saleAmount.toFixed(2);
-            cardSuccessDetails.textContent = data.approval_code
-                ? `Approval Code: ${data.approval_code}`
-                : 'Transaction Complete';
-
-            // Auto-complete sale after brief display
-            setTimeout(() => {
-                completeCardSale();
-            }, 2000);
+        function handleCashNumpad(value) {
+            if (value === 'clear') {
+                // Backspace
+                if (customCashString.length > 0) {
+                    customCashString = customCashString.slice(0, -1);
+                }
+            } else if (value === 'decimal') {
+                // Add decimal if not present
+                if (!customCashString.includes('.')) {
+                    if (customCashString === "") customCashString = "0";
+                    customCashString += '.';
+                }
+            } else if (value === 'apply') {
+                // Legacy apply - button removed but handle just in case
+                const val = parseFloat(customCashString || "0");
+                if (val > 0) selectCashAmount(val);
+            } else {
+                // Digit 0-9
+                // Prevent multiple leading zeros
+                if (customCashString === "0" && value === "0") return;
+                if (customCashString === "0" && value !== ".") customCashString = value; // Replace 0
+                else {
+                    // Limit max length
+                    if (customCashString.length < 8) {
+                        // Limit decimal places to 2
+                        if (customCashString.includes('.')) {
+                            const parts = customCashString.split('.');
+                            if (parts[1] && parts[1].length >= 2) return;
+                        }
+                        customCashString += value;
+                    }
+                }
+            }
+            updateCustomDisplay();
         }
 
-        // Retry card payment
-        function retryCardPayment() {
-            console.log('[Card] Retrying...');
-            showCardWaitingScreen();
+        // Bind cash numpad buttons
+        document.querySelectorAll('.cash-num-btn').forEach(btn => {
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const num = btn.getAttribute('data-num');
+                const action = btn.getAttribute('data-action');
+                handleCashNumpad(num || action);
+            });
+
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const num = btn.getAttribute('data-num');
+                const action = btn.getAttribute('data-action');
+                handleCashNumpad(num || action);
+            });
+        });
+
+        // Complete cash sale
+        completeCashBtn.addEventListener('click', completeCashSale);
+        completeCashBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[Complete Cash] Button tapped, selectedAmount:', selectedCashAmount, 'saleAmount:', saleAmount);
+            completeCashSale();
+        });
+
+        async function completeCashSale() {
+            if (selectedCashAmount < saleAmount) return;
+
+            completeCashBtn.disabled = true;
+            completeCashBtn.textContent = 'Processing...';
+
+            try {
+                // Record the sale completion
+                await fetch(`/api/sales/${saleId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        approved: true,
+                        idVerified: true,
+                        paymentType: 'cash',
+                        cashReceived: selectedCashAmount,
+                        changeGiven: selectedCashAmount - saleAmount
+                    })
+                });
+
+                console.log('[Cash] Sale complete - sending ACCEPT to Lightspeed');
+
+                // Send ACCEPT to Lightspeed to complete the sale
+                window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
+                window.parent.postMessage('ACCEPT', '*');
+
+                completeCashBtn.textContent = '✓ Complete!';
+
+            } catch (e) {
+                console.error('Cash sale error:', e);
+                completeCashBtn.textContent = 'Error - Try Again';
+                completeCashBtn.disabled = false;
+            }
         }
 
-        // Cancel card payment
-        function cancelCardPayment() {
-            console.log('[Card] Canceling...');
-            clearInterval(cardTimerInterval);
-            cancelVerification();
+        function showCashScreen() {
+            // Hide other screens
+            document.querySelector('.scanner-wrap').style.display = 'none';
+
+            // Show cash screen
+            cashScreenWrap.style.display = 'block';
+            cashTotal.textContent = '$' + saleAmount.toFixed(2);
+            generateQuickAmounts(saleAmount);
+
+            // Reset state
+            selectedCashAmount = 0;
+            changeDisplay.style.display = 'none';
+            changeAmount.style.color = 'var(--thc-green)'; // Reset color
+            completeCashBtn.disabled = true;
+            completeCashBtn.textContent = 'Complete Sale';
+            customCashCents = 0;
+            updateCustomDisplay();
         }
 
-        // Complete the sale in Lightspeed
-        function completeCardSale() {
-            console.log('[Card] Completing sale in Lightspeed...');
-
-            // Send ACCEPT to Lightspeed
-            window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
-            window.parent.postMessage('ACCEPT', '*');
-        }
-
-        // Cash screen functions removed - this is the card payment version
-        // The card version uses showCardWaitingScreen() instead of showCashScreen()
+        // Prevent cash screen events from bubbling to document handlers
+        document.getElementById('cashScreenWrap').addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+        });
+        document.getElementById('cashScreenWrap').addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
 
         let pollInterval;
 
@@ -1480,8 +1452,8 @@
                 if (data.success && data.approved) {
                     clearInterval(pollInterval);
                     showSuccess({ customerName: data.customerName || 'Customer' });
-                    // After brief success animation, show card waiting screen
-                    setTimeout(showCardWaitingScreen, 1500);
+                    // After brief success animation, show cash screen
+                    setTimeout(showCashScreen, 1500);
                 } else {
                     showError(data.reason || 'Verification Failed');
                 }
@@ -1499,8 +1471,8 @@
                 if (data.status === 'approved' || data.status === 'approved_override') {
                     clearInterval(pollInterval);
                     showSuccess(data);
-                    // After brief success animation, show card waiting screen
-                    setTimeout(showCardWaitingScreen, 1500);
+                    // After brief success animation, show cash screen
+                    setTimeout(showCashScreen, 1500);
                 } else if (data.status === 'rejected') {
                     clearInterval(pollInterval);
                     showError(data.reason || 'Verification Failed');
@@ -1609,57 +1581,6 @@
             });
         }
 
-        async function submitOverride() {
-            console.log('[Override] Starting override submission');
-            console.log('[Override] saleId:', saleId);
-            console.log('[Override] PIN length:', currentPin.length);
-
-            if (currentPin.length !== 4) {
-                pinError.textContent = 'Enter 4 digits';
-                return;
-            }
-
-            const apiUrl = `/api/sales/${saleId}/override`;
-            console.log('[Override] API URL:', apiUrl);
-
-            try {
-                const payload = {
-                    verificationId: 'MANUAL-OVERRIDE',
-                    managerPin: currentPin,
-                    note: 'Number pad entry',
-                    clerkId: clerkId,
-                    registerId: registerId
-                };
-                console.log('[Override] Payload:', JSON.stringify(payload));
-
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                console.log('[Override] Response status:', response.status);
-                const data = await response.json();
-                console.log('[Override] Response data:', JSON.stringify(data));
-
-                if (data.success) {
-                    console.log('[Override] SUCCESS - showing success screen');
-                    closeOverrideModal();
-                    showSuccess({ customerName: 'Manual Override' });
-                    // After brief success animation, show card waiting screen
-                    setTimeout(showCardWaitingScreen, 1500);
-                } else {
-                    console.log('[Override] FAILED - error message:', data.message);
-                    pinError.textContent = data.message || 'Invalid PIN';
-                    currentPin = '';
-                    updatePinDisplay();
-                }
-            } catch (e) {
-                console.error('[Override] EXCEPTION:', e.name, e.message, e.stack);
-                pinError.textContent = 'Connection error: ' + e.message;
-            }
-        }
-
         function handleNumpadInput(value) {
             pinError.textContent = '';
 
@@ -1712,6 +1633,43 @@
             e.stopPropagation();
             closeOverrideModal();
         });
+
+        async function submitOverride() {
+            if (currentPin.length !== 4) {
+                pinError.textContent = 'Enter 4 digits';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/sales/${saleId}/override`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        verificationId: 'MANUAL-OVERRIDE',
+                        managerPin: currentPin,
+                        note: 'Number pad entry',
+                        clerkId: clerkId,
+                        registerId: registerId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    closeOverrideModal();
+                    showSuccess({ customerName: 'Manual Override' });
+                    // After brief success animation, show cash screen
+                    setTimeout(showCashScreen, 1500);
+                } else {
+                    pinError.textContent = data.message || 'Invalid PIN';
+                    currentPin = '';
+                    updatePinDisplay();
+                }
+            } catch (e) {
+                console.error('Override error', e);
+                pinError.textContent = 'Connection error';
+            }
+        }
 
         // ========== INIT ==========
         createParticles();
