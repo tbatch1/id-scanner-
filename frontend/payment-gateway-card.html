@@ -1430,16 +1430,7 @@
 
         console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount });
 
-        // ========== CASH SCREEN ELEMENTS ==========
-        const cashScreenWrap = document.getElementById('cashScreenWrap');
-        const cashTotal = document.getElementById('cashTotal');
-        const quickAmounts = document.getElementById('quickAmounts');
-        const customAmountDisplay = document.getElementById('customAmountDisplay');
-        const changeDisplay = document.getElementById('changeDisplay');
-        const changeAmount = document.getElementById('changeAmount');
-        const completeCashBtn = document.getElementById('completeCashBtn');
-
-        let selectedCashAmount = 0;
+        // Cash screen elements removed for card flow
 
         // Generate quick-select cash amounts
         function generateQuickAmounts(total) {
