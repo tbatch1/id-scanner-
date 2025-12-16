@@ -27,6 +27,10 @@
       "destination": "/frontend/payment-gateway-card.html"
     },
     {
+      "source": "/payment-gateway-card2.html",
+      "destination": "/frontend/payment-gateway-card2.html"
+    },
+    {
       "source": "/scanner.html",
       "destination": "/frontend/scanner.html"
     },
