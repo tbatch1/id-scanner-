@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>THC Club - ID Card Verification</title>
+    <title>THC Club - ID Verification</title>
 
     <!-- GSAP Animation Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
@@ -1051,25 +1051,7 @@
             console.log('[Scanner] Focus activated');
         }
 
-        // ========== CARD VERIFICATION COMPLETE ==========
-        function completeCardVerification() {
-            console.log('[Card] ID verification complete - sending ACCEPT to Lightspeed');
-
-            // Send ACCEPT to Lightspeed to proceed with card payment
-            try {
-                window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
-            } catch (e) {
-                console.error('[Card] Error sending JSON ACCEPT', e);
-            }
-
-            // Also send plain string format as fallback
-            window.parent.postMessage('ACCEPT', '*');
-
-            console.log('[Card] ACCEPT signals sent to Lightspeed');
-        }
-
         setInterval(ensureFocus, 2500);
-
 
         // ========== TOUCH HANDLING ==========
         scanCard.addEventListener('touchstart', (e) => {
@@ -1470,8 +1452,8 @@
                 if (data.success && data.approved) {
                     clearInterval(pollInterval);
                     showSuccess({ customerName: data.customerName || 'Customer' });
-                    // After brief success animation, send ACCEPT to Lightspeed for card payment
-                    setTimeout(completeCardVerification, 1500);
+                    // After brief success animation, show cash screen
+                    setTimeout(showCashScreen, 1500);
                 } else {
                     showError(data.reason || 'Verification Failed');
                 }
@@ -1489,8 +1471,8 @@
                 if (data.status === 'approved' || data.status === 'approved_override') {
                     clearInterval(pollInterval);
                     showSuccess(data);
-                    // After brief success animation, send ACCEPT to Lightspeed for card payment
-                    setTimeout(completeCardVerification, 1500);
+                    // After brief success animation, show cash screen
+                    setTimeout(showCashScreen, 1500);
                 } else if (data.status === 'rejected') {
                     clearInterval(pollInterval);
                     showError(data.reason || 'Verification Failed');
@@ -1653,9 +1635,6 @@
         });
 
         async function submitOverride() {
-            // DEBUG: Show what saleId we're using
-            alert('DEBUG: saleId = ' + saleId);
-
             if (currentPin.length !== 4) {
                 pinError.textContent = 'Enter 4 digits';
                 return;
@@ -1676,22 +1655,17 @@
 
                 const data = await response.json();
 
-                // DEBUG: Show the API response
-                alert('DEBUG Response: status=' + response.status + ', success=' + data.success + ', message=' + (data.message || 'none'));
-
                 if (data.success) {
                     closeOverrideModal();
                     showSuccess({ customerName: 'Manual Override' });
-                    // After brief success animation, send ACCEPT to Lightspeed
-                    setTimeout(completeCardVerification, 1500);
+                    // After brief success animation, show cash screen
+                    setTimeout(showCashScreen, 1500);
                 } else {
                     pinError.textContent = data.message || 'Invalid PIN';
                     currentPin = '';
                     updatePinDisplay();
                 }
             } catch (e) {
-                // DEBUG: Show errors
-                alert('DEBUG ERROR: ' + e.message);
                 console.error('Override error', e);
                 pinError.textContent = 'Connection error';
             }
