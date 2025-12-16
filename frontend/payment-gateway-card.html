@@ -1100,65 +1100,6 @@
         </div>
     </div>
 
-    <!-- ========== CASH PAYMENT SCREEN ========== -->
-    <div class="scanner-wrap cash-wrap" id="cashScreenWrap" style="display: none;">
-        <div class="cash-screen active" id="cashScreen">
-            <!-- Header row: Total amount with Close button -->
-            <div class="cash-header">
-                <button class="btn-close-cash" id="btnCloseCash" onclick="cancelVerification()">✕ Close</button>
-                <div class="cash-label">Amount Due</div>
-                <div class="cash-total" id="cashTotal">$0.00</div>
-            </div>
-
-            <!-- Two column layout -->
-            <div class="cash-columns">
-                <!-- Left: Quick select buttons -->
-                <div class="cash-left">
-                    <div class="cash-label">Quick Select</div>
-                    <div class="quick-amounts" id="quickAmounts">
-                        <!-- Populated by JavaScript -->
-                    </div>
-                    <!-- THC Logo -->
-                    <div class="cash-logo-container">
-                        <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="cash-logo">
-                    </div>
-                </div>
-
-                <!-- Right: Custom numpad -->
-                <div class="cash-right">
-                    <div class="cash-label">Custom Amount</div>
-                    <div class="custom-amount-display" id="customAmountDisplay">$0.00</div>
-                    <div class="cash-numpad" id="cashNumpad">
-                        <button class="cash-num-btn" data-num="1">1</button>
-                        <button class="cash-num-btn" data-num="2">2</button>
-                        <button class="cash-num-btn" data-num="3">3</button>
-                        <button class="cash-num-btn" data-num="4">4</button>
-                        <button class="cash-num-btn" data-num="5">5</button>
-                        <button class="cash-num-btn" data-num="6">6</button>
-                        <button class="cash-num-btn" data-num="7">7</button>
-                        <button class="cash-num-btn" data-num="8">8</button>
-                        <button class="cash-num-btn" data-num="9">9</button>
-                        <button class="cash-num-btn" data-action="decimal">.</button>
-                        <button class="cash-num-btn" data-num="0">0</button>
-                        <button class="cash-num-btn cash-num-clear" data-action="clear">⌫</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom: Change and Complete -->
-            <div class="cash-footer">
-                <div class="change-display" id="changeDisplay" style="display: none;">
-                    <div class="change-label">Change Due</div>
-                    <div class="change-amount" id="changeAmount">$0.00</div>
-                </div>
-
-                <button class="complete-cash-btn" id="completeCashBtn" disabled>
-                    Complete Sale
-                </button>
-            </div>
-        </div>
-    </div>
-
     <!-- ========== CARD PAYMENT WAITING SCREEN ========== -->
     <div class="card-wrap" id="cardWaitingWrap" style="display: none;">
         <div class="card-waiting-screen" id="cardWaitingScreen">
