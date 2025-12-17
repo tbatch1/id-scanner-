@@ -998,6 +998,17 @@
         </div>
     </div>
 
+    <!-- DEBUG PANEL - REMOVE AFTER TESTING -->
+    <div id="debugPanel"
+        style="position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.9); color: #0f0; font-family: monospace; font-size: 12px; padding: 8px; z-index: 9999; border-bottom: 2px solid #0f0;">
+        <b>🔧 DEBUG:</b>
+        Focus: <span id="dbgFocus">--</span> |
+        Keys: <span id="dbgKeys">0</span> |
+        Buffer: <span id="dbgBuffer">0</span> chars |
+        Last: <span id="dbgLast">--</span> |
+        API: <span id="dbgApi">waiting</span>
+    </div>
+
     <script>
         // ========== ELEMENTS ==========
         const scanCard = document.getElementById('scanCard');
@@ -1104,9 +1115,27 @@
         const SCAN_TIMEOUT = 100;
         const PDF417_PREFIX = ']L';
 
+        // DEBUG: Initialize debug elements
+        const dbgFocus = document.getElementById('dbgFocus');
+        const dbgKeys = document.getElementById('dbgKeys');
+        const dbgBuffer = document.getElementById('dbgBuffer');
+        const dbgLast = document.getElementById('dbgLast');
+        const dbgApi = document.getElementById('dbgApi');
+        let keyCount = 0;
+
+        // DEBUG: Update focus status every second
+        setInterval(() => {
+            dbgFocus.textContent = document.activeElement === hiddenInput ? '✅ YES' : '❌ NO';
+        }, 1000);
+
         document.addEventListener('keydown', (e) => {
             const currentTime = Date.now();
             const isPrintable = e.key.length === 1;
+
+            // DEBUG: Update debug panel
+            keyCount++;
+            dbgKeys.textContent = keyCount;
+            dbgLast.textContent = e.key === 'Enter' ? 'ENTER' : e.key;
 
             if (currentTime - lastKeyTime > SCAN_TIMEOUT && barcodeBuffer.length > 0) {
                 if (!barcodeBuffer.startsWith(PDF417_PREFIX)) {
@@ -1117,12 +1146,14 @@
             lastKeyTime = currentTime;
 
             if (e.key === 'Enter') {
+                dbgApi.textContent = barcodeBuffer.length > 10 ? 'SENDING...' : 'too short';
                 if (barcodeBuffer.length > 10) {
                     handleBluetoothScan(barcodeBuffer);
                 }
                 barcodeBuffer = '';
             } else if (isPrintable) {
                 barcodeBuffer += e.key;
+                dbgBuffer.textContent = barcodeBuffer.length;
 
                 if (barcodeBuffer.length === 1) {
                     activateScanning();
