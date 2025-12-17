@@ -1007,6 +1007,7 @@
         Buffer: <span id="dbgBuffer">0</span> chars |
         Last: <span id="dbgLast">--</span> |
         API: <span id="dbgApi">waiting</span>
+        <br><b>📄 Scan Preview:</b> <span id="dbgPreview" style="color: #ff0;">--</span>
     </div>
 
     <script>
@@ -1121,6 +1122,7 @@
         const dbgBuffer = document.getElementById('dbgBuffer');
         const dbgLast = document.getElementById('dbgLast');
         const dbgApi = document.getElementById('dbgApi');
+        const dbgPreview = document.getElementById('dbgPreview');
         let keyCount = 0;
 
         // DEBUG: Update focus status every second
@@ -1154,6 +1156,7 @@
             } else if (isPrintable) {
                 barcodeBuffer += e.key;
                 dbgBuffer.textContent = barcodeBuffer.length;
+                dbgPreview.textContent = barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : '');
 
                 if (barcodeBuffer.length === 1) {
                     activateScanning();

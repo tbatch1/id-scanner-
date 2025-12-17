@@ -1566,13 +1566,7 @@
             updateCustomDisplay();
         }
 
-        // Prevent cash screen events from bubbling to document handlers
-        document.getElementById('cashScreenWrap').addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-        });
-        document.getElementById('cashScreenWrap').addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
+        // Cash screen event listeners removed - this is card-only flow
 
         let pollInterval;
 
@@ -1954,7 +1948,7 @@
         function showCardWaitingScreen() {
             console.log('[Card] Showing card waiting screen');
             document.querySelector('.scanner-wrap').style.display = 'none';
-            cashScreenWrap.style.display = 'none';
+            // Cash screen elements removed - this is card-only flow
             cardTimeoutWrap.style.display = 'none';
             cardSuccessWrap.style.display = 'none';
             cardWaitingWrap.style.display = 'flex';
