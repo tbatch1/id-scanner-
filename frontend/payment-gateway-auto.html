@@ -1143,6 +1143,39 @@
             dbgFocus.textContent = document.activeElement === hiddenInput ? '✅ YES' : '❌ NO';
         }, 1000);
 
+        // HYBRID APPROACH: Secondary capture via hidden input's 'input' event
+        // This fires when text is typed/scanned INTO the hidden input directly
+        hiddenInput.addEventListener('input', (e) => {
+            const newValue = hiddenInput.value;
+            if (newValue.length > 0) {
+                console.log('[Scanner] Hidden input received:', newValue.length, 'chars');
+                keyCount += newValue.length;
+                dbgKeys.textContent = keyCount;
+                dbgBuffer.textContent = newValue.length;
+                dbgLast.textContent = 'INPUT:' + newValue.slice(-1);
+                dbgPreview.textContent = newValue.substring(0, 50) + (newValue.length > 50 ? '...' : '');
+
+                // If we got content via input event, process it as a scan
+                if (newValue.length > 10) {
+                    console.log('[Scanner] Processing via input event, length:', newValue.length);
+                    dbgApi.textContent = 'SENDING (input)...';
+                    handleBluetoothScan(newValue);
+                    hiddenInput.value = ''; // Clear for next scan
+                }
+            }
+        });
+
+        // Also capture Enter key via keypress on hidden input
+        hiddenInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && hiddenInput.value.length > 10) {
+                console.log('[Scanner] Enter key on hidden input, processing...');
+                dbgApi.textContent = 'SENDING (keypress)...';
+                handleBluetoothScan(hiddenInput.value);
+                hiddenInput.value = '';
+                e.preventDefault();
+            }
+        });
+
         document.addEventListener('keydown', (e) => {
             const currentTime = Date.now();
             const isPrintable = e.key.length === 1;
