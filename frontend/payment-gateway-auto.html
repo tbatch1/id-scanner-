@@ -852,10 +852,10 @@
     <!-- Particles container -->
     <div id="particles"></div>
 
-    <!-- Hidden input for iOS HID focus -->
+    <!-- Hidden input for iOS HID focus - MUST be visible (but transparent) for iOS to accept focus -->
     <input type="text" id="hiddenScannerInput"
-        style="position: absolute; left: -9999px; opacity: 0; width: 1px; height: 1px;" autocomplete="off"
-        autocorrect="off" autocapitalize="off" spellcheck="false" />
+        style="position: fixed; top: 50%; left: 50%; width: 10px; height: 10px; opacity: 0.01; z-index: -1; pointer-events: none;"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="none" />
 
     <div class="scanner-wrap">
         <!-- ========== SCAN STATE ========== -->
@@ -1058,12 +1058,25 @@
         });
 
         // ========== iOS FOCUS ==========
+        let focusAttempts = 0;
         function ensureFocus() {
+            focusAttempts++;
+            // iOS requires click() before focus() sometimes
+            hiddenInput.click();
             hiddenInput.focus();
-            console.log('[Scanner] Focus activated');
+
+            // Update debug panel with focus status
+            const isFocused = document.activeElement === hiddenInput;
+            console.log('[Scanner] Focus attempt #' + focusAttempts + ': ' + (isFocused ? 'SUCCESS' : 'FAILED'));
+
+            // If not focused after user interaction, try select() as well
+            if (!isFocused) {
+                hiddenInput.select();
+            }
         }
 
-        setInterval(ensureFocus, 2500);
+        // More frequent focus checks for iOS
+        setInterval(ensureFocus, 1500);
 
         // ========== TOUCH HANDLING ==========
         scanCard.addEventListener('touchstart', (e) => {

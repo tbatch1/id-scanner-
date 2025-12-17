@@ -397,6 +397,30 @@ function parseAAMVA(data) {
   };
 }
 
+// ========== TEST ENDPOINT FOR SCANNER DEBUGGING ==========
+router.post('/test-scan', (req, res) => {
+  console.log('======================================');
+  console.log('🧪 TEST SCAN ENDPOINT HIT');
+  console.log('======================================');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Request Body:', JSON.stringify(req.body, null, 2));
+  console.log('Body Keys:', Object.keys(req.body || {}));
+  if (req.body.barcodeData) {
+    console.log('Barcode Length:', req.body.barcodeData.length);
+    console.log('Barcode First 100:', req.body.barcodeData.substring(0, 100));
+    console.log('Has @ANSI:', req.body.barcodeData.includes('@ANSI'));
+    console.log('Has ]L:', req.body.barcodeData.includes(']L'));
+  }
+  console.log('======================================\n');
+
+  res.json({
+    received: true,
+    timestamp: new Date().toISOString(),
+    bodyLength: JSON.stringify(req.body).length,
+    barcodeLength: req.body.barcodeData ? req.body.barcodeData.length : 0
+  });
+});
+
 router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
   const { saleId } = req.params;
   const { barcodeData, registerId, clerkId } = req.body;
