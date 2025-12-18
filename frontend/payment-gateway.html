@@ -585,10 +585,19 @@
 
         container.addEventListener('click', activateScanner);
 
+        function openRemoteScanner() {
+            if (!saleId) {
+                showError('Missing Sale ID');
+                return;
+            }
+            window.open(`/scanner.html?sale_id=${saleId}`, '_blank');
+        }
+
         function activateScanner() {
             ensureFocus();
+            openRemoteScanner();
 
-            statusText.textContent = '📡 SCANNING...';
+            statusText.textContent = '📡 WAITING FOR REMOTE...';
             statusText.parentElement.style.borderColor = '#f59e0b';
             statusText.parentElement.style.color = '#f59e0b';
             container.classList.add('scanning');
@@ -652,11 +661,35 @@
         if (!saleId) {
             showError('Missing Sale ID. Please open from Lightspeed.');
         } else {
-            startPolling();
+            startStatusPolling();
         }
 
-        function startPolling() {
-            pollInterval = setInterval(checkStatus, 2000);
+        let statusPollInterval = null;
+        function startStatusPolling() {
+            if (statusPollInterval) return;
+            console.log('[Poll] Starting remote scan monitor...');
+            statusPollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/sales/${saleId}/status`);
+                    const data = await response.json();
+
+                    if (data.status === 'approved' || data.status === 'approved_override') {
+                        console.log('[Poll] REMOTE SCAN APPROVED!');
+                        clearInterval(statusPollInterval);
+                        statusText.textContent = 'VERIFIED ✓';
+                        statusText.parentElement.style.borderColor = '#10b981';
+                        statusText.parentElement.style.color = '#10b981';
+                        showSuccess(data);
+                        setTimeout(completeSale, 1500);
+                    } else if (data.status === 'rejected') {
+                        console.log('[Poll] REMOTE SCAN REJECTED:', data.reason);
+                        clearInterval(statusPollInterval);
+                        showError(data.reason || 'Verification Failed');
+                    }
+                } catch (e) {
+                    console.error('[Poll] Error checking status', e);
+                }
+            }, 500);
         }
 
         async function handleBluetoothScan(barcodeData) {

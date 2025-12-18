@@ -1,1994 +1,223 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="ID Scanner">
-    <title>ID Scanner - THC Club</title>
-    <link rel="manifest" href="/frontend/manifest.json">
-    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-barcode-reader-bundle@10.4.3100/dist/dbr.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-code-parser@2.4.32/dist/dcp.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>THC Remote Scan</title>
     <style>
-        :root {
-            color-scheme: dark;
-            --ls-bg: #0d111b;
-            --ls-panel: rgba(15, 18, 34, 0.92);
-            --ls-border: rgba(255, 255, 255, 0.08);
-            --ls-blue: #5a54ff;
-            --ls-green: #1fbf75;
-            --ls-amber: #f97316;
-            --ls-text: #f4f6ff;
-            --ls-teal: #22d3ee;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: radial-gradient(circle at 20% 20%, rgba(90, 84, 255, 0.35), transparent 55%), radial-gradient(circle at 80% 0%, rgba(34, 211, 238, 0.2), transparent 50%), var(--ls-bg);
-            color: var(--ls-text);
-            min-height: 100vh;
+            margin: 0;
+            background: #000;
+            color: #0f0;
+            font-family: -apple-system, system-ui;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start;
-            padding: 32px 20px 40px;
-            position: relative;
-            overflow-x: hidden;
-            overflow-y: auto;
-        }
-
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background: url('data:image/svg+xml,%3Csvg width=\"200\" height=\"200\" viewBox=\"0 0 120 120\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cpath opacity=\"0.04\" d=\"M0 60L120 60M60 0L60 120\" stroke=\"white\"/%3E%3C/svg%3E');
-            pointer-events: none;
-        }
-
-        .container {
-            max-width: 860px;
-            width: 100%;
+            justify-content: center;
+            height: 100vh;
             text-align: center;
-            background: var(--ls-panel);
-            border-radius: 28px;
-            padding: 32px 32px 36px;
-            border: 1px solid var(--ls-border);
-            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
-            backdrop-filter: blur(22px);
-        }
-
-        h1 {
-            font-size: 30px;
-            margin-bottom: 20px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            background: linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .amount-display {
-            background: linear-gradient(135deg, rgba(90, 84, 255, 0.18) 0%, rgba(34, 211, 238, 0.12) 100%);
-            border: 1px solid rgba(90, 84, 255, 0.35);
-            border-radius: 20px;
-            padding: 22px 28px;
-            margin-bottom: 26px;
-            font-size: 18px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-        }
-
-        .amount-display #amount {
-            display: block;
-            font-size: 38px;
-            font-weight: 700;
-            margin-top: 8px;
-            background: linear-gradient(135deg, var(--ls-teal, #22d3ee) 0%, var(--ls-green) 60%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        #camera-container {
-            width: 100%;
-            max-width: 640px;
-            margin: 0 auto 24px;
-            border-radius: 24px;
             overflow: hidden;
-            box-shadow: 0 35px 90px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(90, 84, 255, 0.3);
-            background: rgba(7, 9, 17, 0.9);
-            position: relative;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(16px);
         }
 
-        #scanGuide {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 85%;
-            height: 55%;
-            border: 3px solid var(--ls-green);
-            border-radius: 12px;
-            pointer-events: none;
-            z-index: 10;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45),
-                        0 0 30px rgba(31, 191, 117, 0.4);
-            animation: guidePulse 2s ease-in-out infinite;
-        }
-
-        @keyframes guidePulse {
-            0%, 100% {
-                box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4),
-                            0 0 30px rgba(31, 191, 117, 0.4);
-            }
-            50% {
-                box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4),
-                            0 0 50px rgba(31, 191, 117, 0.75);
-            }
-        }
-
-        #scanGuide::before {
-            content: '';
-            position: absolute;
-            top: -2px;
-            left: -2px;
-            right: -2px;
-            bottom: -2px;
-            border: 2px dashed rgba(31, 191, 117, 0.45);
-            border-radius: 12px;
-            animation: dashMove 20s linear infinite;
-        }
-
-        @keyframes dashMove {
-            0% { stroke-dashoffset: 0; }
-            100% { stroke-dashoffset: 100; }
-        }
-
-        #scanGuide .corner {
-            position: absolute;
-            width: 30px;
-            height: 30px;
-            border: 4px solid var(--ls-green);
-        }
-
-        #scanGuide .corner.top-left {
-            top: -3px;
-            left: -3px;
-            border-right: none;
-            border-bottom: none;
-        }
-
-        #scanGuide .corner.top-right {
-            top: -3px;
-            right: -3px;
-            border-left: none;
-            border-bottom: none;
-        }
-
-        #scanGuide .corner.bottom-left {
-            bottom: -3px;
-            left: -3px;
-            border-right: none;
-            border-top: none;
-        }
-
-        #scanGuide .corner.bottom-right {
-            bottom: -3px;
-            right: -3px;
-            border-left: none;
-            border-top: none;
-        }
-
-        #scanLine {
-            position: absolute;
-            left: 0;
-            right: 0;
-            top: 50%;
-            height: 2px;
-            background: linear-gradient(90deg,
-                transparent 0%,
-                rgba(31, 191, 117, 0.35) 10%,
-                var(--ls-green) 50%,
-                rgba(31, 191, 117, 0.35) 90%,
-                transparent 100%);
-            box-shadow: 0 0 10px rgba(31, 191, 117, 0.6),
-                        0 0 20px rgba(31, 191, 117, 0.3);
-            transform: translateY(-50%);
-            z-index: 12;
-        }
-
-        #scanLine::before {
-            content: '';
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            width: 4px;
-            height: 4px;
-            background: var(--ls-green);
-            border-radius: 50%;
-            box-shadow: 0 0 8px #7ed956;
-        }
-
-        #targetCrosshair {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            width: 40px;
-            height: 40px;
-            pointer-events: none;
-            z-index: 15;
-        }
-
-        #targetCrosshair::before,
-        #targetCrosshair::after {
-            content: '';
-            position: absolute;
-            background: #7ed956;
-            box-shadow: 0 0 10px rgba(126, 217, 86, 0.8);
-        }
-
-        #targetCrosshair::before {
-            left: 50%;
-            top: 0;
-            width: 2px;
-            height: 100%;
-            transform: translateX(-50%);
-        }
-
-        #targetCrosshair::after {
-            top: 50%;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            transform: translateY(-50%);
-        }
-
-        #targetCenter {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            width: 8px;
-            height: 8px;
-            background: #7ed956;
-            border-radius: 50%;
-            box-shadow: 0 0 15px rgba(126, 217, 86, 1),
-                        0 0 30px rgba(126, 217, 86, 0.6);
-            animation: targetPulse 1.5s ease-in-out infinite;
-        }
-
-        @keyframes targetPulse {
-            0%, 100% {
-                transform: translate(-50%, -50%) scale(1);
-                opacity: 1;
-            }
-            50% {
-                transform: translate(-50%, -50%) scale(1.3);
-                opacity: 0.7;
-            }
-        }
-
-        @keyframes focusPulse {
-            0% {
-                transform: translate(-50%, -50%) scale(0.5);
-                opacity: 1;
-            }
-            100% {
-                transform: translate(-50%, -50%) scale(1.2);
-                opacity: 0;
-            }
-        }
-
-        #scanHint {
-            position: absolute;
-            bottom: 15px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.65);
-            color: var(--ls-green);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            z-index: 11;
-            white-space: nowrap;
-        }
-
-        #videoElement {
-            width: 100%;
-            height: 400px;
-            object-fit: cover;
-            display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            background: #000;
-            -webkit-transform: translateZ(0);
-            transform: translateZ(0);
-        }
-
-        #videoElement.active {
-            background: transparent;
-        }
-
-        canvas {
-            display: none;
+        #ui {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .status {
-            padding: 18px 24px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            font-size: 16px;
-            font-weight: 500;
-            border: 1px solid var(--ls-border);
-            background: rgba(255, 255, 255, 0.02);
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35);
-        }
-
-        .status.info {
-            border-color: rgba(90, 84, 255, 0.45);
-            background: linear-gradient(135deg, rgba(90, 84, 255, 0.15), rgba(34, 211, 238, 0.12));
-        }
-
-        .status.success {
-            border-color: rgba(31, 191, 117, 0.65);
-            background: linear-gradient(135deg, rgba(31, 191, 117, 0.18), rgba(34, 211, 238, 0.12));
-            color: var(--ls-text);
-        }
-
-        .status.error {
-            border-color: rgba(239, 68, 68, 0.65);
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(185, 28, 28, 0.15));
-        }
-
-        button {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: var(--ls-text);
-            padding: 16px 40px;
-            border-radius: 12px;
-            font-size: 17px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin: 10px;
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
-        }
-
-        button:active {
-            transform: scale(0.98);
-        }
-
-        button.primary {
-            background: linear-gradient(135deg, var(--ls-blue), #7f7dff);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            font-size: 20px;
-            padding: 20px 50px;
-            box-shadow: 0 20px 45px rgba(90, 84, 255, 0.45);
-            color: var(--ls-text);
-            font-weight: 700;
-        }
-
-        #flashButton {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: rgba(0, 0, 0, 0.65);
-            border: 2px solid rgba(255, 255, 255, 0.35);
-            color: white;
-            font-size: 28px;
-            cursor: pointer;
-            z-index: 15;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-            margin: 0;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-        }
-
-        #flashButton.active {
-            background: rgba(255, 215, 0, 0.9);
-            border-color: rgba(255, 215, 0, 0.85);
-            box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
-            color: #000;
-        }
-
-        #logs {
-            background: rgba(12, 15, 25, 0.85);
-            padding: 16px;
-            border-radius: 12px;
-            margin-bottom: 22px;
-            font-size: 11px;
-            text-align: left;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
-            border: 1px solid rgba(90, 84, 255, 0.3);
-            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.35);
-        }
-
-        #logs .log-title {
-            background: linear-gradient(135deg, #ffffff 0%, #9ca3ff 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: 24px;
             font-weight: bold;
-            margin-bottom: 5px;
         }
 
-        #logContent div {
-            color: #ecf0f1;
-            margin: 2px 0;
+        .sub {
+            color: #888;
+            margin-top: 10px;
         }
 
-        /* Register Selection Modal */
-        #registerModal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.85);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-        }
-
-        #registerModal.show {
-            display: flex;
-        }
-
-        .modal-content {
-            background: var(--ls-panel);
-            border-radius: 24px;
-            padding: 40px;
-            max-width: 500px;
-            width: 90%;
-            border: 1px solid var(--ls-border);
-            box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7);
-        }
-
-        .modal-content h2 {
-            font-size: 28px;
-            margin-bottom: 16px;
-            background: linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .modal-content p {
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 24px;
-            line-height: 1.6;
-        }
-
-        .modal-content input,
-        .modal-content select {
-            width: 100%;
-            padding: 16px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            background: rgba(0, 0, 0, 0.3);
-            color: var(--ls-text);
-            font-size: 16px;
-            margin-bottom: 20px;
-        }
-
-        .modal-content input:focus,
-        .modal-content select:focus {
-            outline: none;
-            border-color: var(--ls-blue);
-            box-shadow: 0 0 20px rgba(90, 84, 255, 0.3);
-        }
-
-        /* Back to POS Floating Button */
-        #backToPOSButton {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background: linear-gradient(135deg, var(--ls-amber), #ea580c);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            color: white;
-            padding: 18px 32px;
-            border-radius: 50px;
-            font-size: 16px;
-            font-weight: 700;
-            cursor: pointer;
-            box-shadow: 0 20px 45px rgba(249, 115, 22, 0.4);
-            z-index: 999;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transition: all 0.3s ease;
-        }
-
-        #backToPOSButton:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 25px 55px rgba(249, 115, 22, 0.5);
-        }
-
-        #backToPOSButton:active {
-            transform: translateY(0);
-        }
-
-        /* Toast notification */
-        .toast {
-            position: fixed;
-            bottom: 120px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--ls-panel);
-            color: var(--ls-text);
-            padding: 16px 24px;
-            border-radius: 12px;
-            border: 1px solid var(--ls-border);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+        #hiddenInput {
+            position: absolute;
             opacity: 0;
-            transition: opacity 0.3s ease;
-            z-index: 1001;
             pointer-events: none;
         }
 
-        .toast.show {
-            opacity: 1;
+        .success {
+            color: #0f0;
+            display: none;
+        }
+
+        .error {
+            color: #f44;
+            display: none;
+        }
+
+        /* Log Panel */
+        #log-panel {
+            width: 100%;
+            height: 150px;
+            background: rgba(20, 20, 20, 0.9);
+            border-top: 1px solid #333;
+            font-family: monospace;
+            font-size: 11px;
+            color: #aaa;
+            text-align: left;
+            padding: 10px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            box-sizing: border-box;
+        }
+
+        .log-entry {
+            margin-bottom: 2px;
+            border-bottom: 1px solid #222;
+        }
+
+        .log-time {
+            color: #555;
+            margin-right: 5px;
+        }
+
+        .log-info {
+            color: #42b4e6;
+        }
+
+        .log-success {
+            color: #2ea750;
+        }
+
+        .log-error {
+            color: #f44;
         }
     </style>
 </head>
+
 <body>
-    <div class="container">
-        <img src="/frontend/assets/thc-logo.png" alt="THC Club" style="width: 80px; height: 80px; margin-bottom: 20px;">
-        <h1>📷 ID Scanner</h1>
-
-        <div id="amount-display" class="amount-display">
-            Transaction Amount: <span id="amount">$0.00</span>
+    <input type="text" id="hiddenInput" autocomplete="off" />
+    <div id="ui">
+        <div id="ready">
+            <div class="status">🟢 Ready to Scan</div>
+            <div class="sub" id="loc-info">Waiting for Sale ID...</div>
         </div>
-
-        <div id="status" class="status info">
-            Ready to scan
+        <div id="sending" style="display:none;">
+            <div class="status">📤 Sending...</div>
         </div>
-
-        <div id="logs">
-            <div class="log-title">Debug Logs:</div>
-            <div id="logContent"></div>
+        <div id="success" class="success">
+            <div class="status">✅ Scan Sent!</div>
+            <div class="sub">Check the main app.</div>
         </div>
-
-        <button class="primary" onclick="startCamera()">
-            📷 START CAMERA
-        </button>
-
-        <div id="camera-container">
-            <video id="videoElement" playsinline autoplay muted webkit-playsinline></video>
-            <canvas id="canvas"></canvas>
-            <button id="flashButton" onclick="toggleFlash()">💡</button>
-            <div id="scanGuide" style="display:none;">
-                <div class="corner top-left"></div>
-                <div class="corner top-right"></div>
-                <div class="corner bottom-left"></div>
-                <div class="corner bottom-right"></div>
-                <div id="scanLine"></div>
-                <div id="targetCrosshair">
-                    <div id="targetCenter"></div>
-                </div>
-            </div>
-            <div id="scanHint" style="display:none;">Align barcode with center line</div>
-        </div>
-
-        <button id="captureButton" class="primary" onclick="captureHighResPhoto()" style="display:none;">
-            📸 CAPTURE HIGH-RES PHOTO
-        </button>
-    </div>
-
-    <!-- Register Selection Modal -->
-    <div id="registerModal">
-        <div class="modal-content">
-            <h2>🏪 Select Register</h2>
-            <p>Choose your register to continue scanning</p>
-            <input type="text" id="registerInput" placeholder="Enter Register ID (e.g., REG-001)" />
-            <button class="primary" onclick="saveRegister()">Save & Continue</button>
+        <div id="error" class="error">
+            <div class="status">❌ Error Sending Scan</div>
+            <div id="errorMsg" class="sub"></div>
         </div>
     </div>
 
-    <!-- Back to POS Floating Button -->
-    <button id="backToPOSButton" onclick="showBackToPOSHint()">
-        <span>↩️</span>
-        <span>Return to POS</span>
-    </button>
-
-    <!-- Toast Notification -->
-    <div id="toast" class="toast"></div>
+    <!-- Debug Log Panel -->
+    <div id="log-panel"></div>
 
     <script>
-        // Parse query parameters
         const urlParams = new URLSearchParams(window.location.search);
-        const sessionId = urlParams.get('session_id') || urlParams.get('sale_id') || 'SCAN-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-        const registerId = urlParams.get('register_id');
-        const amount = urlParams.get('amount') || '0.00';
-        const outletId = urlParams.get('outlet_id') || '02f4a1bc-ae66-11f0-f174-8d8eeff9231e';
-        const outletName = urlParams.get('outlet_name');
-        const origin = urlParams.get('origin');
-        const employeeId = urlParams.get('employee_id');
-        const employeeName = urlParams.get('employee_name');
+        const saleId = urlParams.get('sale_id');
+        const locInfo = document.getElementById('loc-info');
+        const logPanel = document.getElementById('log-panel');
+        const input = document.getElementById('hiddenInput');
+        const readyUi = document.getElementById('ready');
+        const sendingUi = document.getElementById('sending');
+        const successUi = document.getElementById('success');
+        const errorUi = document.getElementById('error');
+        const errorMsg = document.getElementById('errorMsg');
 
-        // Display amount
-        document.getElementById('amount').textContent = `$${parseFloat(amount).toFixed(2)}`;
+        function addLog(msg, type = '') {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + (type ? 'log-' + type : '');
+            const time = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
+            logPanel.prepend(entry);
+        }
 
-        // Dynamsoft license
-        Dynamsoft.License.LicenseManager.initLicense("DLS2eyJoYW5kc2hha2VDb2RlIjoiMTA0Nzc2MzcyLU1UQTBOemMyTXpjeUxYZGxZaTFVY21saGJGQnliMm8iLCJtYWluU2VydmVyVVJMIjoiaHR0cHM6Ly9tZGxzLmR5bmFtc29mdG9ubGluZS5jb20iLCJvcmdhbml6YXRpb25JRCI6IjEwNDc3NjM3MiIsInN0YW5kYnlTZXJ2ZXJVUkwiOiJodHRwczovL3NkbHMuZHluYW1zb2Z0b25saW5lLmNvbSIsImNoZWNrQ29kZSI6MTg1NjI1MTM1OH0=");
+        if (saleId) {
+            locInfo.textContent = `Sale ID: ${saleId}`;
+            addLog(`Initialized for Sale: ${saleId}`, 'info');
+        } else {
+            addLog('WARNING: No Sale ID provided', 'error');
+        }
 
-        // Load Code Parser specs for MRZ and barcodes
-        Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID");
-        Dynamsoft.DCP.CodeParserModule.loadSpec("ICAO_MRZ");
-        Dynamsoft.DCP.CodeParserModule.loadSpec("MRZ_TD1");
-        Dynamsoft.DCP.CodeParserModule.loadSpec("MRZ_TD3");
+        function forceFocus() { input.focus(); }
+        document.body.onclick = forceFocus;
+        setInterval(forceFocus, 1000);
+        forceFocus();
 
-        let videoStream = null;
-        let router = null;
-        let parser = null; // Global parser instance - created once at startup
-        let isScanning = false;
-        let scanInterval = null;
-        let mrzScanning = false;
-        let flashEnabled = false;
+        let buffer = '';
+        let timer = null;
 
-        // Send timing data to database for analysis
-        async function sendTimingData(timingData) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                addLog(`[KEY] ENTER (Buffer: ${buffer.length})`, 'info');
+                if (buffer.length > 10) submitScan();
+                e.preventDefault();
+            } else if (e.key.length === 1) {
+                buffer += e.key;
+                addLog(`[KEY] ${e.key} (Total: ${buffer.length})`);
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    if (buffer.length > 10) {
+                        addLog('Auto-submitting long buffer...', 'info');
+                        submitScan();
+                    }
+                }, 800);
+            }
+        });
+
+        async function submitScan() {
+            if (!saleId) { showErr('No sale_id found'); return; }
+
+            const scanData = buffer;
+            buffer = '';
+            input.value = '';
+
+            readyUi.style.display = 'none';
+            sendingUi.style.display = 'block';
+            successUi.style.display = 'none';
+            errorUi.style.display = 'none';
+
+            addLog(`SENDING SCAN: ${scanData.substring(0, 10)}...`, 'info');
+
             try {
-                await fetch('/api/scanner-logs', {
+                const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        timing_data: timingData,
-                        user_agent: navigator.userAgent
-                    })
-                }).catch(() => {}); // Fail silently if endpoint unreachable
+                    body: JSON.stringify({ barcodeData: scanData, isRemote: true })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    addLog('SCAN APPROVED BY BACKEND', 'success');
+                    sendingUi.style.display = 'none';
+                    successUi.style.display = 'block';
+                    setTimeout(() => {
+                        successUi.style.display = 'none';
+                        readyUi.style.display = 'block';
+                    }, 3000);
+                } else {
+                    addLog(`REJECTED: ${data.reason}`, 'error');
+                    showErr(data.reason || 'Server Error');
+                }
             } catch (e) {
-                // Ignore timing log errors
+                addLog('CONNECTION FAILED', 'error');
+                showErr('Connection failed');
             }
         }
 
-        // Remote logging to help debug iPad issues
-        async function sendRemoteLog(message, level) {
-            try {
-                // Send to backend database for debugging
-                await fetch('/api/debug-logs', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        level,
-                        message,
-                        user_agent: navigator.userAgent
-                    })
-                }).catch(() => {}); // Fail silently if endpoint unreachable
-            } catch (e) {
-                // Ignore remote logging errors
-            }
-        }
-
-        // ===== COMPANION APP FEATURES =====
-
-        // Show toast notification
-        function showToast(message, duration = 3000) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.classList.add('show');
-
+        function showErr(msg) {
+            sendingUi.style.display = 'none';
+            errorUi.style.display = 'block';
+            errorMsg.textContent = msg;
             setTimeout(() => {
-                toast.classList.remove('show');
-            }, duration);
+                errorUi.style.display = 'none';
+                readyUi.style.display = 'block';
+            }, 3000);
         }
-
-        // Show hint for returning to POS
-        function showBackToPOSHint() {
-            log('User tapped Return to POS button');
-            showToast('👆 Swipe up from bottom to switch back to Lightspeed POS');
-
-            // If window.opener exists (rare), try to focus it
-            if (window.opener && !window.opener.closed) {
-                try {
-                    window.opener.focus();
-                } catch (e) {
-                    log('Could not focus opener window', 'warn');
-                }
-            }
-        }
-
-        // Register management
-        function checkRegister() {
-            // Check if register_id is in URL params
-            let currentRegisterId = urlParams.get('register_id');
-
-            // If not in URL, check localStorage
-            if (!currentRegisterId) {
-                currentRegisterId = localStorage.getItem('scanner_register_id');
-            }
-
-            // If still no register_id, show modal
-            if (!currentRegisterId) {
-                log('No register ID found, showing selection modal');
-                document.getElementById('registerModal').classList.add('show');
-                return null;
-            }
-
-            // Save to localStorage for next time
-            localStorage.setItem('scanner_register_id', currentRegisterId);
-            log(`Using register: ${currentRegisterId}`);
-            return currentRegisterId;
-        }
-
-        // Save register selection
-        function saveRegister() {
-            const input = document.getElementById('registerInput');
-            const registerId = input.value.trim();
-
-            if (!registerId) {
-                showToast('⚠️ Please enter a register ID');
-                return;
-            }
-
-            // Save to localStorage
-            localStorage.setItem('scanner_register_id', registerId);
-            log(`Register saved: ${registerId}`);
-
-            // Hide modal
-            document.getElementById('registerModal').classList.remove('show');
-            showToast(`✅ Register ${registerId} selected`);
-
-            // Update global registerId variable
-            window.currentRegisterId = registerId;
-        }
-
-        // Initialize register on page load
-        window.currentRegisterId = checkRegister();
-
-        // Pre-fill register input if available
-        const savedRegisterId = localStorage.getItem('scanner_register_id');
-        if (savedRegisterId) {
-            document.getElementById('registerInput').value = savedRegisterId;
-        }
-
-        // ===== END COMPANION APP FEATURES =====
-
-        // Logging function - show all logs for debugging
-        function log(message, level = 'info') {
-            const logContent = document.getElementById('logContent');
-            const timestamp = new Date().toLocaleTimeString();
-
-            // Send to remote logging
-            sendRemoteLog(message, level);
-
-            // Show all logs to user for debugging
-            const color = level === 'error' ? '#ef4444' : level === 'warn' ? '#fbbf24' : '#4ecdc4';
-            logContent.innerHTML += `<div style="color:${color}">[${timestamp}] ${message}</div>`;
-            logContent.scrollTop = logContent.scrollHeight;
-
-            // Always log to console
-            console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
-        }
-
-        function updateStatus(message, type) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = message;
-            statusEl.className = `status ${type}`;
-        }
-
-        function setupTapToFocus(video) {
-            const videoContainer = document.getElementById('camera-container');
-
-            videoContainer.addEventListener('click', async (e) => {
-                try {
-                    const rect = videoContainer.getBoundingClientRect();
-                    const x = (e.clientX - rect.left) / rect.width;
-                    const y = (e.clientY - rect.top) / rect.height;
-
-                    log(`Tap to focus at (${(x * 100).toFixed(1)}%, ${(y * 100).toFixed(1)}%)`);
-
-                    // Get video track
-                    const track = videoStream.getVideoTracks()[0];
-                    const capabilities = track.getCapabilities();
-
-                    // Try to focus at the tapped point
-                    if (capabilities.focusMode && capabilities.focusMode.includes('manual')) {
-                        await track.applyConstraints({
-                            advanced: [{
-                                focusMode: 'manual',
-                                pointsOfInterest: [{ x, y }]
-                            }]
-                        });
-
-                        // Return to continuous focus after 2 seconds
-                        setTimeout(async () => {
-                            try {
-                                await track.applyConstraints({
-                                    advanced: [{ focusMode: 'continuous' }]
-                                });
-                            } catch (e) {
-                                // Ignore errors
-                            }
-                        }, 2000);
-                    }
-
-                    // Visual feedback
-                    showFocusPoint(e.clientX - rect.left, e.clientY - rect.top);
-                } catch (error) {
-                    log(`Tap to focus error: ${error.message}`, 'warn');
-                }
-            });
-        }
-
-        function showFocusPoint(x, y) {
-            // Remove existing focus indicator
-            const existing = document.getElementById('focusIndicator');
-            if (existing) existing.remove();
-
-            // Create focus indicator
-            const indicator = document.createElement('div');
-            indicator.id = 'focusIndicator';
-            indicator.style.cssText = `
-                position: absolute;
-                left: ${x}px;
-                top: ${y}px;
-                width: 60px;
-                height: 60px;
-                border: 2px solid #10b981;
-                border-radius: 50%;
-                transform: translate(-50%, -50%);
-                pointer-events: none;
-                z-index: 100;
-                animation: focusPulse 0.5s ease-out;
-            `;
-
-            document.getElementById('camera-container').appendChild(indicator);
-
-            // Remove after animation
-            setTimeout(() => indicator.remove(), 500);
-        }
-
-        // Calculate image sharpness using Laplacian variance
-        function calculateSharpness(canvas, ctx) {
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const pixels = imageData.data;
-
-            // Sample center region for faster calculation (where barcode should be)
-            const startX = Math.floor(canvas.width * 0.1);
-            const endX = Math.floor(canvas.width * 0.9);
-            const startY = Math.floor(canvas.height * 0.225);
-            const endY = Math.floor(canvas.height * 0.775);
-
-            let sum = 0;
-            let count = 0;
-
-            for (let y = startY; y < endY - 1; y++) {
-                for (let x = startX; x < endX - 1; x++) {
-                    const idx = (y * canvas.width + x) * 4;
-
-                    // Convert to grayscale
-                    const gray = pixels[idx] * 0.299 + pixels[idx + 1] * 0.587 + pixels[idx + 2] * 0.114;
-
-                    // Get neighboring pixels
-                    const leftIdx = (y * canvas.width + (x - 1)) * 4;
-                    const rightIdx = (y * canvas.width + (x + 1)) * 4;
-                    const topIdx = ((y - 1) * canvas.width + x) * 4;
-                    const bottomIdx = ((y + 1) * canvas.width + x) * 4;
-
-                    const left = pixels[leftIdx] * 0.299 + pixels[leftIdx + 1] * 0.587 + pixels[leftIdx + 2] * 0.114;
-                    const right = pixels[rightIdx] * 0.299 + pixels[rightIdx + 1] * 0.587 + pixels[rightIdx + 2] * 0.114;
-                    const top = pixels[topIdx] * 0.299 + pixels[topIdx + 1] * 0.587 + pixels[topIdx + 2] * 0.114;
-                    const bottom = pixels[bottomIdx] * 0.299 + pixels[bottomIdx + 1] * 0.587 + pixels[bottomIdx + 2] * 0.114;
-
-                    // Laplacian operator (edge detection)
-                    const laplacian = Math.abs(4 * gray - left - right - top - bottom);
-                    sum += laplacian * laplacian;
-                    count++;
-                }
-            }
-
-            return Math.sqrt(sum / count); // Higher value = sharper image
-        }
-
-        // Calculate average brightness
-        function calculateBrightness(canvas, ctx) {
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const pixels = imageData.data;
-            let sum = 0;
-            const step = 4; // Sample every 4th pixel for speed
-
-            for (let i = 0; i < pixels.length; i += step * 4) {
-                // Average RGB for grayscale brightness
-                sum += (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
-            }
-
-            return sum / (pixels.length / (step * 4)); // Returns 0-255
-        }
-
-        // Histogram equalization for low-light enhancement
-        function applyHistogramEqualization(imageData) {
-            const pixels = imageData.data;
-            const histogram = new Array(256).fill(0);
-
-            // Build histogram (grayscale)
-            for (let i = 0; i < pixels.length; i += 4) {
-                const gray = Math.floor(pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114);
-                histogram[gray]++;
-            }
-
-            // Calculate cumulative distribution
-            const cdf = new Array(256).fill(0);
-            cdf[0] = histogram[0];
-            for (let i = 1; i < 256; i++) {
-                cdf[i] = cdf[i - 1] + histogram[i];
-            }
-
-            // Normalize CDF
-            const totalPixels = pixels.length / 4;
-            const cdfMin = cdf.find(val => val > 0);
-            const lookupTable = new Array(256);
-            for (let i = 0; i < 256; i++) {
-                lookupTable[i] = Math.round(((cdf[i] - cdfMin) / (totalPixels - cdfMin)) * 255);
-            }
-
-            // Apply equalization
-            for (let i = 0; i < pixels.length; i += 4) {
-                const gray = Math.floor(pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114);
-                const newVal = lookupTable[gray];
-                pixels[i] = newVal;
-                pixels[i + 1] = newVal;
-                pixels[i + 2] = newVal;
-            }
-
-            return imageData;
-        }
-
-        // Sharpen filter for low-light frames
-        function applySharpenFilter(imageData, canvas) {
-            const pixels = imageData.data;
-            const width = canvas.width;
-            const height = canvas.height;
-            const output = new Uint8ClampedArray(pixels);
-
-            // Sharpen kernel (3x3)
-            const kernel = [
-                0, -1, 0,
-                -1, 5, -1,
-                0, -1, 0
-            ];
-
-            for (let y = 1; y < height - 1; y++) {
-                for (let x = 1; x < width - 1; x++) {
-                    for (let c = 0; c < 3; c++) { // RGB channels only
-                        let sum = 0;
-                        for (let ky = -1; ky <= 1; ky++) {
-                            for (let kx = -1; kx <= 1; kx++) {
-                                const idx = ((y + ky) * width + (x + kx)) * 4 + c;
-                                const kernelIdx = (ky + 1) * 3 + (kx + 1);
-                                sum += pixels[idx] * kernel[kernelIdx];
-                            }
-                        }
-                        const idx = (y * width + x) * 4 + c;
-                        output[idx] = Math.max(0, Math.min(255, sum));
-                    }
-                }
-            }
-
-            // Copy sharpened data back
-            for (let i = 0; i < pixels.length; i++) {
-                pixels[i] = output[i];
-            }
-
-            return imageData;
-        }
-
-        async function toggleFlash() {
-            try {
-                if (!videoStream) {
-                    log('No video stream available', 'error');
-                    return;
-                }
-
-                const track = videoStream.getVideoTracks()[0];
-                if (!track) {
-                    log('No video track found', 'error');
-                    return;
-                }
-
-                flashEnabled = !flashEnabled;
-                log(`Attempting to ${flashEnabled ? 'enable' : 'disable'} flash...`);
-
-                // Method 1: Try ImageCapture API
-                try {
-                    const imageCapture = new ImageCapture(track);
-                    const capabilities = await imageCapture.getPhotoCapabilities();
-
-                    if (capabilities.fillLightMode && capabilities.fillLightMode.includes('flash')) {
-                        await track.applyConstraints({
-                            advanced: [{ fillLightMode: flashEnabled ? 'flash' : 'off' }]
-                        });
-                        log('Flash toggled via fillLightMode');
-                    } else {
-                        throw new Error('fillLightMode not supported');
-                    }
-                } catch (imageCaptureError) {
-                    log(`ImageCapture method failed: ${imageCaptureError.message}`, 'warn');
-
-                    // Method 2: Try advanced torch constraint
-                    try {
-                        await track.applyConstraints({
-                            advanced: [{ torch: flashEnabled }]
-                        });
-                        log('Flash toggled via advanced torch');
-                    } catch (advancedError) {
-                        log(`Advanced torch failed: ${advancedError.message}`, 'warn');
-
-                        // Method 3: Try direct torch constraint
-                        const constraints = track.getConstraints();
-                        constraints.torch = flashEnabled;
-                        await track.applyConstraints(constraints);
-                        log('Flash toggled via direct constraint');
-                    }
-                }
-
-                const flashButton = document.getElementById('flashButton');
-                if (flashEnabled) {
-                    flashButton.classList.add('active');
-                    flashButton.textContent = '🔦';
-                    log('Flash enabled successfully');
-                } else {
-                    flashButton.classList.remove('active');
-                    flashButton.textContent = '💡';
-                    log('Flash disabled successfully');
-                }
-            } catch (error) {
-                log(`Flash toggle error: ${error.message}`, 'error');
-                console.error('Full flash error:', error);
-                updateStatus(`⚠️ Flash not supported on this device`, 'error');
-                // Revert state
-                flashEnabled = !flashEnabled;
-            }
-        }
-
-        async function captureHighResPhoto() {
-            try {
-                if (!videoStream) {
-                    updateStatus('❌ Camera not started', 'error');
-                    log('Cannot capture - camera not started', 'error');
-                    return;
-                }
-
-                updateStatus('📸 Capturing high-resolution photo...', 'info');
-                log('Starting high-res photo capture...');
-
-                const track = videoStream.getVideoTracks()[0];
-                const imageCapture = new ImageCapture(track);
-
-                // Get max resolution capabilities
-                const capabilities = await imageCapture.getPhotoCapabilities();
-                log(`Max photo resolution: ${capabilities.imageWidth?.max}x${capabilities.imageHeight?.max}`);
-
-                // Capture at maximum resolution
-                const photoSettings = {};
-                if (capabilities.imageWidth && capabilities.imageWidth.max) {
-                    photoSettings.imageWidth = capabilities.imageWidth.max;
-                }
-                if (capabilities.imageHeight && capabilities.imageHeight.max) {
-                    photoSettings.imageHeight = capabilities.imageHeight.max;
-                }
-
-                const photoBlob = await imageCapture.takePhoto(photoSettings);
-                log(`Photo captured, size: ${photoBlob.size} bytes`);
-
-                // Convert blob to canvas for Dynamsoft
-                const img = await createImageBitmap(photoBlob);
-                const canvas = document.getElementById('canvas');
-                const ctx = canvas.getContext('2d');
-
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
-
-                log(`High-res image ready: ${canvas.width}x${canvas.height}`);
-                updateStatus('🔍 Scanning high-resolution image...', 'info');
-
-                // Scan the high-res image
-                const barcodeResult = await router.capture(canvas, 'ReadBarcodes_Balance');
-                log(`High-res scan result: ${barcodeResult.barcodeResultItems?.length || 0} items found`);
-
-                if (barcodeResult.barcodeResultItems && barcodeResult.barcodeResultItems.length > 0) {
-                    log('✅ Barcode detected in high-res photo!', 'info');
-                    await handleBarcode(barcodeResult.barcodeResultItems[0].text);
-                } else {
-                    updateStatus('❌ No barcode found - try again or reposition', 'error');
-                    log('No barcode detected in high-res photo', 'warn');
-                }
-
-            } catch (error) {
-                log(`High-res capture error: ${error.message}`, 'error');
-                console.error('Full high-res capture error:', error);
-
-                if (error.name === 'NotSupportedError') {
-                    updateStatus('❌ High-res capture not supported on this device', 'error');
-                } else {
-                    updateStatus('❌ Photo capture failed - try again', 'error');
-                }
-            }
-        }
-
-        async function startCamera() {
-            try {
-                log('Camera initialization started');
-                updateStatus('📷 Opening camera...', 'info');
-
-                const video = document.getElementById('videoElement');
-
-                const constraints = {
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },  // OPTIMIZED: 720p is optimal for barcode scanning (56% fewer pixels than 1080p)
-                        height: { ideal: 720 },  // OPTIMIZED: Faster processing without quality loss
-                        frameRate: { ideal: 30 },
-                        advanced: [
-                            { focusMode: 'continuous' },
-                            { exposureMode: 'continuous' },
-                            { whiteBalanceMode: 'continuous' }
-                        ]
-                    },
-                    audio: false
-                };
-
-                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = videoStream;
-
-                // Wait for metadata to load
-                await new Promise((resolve, reject) => {
-                    video.onloadedmetadata = () => resolve();
-                    video.onerror = (e) => reject(e);
-                    setTimeout(() => reject(new Error('Metadata timeout')), 5000);
-                });
-
-                // Force play for iOS
-                try {
-                    await video.play();
-                } catch (playError) {
-                    video.muted = true;
-                    await video.play();
-                }
-
-                video.classList.add('active');
-                updateStatus('✅ Camera active - Initializing scanner...', 'info');
-                log('Camera active, video playing');
-
-                // Enable tap-to-focus
-                setupTapToFocus(video);
-
-                // Show flash button only on Android (iOS doesn't support torch API)
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) ||
-                             (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-                if (isIOS) {
-                    log('⚠️ iOS detected - Flash not supported in Safari');
-                    // Don't show flash button on iOS
-                } else {
-                    // Show flash button on Android/other platforms
-                    document.getElementById('flashButton').style.display = 'flex';
-                    const track = videoStream.getVideoTracks()[0];
-                    const capabilities = track.getCapabilities();
-
-                    log(`Camera capabilities: ${JSON.stringify(capabilities)}`);
-
-                    if (capabilities.torch) {
-                        log('✅ Torch capability detected');
-                    } else {
-                        log('⚠️ Torch not in capabilities, will try anyway');
-                    }
-
-                    // Check ImageCapture API
-                    try {
-                        const imageCapture = new ImageCapture(track);
-                        const photoCapabilities = await imageCapture.getPhotoCapabilities();
-                        log(`Photo capabilities: ${JSON.stringify(photoCapabilities.fillLightMode)}`);
-                    } catch (e) {
-                        log(`ImageCapture check failed: ${e.message}`, 'warn');
-                    }
-                }
-
-                // Initialize Dynamsoft barcode reader
-                log('Creating CaptureVisionRouter instance...');
-                router = await Dynamsoft.CVR.CaptureVisionRouter.createInstance();
-                log('Router created successfully');
-
-                // Optimize settings for PDF417 barcodes
-                log('Getting simplified settings...');
-                let settings = await router.getSimplifiedSettings('ReadBarcodes_Balance');
-                log('Got settings, configuring PDF417...');
-
-                settings.barcodeSettings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_PDF417;
-
-                // OPTIMIZED for PDF417 driver's licenses - SPEED FIRST while maintaining quality
-                settings.barcodeSettings.deblurLevel = 2; // Moderate deblur for driver's licenses
-                settings.barcodeSettings.localizationModes = [16, 2, 0, 0, 0, 0, 0, 0]; // LM_SCAN_DIRECTLY (16) FIRST for 30-50% speed boost, then LM_CONNECTED_BLOCKS (2)
-                settings.barcodeSettings.deblurModes = [1, 2, 0, 0, 0, 0, 0, 0]; // Direct + threshold (removed gray equalization for speed)
-
-                // Streamlined grayscale processing for speed (single mode instead of 3)
-                settings.barcodeSettings.grayscaleEnhancementModes = [1, 0, 0, 0, 0, 0, 0, 0]; // GEM_GENERAL only for speed
-
-                // Support both normal and inverted barcodes
-                settings.barcodeSettings.grayscaleTransformationModes = [1, 2, 0, 0, 0, 0, 0, 0]; // Original + Inverted
-
-                settings.barcodeSettings.expectBarcodeCount = 1;
-                settings.barcodeSettings.minResultConfidence = 20; // Lower threshold for difficult barcodes
-                settings.barcodeSettings.scaleUpModes = [2, 1, 0, 0, 0, 0, 0, 0]; // Linear interpolation + auto
-                settings.barcodeSettings.binarizationModes = [1, 0, 0, 0, 0, 0, 0, 0]; // Local block (adaptive)
-                settings.barcodeSettings.timeout = 1000; // OPTIMIZED: Shorter timeout for video scanning (skip bad frames faster)
-                settings.barcodeSettings.returnPartialBarcodeValue = 1;
-                settings.barcodeSettings.maxAlgorithmThreadCount = 2; // Limit CPU usage on mobile
-
-                // ROI configured to scan guide area - helps focus detection
-                settings.roi = {
-                    points: [
-                        { x: 7.5, y: 22.5 },
-                        { x: 92.5, y: 22.5 },
-                        { x: 92.5, y: 77.5 },
-                        { x: 7.5, y: 77.5 }
-                    ],
-                    measuredByPercentage: 1
-                };
-
-                log('Updating router settings with ROI...');
-                await router.updateSettings('ReadBarcodes_Balance', settings);
-                log('Settings updated successfully - ROI configured to scan guide area');
-
-                // Create parser instance once at startup (NOT on every scan!)
-                updateStatus('⏳ Loading ID parser (one-time setup)...', 'info');
-                log('Creating CodeParser instance (one-time)...');
-                const parserStart = performance.now();
-                await Dynamsoft.DCP.CodeParserModule.loadSpec("AAMVA_DL_ID");
-                parser = await Dynamsoft.DCP.CodeParser.createInstance();
-                const parserTime = Math.round(performance.now() - parserStart);
-                log(`✅ Parser created in ${parserTime}ms (will be reused for all scans)`);
-
-                // Start scanning - OPTIMIZED: 100ms interval for faster detection (10 fps vs 6.67 fps)
-                isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 100);
-                log('Scanning started - interval set to 150ms');
-
-                // Show scanning guide
-                document.getElementById('scanGuide').style.display = 'block';
-                document.getElementById('scanHint').style.display = 'block';
-
-                // Show high-res capture button
-                document.getElementById('captureButton').style.display = 'inline-block';
-
-                updateStatus('✅ Ready - Position ID within frame', 'info');
-
-            } catch (error) {
-                log(`Camera error: ${error.message}`, 'error');
-                console.error('Camera initialization failed:', error);
-
-                if (error.name === 'NotAllowedError') {
-                    updateStatus('❌ Camera permission denied', 'error');
-                } else if (error.name === 'NotFoundError') {
-                    updateStatus('❌ No camera found', 'error');
-                } else if (error.name === 'NotReadableError') {
-                    updateStatus('❌ Camera in use', 'error');
-                } else {
-                    updateStatus('❌ Camera error', 'error');
-                }
-            }
-        }
-
-        async function scanVideoFrame() {
-            if (!isScanning || !router) {
-                log(`Scan frame skipped - isScanning: ${isScanning}, router: ${!!router}`, 'warn');
-                return;
-            }
-
-            try {
-                const video = document.getElementById('videoElement');
-                const canvas = document.getElementById('canvas');
-                const ctx = canvas.getContext('2d');
-
-                // Set canvas size to match video
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-
-                if (canvas.width === 0 || canvas.height === 0) {
-                    log('Video not ready - width/height is 0', 'warn');
-                    return;
-                }
-
-                // Draw current video frame to canvas
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                // Calculate image quality metrics
-                const sharpness = calculateSharpness(canvas, ctx);
-                const brightness = calculateBrightness(canvas, ctx);
-
-                log(`Frame quality - Sharpness: ${sharpness.toFixed(2)}, Brightness: ${brightness.toFixed(0)}`);
-
-                // Basic quality checks with relaxed thresholds
-                const MIN_SHARPNESS = 8;   // Very low threshold for acceptable sharpness
-                const MIN_BRIGHTNESS = 22; // Low threshold for acceptable brightness
-
-                if (sharpness < MIN_SHARPNESS) {
-                    updateStatus('⚠️ Hold steady - image blurry', 'warn');
-                    document.getElementById('scanHint').textContent = `Sharp: ${sharpness.toFixed(0)} Bright: ${brightness.toFixed(0)}`;
-                    document.getElementById('scanHint').style.background = 'rgba(255, 165, 0, 0.7)';
-                    document.getElementById('scanHint').style.color = '#ffffff';
-                    return;
-                }
-
-                if (brightness < MIN_BRIGHTNESS) {
-                    updateStatus('⚠️ Need more light', 'warn');
-                    document.getElementById('scanHint').textContent = `Sharp: ${sharpness.toFixed(0)} Bright: ${brightness.toFixed(0)}`;
-                    document.getElementById('scanHint').style.background = 'rgba(255, 165, 0, 0.7)';
-                    document.getElementById('scanHint').style.color = '#ffffff';
-                    return;
-                }
-
-                // Quality is good - scanning
-                updateStatus('✅ Scanning...', 'info');
-                document.getElementById('scanHint').textContent = `Sharp: ${sharpness.toFixed(0)} Bright: ${brightness.toFixed(0)}`;
-                document.getElementById('scanHint').style.background = 'rgba(0, 0, 0, 0.7)';
-                document.getElementById('scanHint').style.color = '#7ed956';
-
-                log(`Scanning frame ${canvas.width}x${canvas.height} (S:${sharpness.toFixed(0)} B:${brightness.toFixed(0)})...`);
-
-                // Scan raw color image - Dynamsoft handles all processing
-                const barcodeResult = await router.capture(canvas, 'ReadBarcodes_Balance');
-                log(`Barcode scan result: ${barcodeResult.barcodeResultItems?.length || 0} items found`);
-
-                if (barcodeResult.barcodeResultItems && barcodeResult.barcodeResultItems.length > 0) {
-                    log('Barcode detected!', 'info');
-                    await handleBarcode(barcodeResult.barcodeResultItems[0].text);
-                    return;
-                }
-
-                // If no barcode found, try MRZ scanning (for passports/international IDs)
-                if (!mrzScanning) {
-                    mrzScanning = true;
-                    try {
-                        const mrzResult = await router.capture(canvas, 'ReadTextLines_MRZ');
-                        if (mrzResult.textLineResultItems && mrzResult.textLineResultItems.length >= 2) {
-                            await handleMrz(mrzResult.textLineResultItems);
-                            return;
-                        }
-                    } catch (mrzError) {
-                        // Silent fail - continue scanning
-                    } finally {
-                        mrzScanning = false;
-                    }
-                }
-
-            } catch (error) {
-                // Ignore scanning errors, keep trying
-                if (error.message && !error.message.includes('No barcode') && !error.message.includes('No text')) {
-                    log(`Scan error: ${error.message}`, 'error');
-                }
-            }
-        }
-
-        async function handleBarcode(barcodeText) {
-            if (!isScanning) return;
-
-            isScanning = false;
-            clearInterval(scanInterval);
-
-            const totalStartTime = performance.now();
-            updateStatus('📄 ID detected! Parsing...', 'info');
-
-            // Timing data collection
-            const timingData = {};
-
-            try {
-                // Parse ID using pre-created global parser instance
-                log('⏱️ [TIMING] Starting barcode processing...');
-
-                // Spec already loaded and parser already created at startup
-                timingData.spec_load = 0; // Already loaded at startup
-                timingData.parser_create = 0; // Already created at startup
-
-                let stepStart = performance.now();
-                log(`Parsing barcode text (length: ${barcodeText.length}) with optimized parser pipeline...`);
-
-                let parsedData = null;
-                log(`Attempting fast AAMVA parser... barcode preview: ${barcodeText.substring(0, 100)}`);
-                const fastParsed = parseAamvaBarcode(barcodeText);
-                if (fastParsed) {
-                    parsedData = fastParsed;
-                    timingData.parse = Math.round(performance.now() - stepStart);
-                    log(`⚡ Fast AAMVA parser succeeded in ${timingData.parse}ms`);
-                } else {
-                    log(`⚠️ Fast parser returned null, falling back to Dynamsoft WASM parser`);
-                    const parsedResult = await parser.parse(barcodeText);
-                    timingData.parse = Math.round(performance.now() - stepStart);
-                    log(`⏱️ [TIMING] Parse completed in ${timingData.parse}ms`);
-
-                    parsedData = {
-                        firstName: parsedResult.getFieldValue("firstName"),
-                        lastName: parsedResult.getFieldValue("lastName"),
-                        dob: parsedResult.getFieldValue("birthDate"),
-                        documentNumber: parsedResult.getFieldValue("documentNumber") || parsedResult.getFieldValue("licenseNumber"),
-                        sex: parsedResult.getFieldValue("sex"),
-                        expiry: parsedResult.getFieldValue("expiryDate"),
-                        issuingState: parsedResult.getFieldValue("issuingState")
-                    };
-                }
-
-                log(`Parsed: ${parsedData.firstName} ${parsedData.lastName}, DOB: ${parsedData.dob}`);
-
-                // Check for missing required fields
-                if (!parsedData.firstName || !parsedData.lastName || !parsedData.dob) {
-                    throw new Error(`Missing required fields - firstName: ${!!parsedData.firstName}, lastName: ${!!parsedData.lastName}, dob: ${!!parsedData.dob}`);
-                }
-
-                stepStart = performance.now();
-                const age = calculateAge(parsedData.dob);
-                timingData.age_calc = Math.round(performance.now() - stepStart);
-                log(`⏱️ [TIMING] Age calculated in ${timingData.age_calc}ms - Age: ${age}`);
-
-                if (!age || age < 0) {
-                    throw new Error(`Invalid age calculated from DOB: ${parsedData.dob}`);
-                }
-
-                // Verify age
-                const approved = age >= 21;
-
-                                updateStatus(
-                    approved
-                        ? `✅ APPROVED: ${parsedData.firstName} ${parsedData.lastName} (Age ${age})`
-                        : `❌ REJECTED: Under 21 (Age ${age})`,
-                    approved ? 'success' : 'error'
-                );
-
-                // Save complete data to database
-                stepStart = performance.now();
-                log('Saving to database...');
-                try {
-                    await saveScanResult({
-                        sessionId: sessionId,
-                        approved: approved,
-                        firstName: parsedData.firstName,
-                        lastName: parsedData.lastName,
-                        age: age,
-                        dob: parsedData.dob,
-                        documentType: 'drivers_license',
-                        documentNumber: parsedData.documentNumber,
-                        sex: parsedData.sex,
-                        expiry: parsedData.expiry,
-                        nationality: parsedData.issuingState || 'USA',
-                        reason: approved ? null : 'Under minimum age',
-                        outletId: outletId,
-                        outletName: outletName,
-                        registerId: registerId || window.currentRegisterId,
-                        employeeId: employeeId,
-                        employeeName: employeeName
-                    });
-                } catch (error) {
-                    handlePersistenceError(error);
-                    return;
-                }
-
-                timingData.db_save = Math.round(performance.now() - stepStart);
-                log(`⏱️ [TIMING] Database save completed in ${timingData.db_save}ms`);
-
-                // OPTIMIZED: Stop scanning and camera IMMEDIATELY after successful save
-                clearInterval(scanInterval);
-                isScanning = false;
-
-                stepStart = performance.now();
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                }
-                log(`⏱️ [TIMING] Camera stopped in ${(performance.now() - stepStart).toFixed(0)}ms`);
-
-                timingData.total = Math.round(performance.now() - totalStartTime);
-                log(`⏱️ [TIMING] ✅ TOTAL PROCESSING TIME: ${timingData.total}ms`);
-
-                // Send timing data to database for analysis
-                sendTimingData(timingData);
-
-                // Check if opened via Payment Gateway Flow (has sale_id)
-                const saleId = urlParams.get('sale_id');
-
-                if (saleId) {
-                    // Payment Gateway Flow: Send verification to backend
-                    log('Payment Gateway Flow detected - sending verification to backend');
-                    updateStatus('✅ Sending verification...', 'success');
-
-                    // Send verification result to backend
-                    await sendSaleVerification(saleId, {
-                        approved,
-                        customerId: result.licenseNumber || result.documentNumber,
-                        customerName: `${result.firstName || ''} ${result.lastName || ''}`.trim(),
-                        age: result.age,
-                        reason: approved ? null : 'Under 21',
-                        registerId: registerId || window.currentRegisterId
-                    });
-
-                    // Show success message
-                    showToast('✅ Verification sent! Return to Lightspeed');
-                    updateStatus('✅ Verification sent! Return to Lightspeed', 'success');
-                } else {
-                    // Companion App Flow: Stay on page
-                    log('Companion App Flow - staying on scanner page');
-
-                    // Show success/failure message
-                    if (approved) {
-                        updateStatus('✅ ID Verified! Ready for next scan.', 'success');
-                    } else {
-                        updateStatus('❌ REJECTED: Under 21. Check ID and try again.', 'error');
-                    }
-                }
-
-            } catch (error) {
-                log(`Parse error: ${error.message}`, 'error');
-                log(`Error stack: ${error.stack}`, 'error');
-                console.error('Full parse error:', error);
-                updateStatus(`❌ Parse failed: ${error.message}`, 'error');
-
-                // Resume scanning
-                isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 100);
-            }
-        }
-
-        async function handleMrz(textLines) {
-            if (!isScanning) return;
-
-            isScanning = false;
-            clearInterval(scanInterval);
-
-            updateStatus('📄 Passport/ID detected! Parsing...', 'info');
-
-            try {
-                // Extract text from lines
-                const lines = textLines.map(item => item.text.replace(/\s/g, ''));
-
-                let parsedData;
-
-                // Detect format and parse
-                if (lines.length === 2 && lines[0].length === 44) {
-                    // TD3 format (passport)
-                    parsedData = parseMrzTd3(lines[0], lines[1]);
-                } else if (lines.length === 3 && lines[0].length === 30) {
-                    // TD1 format (ID card)
-                    parsedData = parseMrzTd1(lines[0], lines[1], lines[2]);
-                } else {
-                    throw new Error('Invalid MRZ format');
-                }
-
-                const age = calculateAge(parsedData.dob);
-
-                // Verify age
-                const approved = age >= 21;
-
-                updateStatus(
-                    approved
-                        ? `✅ APPROVED: ${parsedData.firstName} ${parsedData.lastName} (Age ${age})`
-                        : `❌ REJECTED: Under 21 (Age ${age})`,
-                    approved ? 'success' : 'error'
-                );
-
-                // Save complete data to database
-                try {
-                    await saveScanResult({
-                        sessionId: sessionId,
-                        approved: approved,
-                        firstName: parsedData.firstName,
-                        lastName: parsedData.lastName,
-                        age: age,
-                        dob: parsedData.dob,
-                        documentType: parsedData.documentType,
-                        documentNumber: parsedData.documentNumber,
-                        sex: parsedData.sex,
-                        expiry: parsedData.expiry,
-                        nationality: parsedData.nationality,
-                        reason: approved ? null : 'Under minimum age',
-                        outletId: outletId,
-                        outletName: outletName,
-                        registerId: registerId || window.currentRegisterId,
-                        employeeId: employeeId,
-                        employeeName: employeeName
-                    });
-                } catch (error) {
-                    handlePersistenceError(error);
-                    return;
-                }
-
-                // OPTIMIZED: Stop scanning and camera IMMEDIATELY
-                clearInterval(scanInterval);
-                isScanning = false;
-
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                }
-
-                // Check if opened via Payment Gateway Flow (has sale_id)
-                const saleId = urlParams.get('sale_id');
-
-                if (saleId) {
-                    // Payment Gateway Flow: Send verification to backend
-                    log('Payment Gateway Flow detected (MRZ) - sending verification to backend');
-                    updateStatus('✅ Sending verification...', 'success');
-
-                    // Send verification result to backend
-                    await sendSaleVerification(saleId, {
-                        approved,
-                        customerId: parsedData.documentNumber,
-                        customerName: `${parsedData.firstName || ''} ${parsedData.lastName || ''}`.trim(),
-                        age: age,
-                        reason: approved ? null : 'Under 21',
-                        registerId: registerId || window.currentRegisterId
-                    });
-
-                    // Show success message
-                    showToast('✅ Verification sent! Return to Lightspeed');
-                    updateStatus('✅ Verification sent! Return to Lightspeed', 'success');
-                } else {
-                    // Companion App Flow: Stay on page
-                    log('Companion App Flow (MRZ) - staying on scanner page');
-                    updateStatus('✅ Document Verified! Ready for next scan.', 'success');
-                }
-
-            } catch (error) {
-                log(`MRZ parse error: ${error.message}`, 'error');
-                updateStatus('❌ Failed to parse document. Please try again.', 'error');
-                isScanning = true;
-                scanInterval = setInterval(scanVideoFrame, 100);
-            }
-        }
-
-        function calculateAge(birthDate) {
-            if (!birthDate) {
-                log('calculateAge: birthDate is null/undefined', 'error');
-                return null;
-            }
-
-            // Trim and clean the input
-            birthDate = String(birthDate).trim();
-            log(`calculateAge: input birthDate = "${birthDate}" (length: ${birthDate.length})`);
-
-            // Handle MMDDYYYY format from Dynamsoft parser (e.g., "06221995")
-            if (/^\d{8}$/.test(birthDate)) {
-                const month = birthDate.substring(0, 2);
-                const day = birthDate.substring(2, 4);
-                const year = birthDate.substring(4, 8);
-                birthDate = `${year}-${month}-${day}`;
-                log(`calculateAge: converted MMDDYYYY to ${birthDate}`);
-            }
-
-            const birth = new Date(birthDate);
-            log(`calculateAge: Date object created, valid: ${!isNaN(birth.getTime())}`);
-
-            if (isNaN(birth.getTime())) {
-                log(`calculateAge: Invalid date format: ${birthDate}`, 'error');
-                return null;
-            }
-
-            const today = new Date();
-            let age = today.getFullYear() - birth.getFullYear();
-            const monthDiff = today.getMonth() - birth.getMonth();
-
-            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-                age--;
-            }
-
-            log(`calculateAge: birth = ${birth.toISOString()}, age = ${age}`);
-            return age;
-        }
-
-        async function saveScanResult(data) {
-            const dbStartTime = performance.now();
-
-            // Validate required fields before saving
-            if (!data.firstName || !data.lastName || !data.dob || !data.age) {
-                log('Missing required fields for database save', 'error');
-                throw new Error('Incomplete scan data');
-            }
-
-            try {
-                log('Building payload...');
-                let dbStep = performance.now();
-
-                const payload = {
-                    sessionId: data.sessionId,
-                    approved: data.approved,
-                    firstName: data.firstName.trim(),
-                    lastName: data.lastName.trim(),
-                    age: parseInt(data.age),
-                    dob: data.dob,
-                    documentType: data.documentType || 'drivers_license',
-                    documentNumber: data.documentNumber || null,
-                    nationality: data.nationality || null,
-                    sex: data.sex || null,
-                    expiry: data.expiry || null,
-                    reason: data.reason || null,
-                    outletId: data.outletId,
-                    outletName: data.outletName || null,
-                    registerId: data.registerId,
-                    employeeId: data.employeeId || null,
-                    employeeName: data.employeeName || null,
-                    scannedAt: new Date().toISOString()
-                };
-
-                log(`⏱️ [DB TIMING] Payload built in ${(performance.now() - dbStep).toFixed(0)}ms`);
-                log(`Payload: ${JSON.stringify(payload)}`);
-
-                dbStep = performance.now();
-                log('Sending POST request to /api/scan-sessions...');
-                const response = await fetch('/api/scan-sessions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                });
-                log(`⏱️ [DB TIMING] HTTP request completed in ${(performance.now() - dbStep).toFixed(0)}ms - Status: ${response.status}`);
-
-                if (!response.ok) {
-                    dbStep = performance.now();
-                    const errorText = await response.text();
-                    log(`⏱️ [DB TIMING] Error text read in ${(performance.now() - dbStep).toFixed(0)}ms`);
-                    log(`Database save failed: ${response.status} - ${errorText}`, 'error');
-                    throw new Error(`Save failed: ${response.status}`);
-                }
-
-                dbStep = performance.now();
-                const result = await response.json();
-                log(`⏱️ [DB TIMING] Response parsed in ${(performance.now() - dbStep).toFixed(0)}ms`);
-                log(`⏱️ [DB TIMING] ✅ Total DB operation: ${(performance.now() - dbStartTime).toFixed(0)}ms`);
-                log(`Saved to database: ID ${result.id || 'success'}`);
-                return result;
-
-            } catch (error) {
-                log(`⏱️ [DB TIMING] ❌ DB operation failed after ${(performance.now() - dbStartTime).toFixed(0)}ms`);
-                log(`Database error: ${error.message}`, 'error');
-                throw error;
-            }
-        }
-
-        async function sendSaleVerification(saleId, data) {
-            log(`Sending sale verification for sale ${saleId}...`);
-
-            try {
-                const payload = {
-                    approved: data.approved,
-                    customerId: data.customerId || null,
-                    customerName: data.customerName || null,
-                    age: data.age || null,
-                    reason: data.reason || null,
-                    registerId: data.registerId || null
-                };
-
-                log(`Sale verification payload: ${JSON.stringify(payload)}`);
-
-                const response = await fetch(`/api/sales/${saleId}/verify`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    log(`Sale verification failed: ${response.status} - ${errorText}`, 'error');
-                    throw new Error(`Verification failed: ${response.status}`);
-                }
-
-                const result = await response.json();
-                log(`Sale verification sent successfully: ${JSON.stringify(result)}`);
-                return result;
-
-            } catch (error) {
-                log(`Sale verification error: ${error.message}`, 'error');
-                showToast('❌ Failed to send verification');
-                throw error;
-            }
-        }
-
-        function handlePersistenceError(error) {
-            log(`Persistence error: ${error.message}`, 'error');
-
-            // IMPROVED UX: Show retry message instead of generic error
-            updateStatus('⚠️ Retrying save... Keep ID steady', 'warn');
-
-            clearInterval(scanInterval);
-            isScanning = true;
-
-            // Brief delay before retry to avoid hammering the server
-            setTimeout(() => {
-                scanInterval = setInterval(scanVideoFrame, 100);
-            }, 500);
-        }
-
-        // MRZ Parsing Functions
-        function parseMrzTd3(line1, line2) {
-            // TD3 format (passports) - 2 lines of 44 characters
-            const documentNumber = line2.substring(0, 9).replace(/</g, '');
-            const nationality = line2.substring(10, 13);
-            const dob = line2.substring(13, 19);
-            const sex = line2.substring(20, 21);
-            const expiry = line2.substring(21, 27);
-            const names = line1.substring(5).split('<<');
-            const lastName = names[0].replace(/</g, ' ').trim();
-            const firstName = (names[1] || '').replace(/</g, ' ').trim();
-
-            return {
-                documentType: 'passport',
-                documentNumber,
-                firstName,
-                lastName,
-                dob: parseMrzDate(dob),
-                sex,
-                nationality,
-                expiry: parseMrzDate(expiry)
-            };
-        }
-
-        function parseMrzTd1(line1, line2, line3) {
-            // TD1 format (ID cards) - 3 lines of 30 characters
-            const documentNumber = line1.substring(5, 14).replace(/</g, '');
-            const dob = line2.substring(0, 6);
-            const sex = line2.substring(7, 8);
-            const expiry = line2.substring(8, 14);
-            const nationality = line2.substring(15, 18);
-            const names = line3.substring(0, 30).split('<<');
-            const lastName = names[0].replace(/</g, ' ').trim();
-            const firstName = (names[1] || '').replace(/</g, ' ').trim();
-
-            return {
-                documentType: 'national_id',
-                documentNumber,
-                firstName,
-                lastName,
-                dob: parseMrzDate(dob),
-                sex,
-                nationality,
-                expiry: parseMrzDate(expiry)
-            };
-        }
-
-        function parseMrzDate(mrzDate) {
-            // MRZ dates are YYMMDD
-            if (!mrzDate || mrzDate.length !== 6) return null;
-            let year = parseInt(mrzDate.substring(0, 2));
-            const month = mrzDate.substring(2, 4);
-            const day = mrzDate.substring(4, 6);
-
-            // Century logic: 00-30 = 2000s, 31-99 = 1900s
-            year = year <= 30 ? 2000 + year : 1900 + year;
-
-            return `${year}-${month}-${day}`;
-        }
-
-        // Device ready
-        console.log('ID Scanner initialized');
-        console.log(`Platform: ${navigator.platform}, MediaDevices: ${!!navigator.mediaDevices}`);
-                function parseAamvaBarcode(raw = '') {
-            try {
-                if (!raw || raw.length < 40) {
-                    log(`Fast parser: barcode too short (${raw?.length || 0} chars)`);
-                    return null;
-                }
-
-                // Check for ANSI header (case-insensitive and flexible spacing)
-                const hasAnsiHeader = /ANSI\s/i.test(raw);
-                if (!hasAnsiHeader) {
-                    log(`Fast parser: no ANSI header found in barcode`);
-                    return null;
-                }
-
-                const lines = raw.replace(/\r/g, '\n').split(/\n+/);
-                const data = {};
-
-                for (const line of lines) {
-                    if (line.length < 3) continue;
-                    const code = line.substring(0, 3);
-                    const value = line.substring(3).trim();
-
-                    // Log date fields for debugging
-                    if (code === 'DBB' || code === 'DDB' || code === 'DBA') {
-                        log(`AAMVA field ${code} = "${value}"`);
-                    }
-
-                    switch (code) {
-                        case 'DAA':
-                            data.fullName = value;
-                            break;
-                        case 'DAC':
-                        case 'DCT':
-                            data.firstName = value;
-                            break;
-                        case 'DAD':
-                            data.middleName = value;
-                            break;
-                        case 'DCS':
-                            data.lastName = value;
-                            break;
-                        case 'DBB':
-                            data.dob = value; // Store raw value, normalize later (DBB = primary DOB field)
-                            break;
-                        case 'DDB': // Alternative/secondary date field
-                            if (!data.dob) data.dob = value; // Only use if DBB wasn't found
-                            break;
-                        case 'DBA':
-                            data.expiry = value; // Store raw value, normalize later
-                            break;
-                        case 'DAQ':
-                        case 'DBL':
-                            data.documentNumber = value;
-                            break;
-                        case 'DBC':
-                            data.sex = value === '1' ? 'M' : value === '2' ? 'F' : value;
-                            break;
-                        case 'DAJ':
-                        case 'DCJ':
-                            data.issuingState = value;
-                            break;
-                    }
-                }
-
-                if ((!data.firstName || !data.lastName) && data.fullName && data.fullName.includes(',')) {
-                    const parts = data.fullName.split(',');
-                    data.lastName = data.lastName || parts[0].trim();
-                    data.firstName = data.firstName || parts[1].trim();
-                }
-
-                // Log all raw data before normalization
-                log(`Fast parser RAW data: ${JSON.stringify(data)}`);
-
-                data.dob = normalizeAamvaDate(data.dob);
-                data.expiry = normalizeAamvaDate(data.expiry);
-                data.documentType = 'drivers_license';
-
-                log(`Fast parser AFTER normalization: DOB=${data.dob}, Expiry=${data.expiry}`);
-
-                if (!data.firstName || !data.lastName || !data.dob) {
-                    log(`Fast parser returning null - missing fields: firstName=${!!data.firstName}, lastName=${!!data.lastName}, dob=${!!data.dob}`);
-                    return null;
-                }
-
-                return data;
-            } catch (error) {
-                log(`Fast parser error: ${error.message}`, 'warn');
-                return null;
-            }
-        }
-
-        function normalizeAamvaDate(value) {
-            if (!value) return null;
-            const digits = value.replace(/[^0-9]/g, '');
-            log(`normalizeAamvaDate: input="${value}", digits="${digits}", length=${digits.length}`);
-            if (digits.length === 8) {
-                const mm = digits.substring(0, 2);
-                const dd = digits.substring(2, 4);
-                const yyyy = digits.substring(4);
-                const normalized = `${yyyy}-${mm}-${dd}`;
-                log(`normalizeAamvaDate: output="${normalized}"`);
-                return normalized;
-            }
-            log(`normalizeAamvaDate: returned null (length mismatch)`);
-            return null;
-        }
-
     </script>
 </body>
+
 </html>

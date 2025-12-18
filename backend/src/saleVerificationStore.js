@@ -1,16 +1,3 @@
-/**
- * Sale Verification Store
- *
- * In-memory storage for Lightspeed POS sale verification requests
- * Handles the request-response flow between payment-gateway.html and scanner.html
- *
- * Flow:
- * 1. payment-gateway.html creates pending verification (Lightspeed iframe)
- * 2. scanner.html scans ID and submits result (PWA app)
- * 3. payment-gateway.html polls for status and displays result
- * 4. payment-gateway.html sends unlock to Lightspeed
- */
-
 const logger = require('./logger');
 
 /**
@@ -24,6 +11,9 @@ const logger = require('./logger');
  *   age: number | null,
  *   reason: string | null,
  *   registerId: string | null,
+ *   remoteScannerActive: boolean, // Friendship: Is the handheld scanner page open?
+ *   lastHeartbeat: Date | null,   // Friendship: When did the handheld last check in?
+ *   logs: Array,                 // Friendship Trace: Activity log for dev troubleshooting
  *   createdAt: Date,
  *   updatedAt: Date,
  *   expiresAt: Date (15 minutes from creation)
@@ -57,15 +47,14 @@ setInterval(() => {
       remaining: verifications.size
     }, `Cleaned up ${expiredCount} expired verifications`);
   }
-}, 5 * 60 * 1000); // Run every 5 minutes
+}, 5 * 60 * 1000);
 
 /**
  * Create a new pending verification
- * Called when payment-gateway.html loads (Lightspeed button clicked)
  */
 function createVerification(saleId, { registerId = null } = {}) {
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutes
+  const expiresAt = new Date(now.getTime() + 15 * 60 * 1000);
 
   const verification = {
     saleId,
@@ -75,6 +64,9 @@ function createVerification(saleId, { registerId = null } = {}) {
     age: null,
     reason: null,
     registerId,
+    remoteScannerActive: false,
+    lastHeartbeat: null,
+    logs: [{ t: now, m: 'IDLE: Waiting for handheld connection...', type: 'info' }],
     createdAt: now,
     updatedAt: now,
     expiresAt
@@ -93,8 +85,44 @@ function createVerification(saleId, { registerId = null } = {}) {
 }
 
 /**
+ * Update the handheld heartbeat / active state
+ */
+function updateHeartbeat(saleId) {
+  const verification = verifications.get(saleId);
+  if (!verification) return null;
+
+  const now = new Date();
+  if (!verification.remoteScannerActive) {
+    verification.logs.push({ t: now, m: 'HANDSHAKE: Handheld scanner connected', type: 'success' });
+  }
+
+  verification.remoteScannerActive = true;
+  verification.lastHeartbeat = now;
+  verification.updatedAt = now;
+  return verification;
+}
+
+/**
+ * Add a log entry for dev troubleshooting
+ */
+function addSessionLog(saleId, message, type = 'info') {
+  const verification = verifications.get(saleId);
+  if (!verification) return;
+
+  verification.logs.push({
+    t: new Date(),
+    m: message,
+    type
+  });
+
+  // Keep logs manageable
+  if (verification.logs.length > 50) {
+    verification.logs.shift();
+  }
+}
+
+/**
  * Update verification with scan result
- * Called by scanner.html after ID scan
  */
 function updateVerification(saleId, {
   approved,
@@ -107,24 +135,15 @@ function updateVerification(saleId, {
   const verification = verifications.get(saleId);
 
   if (!verification) {
-    logger.warn({
-      event: 'verification_not_found',
-      saleId
-    }, `Attempted to update non-existent verification: ${saleId}`);
+    logger.warn({ event: 'verification_not_found', saleId }, `Attempted update non-existent: ${saleId}`);
     return null;
   }
 
-  // Check if expired
   if (verification.expiresAt < new Date()) {
     verifications.delete(saleId);
-    logger.warn({
-      event: 'verification_expired_on_update',
-      saleId
-    }, `Attempted to update expired verification: ${saleId}`);
     return null;
   }
 
-  // Update verification
   verification.status = approved ? 'approved' : 'rejected';
   verification.customerId = customerId;
   verification.customerName = customerName;
@@ -133,37 +152,38 @@ function updateVerification(saleId, {
   verification.registerId = registerId || verification.registerId;
   verification.updatedAt = new Date();
 
+  addSessionLog(saleId, `RESULT: Scan ${approved ? 'Approved' : 'Rejected'} (${reason || 'OK'})`, approved ? 'success' : 'error');
+
   logger.info({
     event: 'verification_updated',
     saleId,
     status: verification.status,
     customerId,
-    age,
-    reason
+    age
   }, `Sale verification updated: ${saleId} - ${verification.status}`);
 
   return verification;
 }
 
 /**
- * Get verification status
- * Called by payment-gateway.html (polling)
+ * Get verification status (includes friendship metadata)
  */
 function getVerification(saleId) {
   const verification = verifications.get(saleId);
+  if (!verification) return null;
 
-  if (!verification) {
+  if (verification.expiresAt < new Date()) {
+    verifications.delete(saleId);
     return null;
   }
 
-  // Check if expired
-  if (verification.expiresAt < new Date()) {
-    verifications.delete(saleId);
-    logger.info({
-      event: 'verification_expired_on_get',
-      saleId
-    }, `Verification expired on retrieval: ${saleId}`);
-    return null;
+  // Auto-detect if handheld dropped offline (no heartbeat for 10s)
+  if (verification.remoteScannerActive && verification.lastHeartbeat) {
+    const elapsed = new Date() - verification.lastHeartbeat;
+    if (elapsed > 10000) {
+      verification.remoteScannerActive = false;
+      addSessionLog(saleId, 'DISCONNECT: Handheld scanner timed out', 'error');
+    }
   }
 
   return verification;
@@ -171,28 +191,18 @@ function getVerification(saleId) {
 
 /**
  * Mark verification as completed
- * Called by payment-gateway.html after sending unlock to Lightspeed
  */
 function completeVerification(saleId) {
   const verification = verifications.get(saleId);
+  if (!verification) return false;
 
-  if (!verification) {
-    logger.warn({
-      event: 'verification_complete_not_found',
-      saleId
-    }, `Attempted to complete non-existent verification: ${saleId}`);
-    return false;
-  }
-
-  // Remove from store
   verifications.delete(saleId);
 
   logger.info({
     event: 'verification_completed',
     saleId,
-    status: verification.status,
-    duration: Math.round((new Date() - verification.createdAt) / 1000)
-  }, `Sale verification completed and removed: ${saleId}`);
+    status: verification.status
+  }, `Sale verification completed/removed: ${saleId}`);
 
   return true;
 }
@@ -207,7 +217,8 @@ function getStats() {
     pending: 0,
     approved: 0,
     rejected: 0,
-    expired: 0
+    expired: 0,
+    activeRemoteScanners: 0
   };
 
   for (const verification of verifications.values()) {
@@ -215,6 +226,7 @@ function getStats() {
       stats.expired++;
     } else {
       stats[verification.status]++;
+      if (verification.remoteScannerActive) stats.activeRemoteScanners++;
     }
   }
 
@@ -226,5 +238,7 @@ module.exports = {
   updateVerification,
   getVerification,
   completeVerification,
+  updateHeartbeat,
+  addSessionLog,
   getStats
 };

@@ -1173,20 +1173,22 @@
         setInterval(ensureFocus, 2500);
 
         // ========== TOUCH HANDLING ==========
-        scanCard.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            activateScanning();
-        });
-
-        scanCard.addEventListener('click', activateScanning);
+        function openRemoteScanner() {
+            if (!saleId) {
+                showError('Missing Sale ID');
+                return;
+            }
+            window.open(`/scanner.html?sale_id=${saleId}`, '_blank');
+        }
 
         function activateScanning() {
             ensureFocus();
+            openRemoteScanner();
 
             // Visual feedback
             scanCard.classList.add('scanning');
             statusIndicator.classList.add('scanning');
-            statusText.textContent = 'Scanning...';
+            statusText.textContent = 'WAITING FOR REMOTE...';
 
             // Logo glow effect
             gsap.to('.logo', {
@@ -1217,6 +1219,13 @@
             });
         }
 
+        scanCard.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            activateScanning();
+        });
+
+        scanCard.addEventListener('click', activateScanning);
+
         // ========== BLUETOOTH SCANNER ==========
         let barcodeBuffer = '';
         let lastKeyTime = 0;
@@ -1242,7 +1251,6 @@
                 barcodeBuffer = '';
             } else if (isPrintable) {
                 barcodeBuffer += e.key;
-
                 if (barcodeBuffer.length === 1) {
                     activateScanning();
                 }
@@ -1254,44 +1262,13 @@
         const saleId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
         const registerId = urlParams.get('register_id') || urlParams.get('registerId') || urlParams.get('outlet_id');
         const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
-        // Get amount from Lightspeed URL params (in cents or dollars depending on gateway)
         const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
-        const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount); // Handle cents vs dollars
+        const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
 
-        console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount });
-
-        // Cash screen code removed - this page is for card payments only
-
-        let pollInterval;
-
-        if (!saleId) {
-            showError('Missing Sale ID. Open from Lightspeed.');
-        } else {
-            startPolling();
-        }
-
-        function startPolling() {
-            // AUTO-REFUND BYPASS
-            // If sale amount is negative (refund), bypass ID check and auto-approve
-            if (saleAmount < 0) {
-                console.log('[Refund] Negative amount detected, auto-approving...');
-
-                // Hide UI immediately
-                document.querySelector('.scanner-wrap').style.display = 'none';
-                document.body.style.background = '#1a1a1a'; // Just dark background
-
-                // Send ACCEPT to Lightspeed immediately
-                window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
-                window.parent.postMessage('ACCEPT', '*');
-                return; // Stop polling
-            }
-
-            pollInterval = setInterval(checkStatus, 2000);
-        }
+        console.log('THC Card Gateway:', { saleId, registerId, clerkId, saleAmount });
 
         async function handleBluetoothScan(barcodeData) {
             statusText.textContent = 'Processing...';
-
             let cleanData = barcodeData;
             if (cleanData.startsWith(PDF417_PREFIX)) {
                 cleanData = cleanData.substring(PDF417_PREFIX.length);
@@ -1312,11 +1289,9 @@
                 });
 
                 const data = await response.json();
-
                 if (data.success && data.approved) {
-                    clearInterval(pollInterval);
+                    clearInterval(statusPollInterval);
                     showSuccess({ customerName: data.customerName || 'Customer' });
-                    // After brief success animation, show card waiting screen
                     setTimeout(showCardWaitingScreen, 1500);
                 } else {
                     showError(data.reason || 'Verification Failed');
@@ -1333,12 +1308,13 @@
                 const data = await response.json();
 
                 if (data.status === 'approved' || data.status === 'approved_override') {
-                    clearInterval(pollInterval);
+                    console.log('[Poll] Remote Scan Approved');
+                    clearInterval(statusPollInterval);
                     showSuccess(data);
-                    // After brief success animation, show card waiting screen
                     setTimeout(showCardWaitingScreen, 1500);
                 } else if (data.status === 'rejected') {
-                    clearInterval(pollInterval);
+                    console.log('[Poll] Remote Scan Rejected');
+                    clearInterval(statusPollInterval);
                     showError(data.reason || 'Verification Failed');
                 }
             } catch (e) {
@@ -1346,36 +1322,42 @@
             }
         }
 
-        // Old completeSale function removed - we now use completeCashSale
+        let statusPollInterval = null;
+        function startStatusPolling() {
+            if (statusPollInterval) return;
+            // AUTO-REFUND BYPASS
+            if (saleAmount < 0) {
+                console.log('[Refund] Negative amount detected, auto-approving...');
+                document.querySelector('.scanner-wrap').style.display = 'none';
+                window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
+                window.parent.postMessage('ACCEPT', '*');
+                return;
+            }
+            console.log('[Poll] Starting remote scan monitor...');
+            statusPollInterval = setInterval(checkStatus, 500);
+        }
 
         function cancelVerification() {
-            clearInterval(pollInterval);
-            console.log('[Cancel] Sending DECLINE to Lightspeed parent...');
-
-            // Try JSON format first (Lightspeed docs suggest this)
+            clearInterval(statusPollInterval);
+            console.log('[Cancel] Processing cancellation...');
             try {
+                window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
                 window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
-                console.log('[Cancel] Sent JSON: {step: DECLINE}');
-            } catch (e) {
-                console.error('[Cancel] JSON format failed:', e);
-            }
-
-            // Also try plain string formats as fallback
+            } catch (e) { }
             window.parent.postMessage('DECLINE', '*');
             window.parent.postMessage('CANCEL', '*');
-            console.log('[Cancel] Sent plain: DECLINE and CANCEL');
         }
 
         // ========== STATE MANAGEMENT ==========
         function showSuccess(data) {
-            scanCard.classList.add('hidden');
+            scanCard.style.display = 'none';
             errorCard.classList.remove('active');
             successCard.classList.add('active');
             document.getElementById('successDetails').textContent = `${data.customerName || 'Customer'} verified ✓`;
         }
 
         function showError(message) {
-            scanCard.classList.add('hidden');
+            scanCard.style.display = 'none';
             successCard.classList.remove('active');
             errorCard.classList.add('active');
             document.getElementById('errorDetails').textContent = message;
@@ -1383,37 +1365,12 @@
 
         function retry() {
             errorCard.classList.remove('active');
-            scanCard.classList.remove('hidden', 'scanning');
+            scanCard.style.display = 'block';
+            scanCard.classList.remove('scanning');
             statusIndicator.classList.remove('scanning');
             statusText.textContent = 'Ready';
-            gsap.to('.logo', { filter: 'drop-shadow(0 0 30px rgba(66, 180, 230, 0.4))', duration: 0.3 });
-            startPolling();
+            startStatusPolling();
             ensureFocus();
-        }
-
-        // ========== CANCEL/CLOSE ==========
-        function cancelVerification() {
-            clearInterval(pollInterval);
-            console.log('[Cancel] Trying to bypass red screen...');
-
-            // Try various signals that might skip the red "Payment Failed" screen
-            try {
-                window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
-                window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
-                window.parent.postMessage(JSON.stringify({ step: 'ABORT' }), '*');
-                window.parent.postMessage(JSON.stringify({ step: 'BACK' }), '*');
-                window.parent.postMessage(JSON.stringify({ step: 'CANCEL' }), '*');
-            } catch (e) { }
-
-            window.parent.postMessage('CLOSE', '*');
-            window.parent.postMessage('EXIT', '*');
-            window.parent.postMessage('CANCEL', '*');
-
-            // Fallback: If nothing else works after 500ms, force DECLINE
-            setTimeout(() => {
-                window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
-                window.parent.postMessage('DECLINE', '*');
-            }, 500);
         }
 
         // ========== NUMBER PAD OVERRIDE ==========
@@ -1437,73 +1394,39 @@
 
         function updatePinDisplay() {
             pinDots.forEach((dot, index) => {
-                if (index < currentPin.length) {
-                    dot.classList.add('filled');
-                } else {
-                    dot.classList.remove('filled');
-                }
+                if (index < currentPin.length) dot.classList.add('filled');
+                else dot.classList.remove('filled');
             });
         }
 
         function handleNumpadInput(value) {
             pinError.textContent = '';
-
             if (value === 'clear') {
-                // Backspace - remove last digit
                 currentPin = currentPin.slice(0, -1);
             } else if (value === 'submit') {
-                // Submit PIN
-                if (currentPin.length === 4) {
-                    submitOverride();
-                } else {
-                    pinError.textContent = 'Enter 4 digits';
-                }
+                if (currentPin.length === 4) submitOverride();
+                else pinError.textContent = 'Enter 4 digits';
                 return;
             } else {
-                // Add digit (max 4)
-                if (currentPin.length < 4) {
-                    currentPin += value;
-                }
+                if (currentPin.length < 4) currentPin += value;
             }
-
             updatePinDisplay();
         }
 
-        // Bind numpad buttons with touchend for iOS
         document.querySelectorAll('.numpad-btn').forEach(btn => {
             btn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                const num = btn.getAttribute('data-num');
-                const action = btn.getAttribute('data-action');
-                handleNumpadInput(num || action);
+                handleNumpadInput(btn.getAttribute('data-num') || btn.getAttribute('data-action'));
             });
-
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const num = btn.getAttribute('data-num');
-                const action = btn.getAttribute('data-action');
-                handleNumpadInput(num || action);
+                handleNumpadInput(btn.getAttribute('data-num') || btn.getAttribute('data-action'));
             });
-        });
-
-        // Close button
-        document.getElementById('closeModalBtn')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            closeOverrideModal();
-        });
-        document.getElementById('closeModalBtn')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            closeOverrideModal();
         });
 
         async function submitOverride() {
-            if (currentPin.length !== 4) {
-                pinError.textContent = 'Enter 4 digits';
-                return;
-            }
-
+            if (currentPin.length !== 4) return;
             try {
                 const response = await fetch(`/api/sales/${saleId}/override`, {
                     method: 'POST',
@@ -1516,14 +1439,11 @@
                         registerId: registerId
                     })
                 });
-
                 const data = await response.json();
-
                 if (data.success) {
                     closeOverrideModal();
                     showSuccess({ customerName: 'Manual Override' });
-                    // After brief success animation, show cash screen
-                    setTimeout(showCashScreen, 1500);
+                    setTimeout(showCardWaitingScreen, 1500);
                 } else {
                     pinError.textContent = data.message || 'Invalid PIN';
                     currentPin = '';
@@ -1535,102 +1455,11 @@
             }
         }
 
-        // ========== INIT ==========
-        createParticles();
+        // Close button
+        document.getElementById('closeModalBtn')?.addEventListener('click', closeOverrideModal);
+        document.getElementById('closeModalBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); closeOverrideModal(); });
 
-        // iOS TOUCH FIX: Add empty touchstart listener to wake up iOS touch handling
-        document.addEventListener('touchstart', () => { });
-        window.addEventListener('touchstart', () => { });
-
-        // iOS TOUCH FIX: Bind touchend handlers for all buttons (onclick doesn't work in WKWebView iframes)
-        // Cancel button
-        // Main page Cancel button
-        document.querySelector('#scanCard .btn-cancel')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            cancelVerification();
-        });
-
-        // Main page Override button (opens modal)
-        document.querySelector('#scanCard .btn-override')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            showOverrideModal();
-        });
-
-        // Error page Retry button
-        document.querySelector('#errorCard .btn-retry')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            retry();
-        });
-
-        // Error page Override button
-        document.querySelector('#errorCard .btn-override')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            showOverrideModal();
-        });
-
-        // Modal Cancel button
-        document.querySelector('#overrideModal .btn-cancel')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            closeOverrideModal();
-        });
-
-        // Modal Submit button
-        document.querySelector('#overrideModal .btn-override')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            submitOverride();
-        });
-
-        // Success Complete button
-        document.querySelector('.btn-success')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            completeSale();
-        });
-
-        // Cash Screen Close button
-        document.getElementById('btnCloseCash')?.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            cancelVerification();
-        });
-
-        // iOS Keyboard Fix: PIN input needs special handling
-        const pinInput = document.getElementById('managerPin');
-        if (pinInput) {
-            pinInput.addEventListener('touchend', (e) => {
-                e.stopPropagation();
-                // Delay focus slightly for iOS to register properly
-                setTimeout(() => {
-                    pinInput.focus();
-                    pinInput.click();
-                }, 100);
-            });
-
-            pinInput.addEventListener('click', (e) => {
-                e.stopPropagation();
-                pinInput.focus();
-            });
-        }
-
-        // Same for note input
-        const noteInput = document.getElementById('overrideNote');
-        if (noteInput) {
-            noteInput.addEventListener('touchend', (e) => {
-                e.stopPropagation();
-                setTimeout(() => {
-                    noteInput.focus();
-                    noteInput.click();
-                }, 100);
-            });
-        }
-
-        // ========== CARD PAYMENT SCREENS ==========
+        // ========== CARD PAYMENT FLOW ==========
         const cardWaitingWrap = document.getElementById('cardWaitingWrap');
         const cardTimeoutWrap = document.getElementById('cardTimeoutWrap');
         const cardSuccessWrap = document.getElementById('cardSuccessWrap');
@@ -1640,14 +1469,11 @@
         let cardTimeRemaining = 120;
 
         function showCardWaitingScreen() {
-            console.log('[Card] Showing card waiting screen');
+            clearInterval(statusPollInterval);
             document.querySelector('.scanner-wrap').style.display = 'none';
-            // Cash screen elements removed - this is card-only flow
             cardTimeoutWrap.style.display = 'none';
             cardSuccessWrap.style.display = 'none';
             cardWaitingWrap.style.display = 'flex';
-            cardWaitingWrap.style.justifyContent = 'center';
-            cardWaitingWrap.style.alignItems = 'center';
             cardAmountEl.textContent = '$' + saleAmount.toFixed(2);
             cardTimeRemaining = 120;
             cardTimerEl.textContent = cardTimeRemaining;
@@ -1663,7 +1489,6 @@
         }
 
         async function triggerCardTerminal() {
-            console.log('[Card] Triggering terminal for amount:', saleAmount);
             try {
                 const response = await fetch('/api/terminal/sale', {
                     method: 'POST',
@@ -1675,82 +1500,46 @@
                     })
                 });
                 const data = await response.json();
-                console.log('[Card] Terminal response:', data);
-
                 if (data.success) {
-                    // Only clear timer on actual success
                     clearInterval(cardTimerInterval);
-                    document.getElementById('cardSuccessDetails').textContent =
-                        'Transaction ' + (data.transaction_id || '') + ' - ' + (data.message || 'APPROVED');
+                    document.getElementById('cardSuccessDetails').textContent = 'Transaction approved';
                     showCardSuccess();
-                } else if (data.pending) {
-                    // Terminal call sent, waiting for customer - let timer continue
-                    console.log('[Card] Terminal pending - waiting for customer to pay...');
-                } else {
-                    // Declined - but still let timer run for retry opportunity
-                    console.log('[Card] Terminal response (will retry):', data.error || 'Unknown');
-                    // Don't show timeout yet - let user see card screen and timer can retry
                 }
-            } catch (e) {
-                // API error - let timer continue, don't auto-timeout
-                console.error('[Card] Terminal API error (will retry):', e);
-            }
+            } catch (e) { console.error('Terminal error', e); }
         }
 
-
         function showCardTimeout() {
-            console.log('[Card] Showing timeout screen');
-            clearInterval(cardTimerInterval);
             cardWaitingWrap.style.display = 'none';
             cardTimeoutWrap.style.display = 'flex';
-            cardTimeoutWrap.style.justifyContent = 'center';
-            cardTimeoutWrap.style.alignItems = 'center';
         }
 
         function showCardSuccess() {
-            console.log('[Card] Showing success screen');
-            clearInterval(cardTimerInterval);
             cardWaitingWrap.style.display = 'none';
-            cardTimeoutWrap.style.display = 'none';
             cardSuccessWrap.style.display = 'flex';
-            cardSuccessWrap.style.justifyContent = 'center';
-            cardSuccessWrap.style.alignItems = 'center';
             setTimeout(completeCardSale, 2000);
         }
 
-        function retryCardPayment() {
-            console.log('[Card] Retrying payment');
-            showCardWaitingScreen();
-        }
-
-        function cancelCardPayment() {
-            console.log('[Card] Payment cancelled');
-            clearInterval(cardTimerInterval);
-            window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
-            window.parent.postMessage('DECLINE', '*');
-        }
-
         function completeCardSale() {
-            console.log('[Card] Completing sale');
             window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
             window.parent.postMessage('ACCEPT', '*');
         }
 
-        // Card button handlers
-        document.getElementById('cardCancelBtn')?.addEventListener('click', cancelCardPayment);
-        document.getElementById('cardCancelBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); cancelCardPayment(); });
-        document.getElementById('cardRetryBtn')?.addEventListener('click', retryCardPayment);
-        document.getElementById('cardRetryBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); retryCardPayment(); });
-        document.getElementById('cardTimeoutCancelBtn')?.addEventListener('click', cancelCardPayment);
-        document.getElementById('cardTimeoutCancelBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); cancelCardPayment(); });
+        function retryCardPayment() { showCardWaitingScreen(); }
+        function cancelCardPayment() {
+            clearInterval(cardTimerInterval);
+            window.parent.postMessage('DECLINE', '*');
+        }
 
-        // Entrance animation
-        gsap.from('.scan-card', {
-            scale: 0.9,
-            opacity: 0,
-            duration: 0.6,
-            ease: 'back.out(1.5)'
-        });
+        document.getElementById('cardCancelBtn')?.addEventListener('click', cancelCardPayment);
+        document.getElementById('cardRetryBtn')?.addEventListener('click', retryCardPayment);
+        document.getElementById('cardTimeoutCancelBtn')?.addEventListener('click', cancelCardPayment);
+
+        // ========== INIT ==========
+        createParticles();
+        if (!saleId) showError('Missing Sale ID');
+        else startStatusPolling();
+
+        gsap.from('.scan-card', { scale: 0.9, opacity: 0, duration: 0.6, ease: 'back.out(1.5)' });
     </script>
 </body>
 
