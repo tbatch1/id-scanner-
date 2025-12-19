@@ -395,39 +395,89 @@
             font-size: 14px;
         }
 
-        .pin-input {
-            width: 100%;
-            padding: 16px;
+        .pin-display {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .pin-dot {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transition: all 0.15s ease;
+        }
+
+        .pin-dot.filled {
+            background: var(--warning);
+            border-color: var(--warning);
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+        }
+
+        .numpad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .numpad-btn {
+            padding: 20px;
             font-size: 28px;
-            letter-spacing: 8px;
-            text-align: center;
+            font-weight: 600;
             background: rgba(255, 255, 255, 0.1);
             border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
+            border-radius: 15px;
             color: white;
-            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        .pin-input:focus {
-            outline: none;
-            border-color: var(--warning);
+        .numpad-btn:active {
+            background: rgba(255, 255, 255, 0.25);
+            transform: scale(0.95);
         }
 
-        .note-input {
-            width: 100%;
-            padding: 12px;
+        .numpad-clear {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        .numpad-submit {
+            background: rgba(16, 185, 129, 0.3);
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .numpad-submit:active {
+            background: rgba(16, 185, 129, 0.5);
+        }
+
+        .error-msg {
+            color: #ef4444;
+            text-align: center;
+            min-height: 20px;
+            margin-top: 10px;
             font-size: 14px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            color: white;
-            margin-bottom: 20px;
         }
 
-        .modal-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        .modal {
+            position: relative;
         }
 
         .hidden {
@@ -494,18 +544,38 @@
         </div>
     </div>
 
-    <!-- ========== OVERRIDE MODAL ========== -->
+    <!-- ========== OVERRIDE MODAL WITH NUMPAD ========== -->
     <div id="override-modal" class="modal-overlay">
-        <div class="modal">
+        <div class="modal" onclick="event.stopPropagation()">
+            <button class="close-btn" id="closeModalBtn">✕</button>
             <h2>Manager Override</h2>
-            <p>Enter manager PIN to bypass verification</p>
-            <input type="password" id="manager-pin" class="pin-input" placeholder="••••" maxlength="4"
-                inputmode="numeric" />
-            <input type="text" id="override-note" class="note-input" placeholder="Reason (optional)" />
-            <div class="modal-actions">
-                <button class="btn btn-retry" onclick="closeOverrideModal()">Cancel</button>
-                <button class="btn btn-override" onclick="submitOverride()">Override</button>
+            <p>Enter 4-digit PIN</p>
+
+            <!-- PIN Display -->
+            <div class="pin-display" id="pinDisplay">
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
             </div>
+
+            <!-- Number Pad -->
+            <div class="numpad">
+                <button class="numpad-btn" data-num="1">1</button>
+                <button class="numpad-btn" data-num="2">2</button>
+                <button class="numpad-btn" data-num="3">3</button>
+                <button class="numpad-btn" data-num="4">4</button>
+                <button class="numpad-btn" data-num="5">5</button>
+                <button class="numpad-btn" data-num="6">6</button>
+                <button class="numpad-btn" data-num="7">7</button>
+                <button class="numpad-btn" data-num="8">8</button>
+                <button class="numpad-btn" data-num="9">9</button>
+                <button class="numpad-btn numpad-clear" data-action="clear">⌫</button>
+                <button class="numpad-btn" data-num="0">0</button>
+                <button class="numpad-btn numpad-submit" data-action="submit">✓</button>
+            </div>
+
+            <p class="error-msg" id="pinError"></p>
         </div>
     </div>
 
@@ -793,53 +863,90 @@
             ensureFocus();
         }
 
-        // ========== OVERRIDE MODAL ==========
+        // ========== NUMPAD OVERRIDE MODAL ==========
+        let currentPin = '';
+        const pinDots = document.querySelectorAll('.pin-dot');
+        const pinError = document.getElementById('pinError');
+
         function showOverrideModal() {
             document.getElementById('override-modal').classList.add('active');
-            document.getElementById('manager-pin').value = '';
-            document.getElementById('override-note').value = '';
-            document.getElementById('manager-pin').focus();
+            currentPin = '';
+            updatePinDisplay();
+            pinError.textContent = '';
         }
 
         function closeOverrideModal() {
             document.getElementById('override-modal').classList.remove('active');
+            currentPin = '';
+            updatePinDisplay();
             ensureFocus();
         }
 
-        async function submitOverride() {
-            const pin = document.getElementById('manager-pin').value;
-            const note = document.getElementById('override-note').value;
+        function updatePinDisplay() {
+            pinDots.forEach((dot, index) => {
+                if (index < currentPin.length) dot.classList.add('filled');
+                else dot.classList.remove('filled');
+            });
+        }
 
-            if (!pin) {
-                alert('Please enter a PIN');
+        function handleNumpadInput(value) {
+            pinError.textContent = '';
+            if (value === 'clear') {
+                currentPin = currentPin.slice(0, -1);
+            } else if (value === 'submit') {
+                if (currentPin.length === 4) submitOverride();
+                else pinError.textContent = 'Enter 4 digits';
                 return;
+            } else {
+                if (currentPin.length < 4) currentPin += value;
             }
+            updatePinDisplay();
+        }
 
+        // iPad touch handlers for numpad
+        document.querySelectorAll('.numpad-btn').forEach(btn => {
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleNumpadInput(btn.getAttribute('data-num') || btn.getAttribute('data-action'));
+            });
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleNumpadInput(btn.getAttribute('data-num') || btn.getAttribute('data-action'));
+            });
+        });
+
+        // Close button handler
+        document.getElementById('closeModalBtn')?.addEventListener('click', closeOverrideModal);
+        document.getElementById('closeModalBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); closeOverrideModal(); });
+
+        async function submitOverride() {
+            if (currentPin.length !== 4) return;
             try {
                 const response = await fetch(`/api/sales/${saleId}/override`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         verificationId: 'MANUAL-OVERRIDE',
-                        managerPin: pin,
-                        note: note,
+                        managerPin: currentPin,
+                        note: 'Numpad entry',
                         clerkId: clerkId,
                         registerId: registerId
                     })
                 });
-
                 const data = await response.json();
-
                 if (data.success) {
                     closeOverrideModal();
                     showSuccess({ customerName: 'Manual Override' });
                     setTimeout(completeSale, 1500);
                 } else {
-                    alert(data.message || 'Override Failed');
+                    pinError.textContent = data.message || 'Invalid PIN';
+                    currentPin = '';
+                    updatePinDisplay();
                 }
             } catch (e) {
                 console.error('Override error', e);
-                alert('Failed to process override');
+                pinError.textContent = 'Connection error';
             }
         }
     </script>
