@@ -130,8 +130,10 @@ function updateVerification(saleId, {
   customerName = null,
   age = null,
   reason = null,
-  registerId = null
+  registerId = null,
+  status = null
 }) {
+
   const verification = verifications.get(saleId);
 
   if (!verification) {
@@ -144,7 +146,8 @@ function updateVerification(saleId, {
     return null;
   }
 
-  verification.status = approved ? 'approved' : 'rejected';
+  // Use explicit status if provided, otherwise derive from 'approved' boolean
+  verification.status = status || (approved ? 'approved' : 'rejected');
   verification.customerId = customerId;
   verification.customerName = customerName;
   verification.age = age;
