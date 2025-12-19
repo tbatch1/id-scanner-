@@ -966,56 +966,60 @@ router.post('/test-scan', (req, res) => {
     }
 
     try {
-      // 2. Record Override
-      const result = await complianceStore.markVerificationOverride({
-        verificationId,
-        saleId,
-        managerId: 'Manager-' + managerPin.slice(-2), // Obfuscate slightly
-        note,
-        clerkId,
-        registerId
-      });
+      // 2. Record Override (only if database is available)
+      let result = null;
+      if (db.pool) {
+        result = await complianceStore.markVerificationOverride({
+          verificationId,
+          saleId,
+          managerId: 'Manager-' + managerPin.slice(-2),
+          note,
+          clerkId,
+          registerId
+        });
+      } else {
+        logger.info({ event: 'override_no_db', saleId }, 'Override processed without database');
+        result = { verification: null, override: { saleId, note: 'No database mode' } };
+      }
 
-      // 3. Update In-Memory Store (so polling picks it up)
+      // 3. Update In-Memory Store (so polling picks it up) - ALWAYS do this
       saleVerificationStore.updateVerification(saleId, {
         approved: true,
         reason: 'Manual ID Override: ' + (note || 'No reason provided'),
         status: 'approved_override'
       });
 
-      // 4. Abuse Detection
-      // Check how many overrides happened in the last 10 minutes at this location
-      // We need to fetch the verification to get the locationId
-      const verification = await complianceStore.getLatestVerificationForSale(saleId);
-      const locationId = verification?.location_id;
+      // 4. Abuse Detection (only if database is available)
+      if (db.pool) {
+        const verification = await complianceStore.getLatestVerificationForSale(saleId);
+        const locationId = verification?.location_id;
 
-      const recentCount = await complianceStore.countRecentOverrides({
-        locationId,
-        minutes: 10
-      });
+        const recentCount = await complianceStore.countRecentOverrides({
+          locationId,
+          minutes: 10
+        });
 
-      const ABUSE_THRESHOLD = 3;
+        const ABUSE_THRESHOLD = 3;
 
-      if (recentCount >= ABUSE_THRESHOLD) {
-        logger.warn({ event: 'override_abuse_detected', count: recentCount, locationId }, 'Override abuse threshold exceeded');
+        if (recentCount >= ABUSE_THRESHOLD) {
+          logger.warn({ event: 'override_abuse_detected', count: recentCount, locationId }, 'Override abuse threshold exceeded');
 
-        // Send Email Alert
-        const alertHtml = `
-        <h2>⚠️ High Override Volume Detected</h2>
-        <p><strong>Location:</strong> ${locationId || 'Unknown'}</p>
-        <p><strong>Count:</strong> ${recentCount} overrides in the last 10 minutes.</p>
-        <p><strong>Latest Override:</strong></p>
-        <ul>
-          <li><strong>Sale ID:</strong> ${saleId}</li>
-          <li><strong>Manager PIN Used:</strong> ****${managerPin.slice(-2)}</li>
-          <li><strong>Note:</strong> ${note || 'None'}</li>
-          <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
-        </ul>
-        <p>Please investigate immediately.</p>
-      `;
+          const alertHtml = `
+          <h2>⚠️ High Override Volume Detected</h2>
+          <p><strong>Location:</strong> ${locationId || 'Unknown'}</p>
+          <p><strong>Count:</strong> ${recentCount} overrides in the last 10 minutes.</p>
+          <p><strong>Latest Override:</strong></p>
+          <ul>
+            <li><strong>Sale ID:</strong> ${saleId}</li>
+            <li><strong>Manager PIN Used:</strong> ****${managerPin.slice(-2)}</li>
+            <li><strong>Note:</strong> ${note || 'None'}</li>
+            <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
+          </ul>
+          <p>Please investigate immediately.</p>
+        `;
 
-        // Fire and forget (don't await)
-        emailService.sendAlertEmail('High Override Volume Detected', alertHtml);
+          emailService.sendAlertEmail('High Override Volume Detected', alertHtml);
+        }
       }
 
       res.json({
@@ -1027,8 +1031,7 @@ router.post('/test-scan', (req, res) => {
     } catch (error) {
       logger.error('Override failed', { error: error.message, stack: error.stack });
 
-      // Check if it's a DATABASE_URL issue
-      const isDbError = error.message && error.message.includes('DATABASE_URL');
+      const isDbError = error.message && (error.message.includes('DATABASE_URL') || error.message.includes('pool'));
 
       res.status(500).json({
         success: false,
