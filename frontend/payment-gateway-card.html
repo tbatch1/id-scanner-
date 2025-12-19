@@ -1007,8 +1007,8 @@
             </div>
 
             <div class="action-row">
-                <button class="btn btn-override" onclick="showOverrideModal()">Manual Override</button>
-                <button class="btn btn-cancel" onclick="cancelVerification()">Cancel</button>
+                <button class="btn btn-override" id="mainOverrideBtn">Manual Override</button>
+                <button class="btn btn-cancel" id="mainCancelBtn">Cancel</button>
             </div>
         </div>
 
@@ -1017,7 +1017,7 @@
             <div class="result-icon">✅</div>
             <h1 class="result-title">Verified</h1>
             <p class="result-details" id="successDetails">Age 21+ Confirmed</p>
-            <button class="btn btn-success" onclick="completeSale()">Complete Sale</button>
+            <button class="btn btn-success" id="successCompleteBtn">Complete Sale</button>
         </div>
 
         <!-- ========== ERROR STATE ========== -->
@@ -1026,8 +1026,8 @@
             <h1 class="result-title">Failed</h1>
             <p class="result-details" id="errorDetails">Verification failed</p>
             <div style="display: flex; gap: 10px; justify-content: center;">
-                <button class="btn btn-retry" onclick="retry()">Try Again</button>
-                <button class="btn btn-override" onclick="showOverrideModal()">Override</button>
+                <button class="btn btn-retry" id="errorRetryBtn">Try Again</button>
+                <button class="btn btn-override" id="errorOverrideBtn">Override</button>
             </div>
         </div>
     </div>
@@ -1533,6 +1533,34 @@
         document.getElementById('cardCancelBtn')?.addEventListener('click', cancelCardPayment);
         document.getElementById('cardRetryBtn')?.addEventListener('click', retryCardPayment);
         document.getElementById('cardTimeoutCancelBtn')?.addEventListener('click', cancelCardPayment);
+
+        // ========== iOS IFRAME TOUCH FIX ==========
+        // Dummy touchstart listener - REQUIRED for iOS Safari iframe touch events
+        document.addEventListener('touchstart', () => { });
+        window.addEventListener('touchstart', () => { });
+
+        // Main scan card button handlers with touchend for iOS
+        document.getElementById('mainOverrideBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); showOverrideModal(); });
+        document.getElementById('mainOverrideBtn')?.addEventListener('click', showOverrideModal);
+
+        document.getElementById('mainCancelBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); cancelVerification(); });
+        document.getElementById('mainCancelBtn')?.addEventListener('click', cancelVerification);
+
+        // Success state button
+        document.getElementById('successCompleteBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); completeSale(); });
+        document.getElementById('successCompleteBtn')?.addEventListener('click', completeSale);
+
+        // Error state buttons
+        document.getElementById('errorRetryBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); retry(); });
+        document.getElementById('errorRetryBtn')?.addEventListener('click', retry);
+
+        document.getElementById('errorOverrideBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); showOverrideModal(); });
+        document.getElementById('errorOverrideBtn')?.addEventListener('click', showOverrideModal);
+
+        // Card payment screen buttons
+        document.getElementById('cardCancelBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); cancelCardPayment(); });
+        document.getElementById('cardRetryBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); retryCardPayment(); });
+        document.getElementById('cardTimeoutCancelBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); cancelCardPayment(); });
 
         // ========== INIT ==========
         createParticles();
