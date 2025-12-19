@@ -522,8 +522,8 @@
             </div>
         </div>
 
-        <button class="override-btn" onclick="showOverrideModal()">Manual ID Override</button>
-        <div class="cancel-link" onclick="cancelVerification()">Cancel</div>
+        <button class="override-btn" id="mainOverrideBtn">Manual ID Override</button>
+        <div class="cancel-link" id="mainCancelBtn">Cancel</div>
     </div>
 
     <!-- ========== STATE 2: SUCCESS ========== -->
@@ -539,8 +539,8 @@
         <h1>Verification Failed</h1>
         <p id="error-details">Customer is under 21</p>
         <div>
-            <button class="btn btn-retry" onclick="retry()">Try Again</button>
-            <button class="btn btn-override" onclick="showOverrideModal()">Manual Override</button>
+            <button class="btn btn-retry" id="errorRetryBtn">Try Again</button>
+            <button class="btn btn-override" id="errorOverrideBtn">Manual Override</button>
         </div>
     </div>
 
@@ -949,6 +949,25 @@
                 pinError.textContent = 'Connection error';
             }
         }
+
+        // ========== iOS IFRAME TOUCH FIX ==========
+        // Dummy touchstart listener - REQUIRED for iOS Safari iframe touch events
+        document.addEventListener('touchstart', () => { });
+        window.addEventListener('touchstart', () => { });
+
+        // Main page button handlers with touchend for iOS
+        document.getElementById('mainOverrideBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); showOverrideModal(); });
+        document.getElementById('mainOverrideBtn')?.addEventListener('click', showOverrideModal);
+
+        document.getElementById('mainCancelBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); cancelVerification(); });
+        document.getElementById('mainCancelBtn')?.addEventListener('click', cancelVerification);
+
+        // Error state button handlers
+        document.getElementById('errorRetryBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); retry(); });
+        document.getElementById('errorRetryBtn')?.addEventListener('click', retry);
+
+        document.getElementById('errorOverrideBtn')?.addEventListener('touchend', (e) => { e.preventDefault(); showOverrideModal(); });
+        document.getElementById('errorOverrideBtn')?.addEventListener('click', showOverrideModal);
     </script>
 </body>
 
