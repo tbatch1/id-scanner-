@@ -1317,7 +1317,7 @@
         // ========== BLUETOOTH SCANNER ==========
         let barcodeBuffer = '';
         let scanTimer = null;
-        const SCAN_TIMEOUT = 800; // Increased even more for unstable Bluetooth
+        const SCAN_TIMEOUT = 2000; // Longer timeout: scanners often pause between AAMVA subfiles/lines
         const PDF417_PREFIX = ']L';
 
         const dbgFocus = document.getElementById('dbgFocus');
@@ -1397,11 +1397,16 @@
             });
 
             scanInput.addEventListener('keydown', (e) => {
-                // Many scanners end with Enter or Tab; submit immediately.
-                if (e.key === 'Enter' || e.key === 'Tab') {
+                // Keep focus in the box if the scanner sends Tab.
+                // Do NOT treat Enter as "end of scan" because many scanners include CR/LF within the payload.
+                if (e.key === 'Tab') {
                     e.preventDefault();
-                    const value = scanInput.value || barcodeBuffer;
-                    if (value && value.length > 10) handleCompleteScan(value);
+                    scanInput.value = (scanInput.value || '') + '\n';
+                    const value = scanInput.value || '';
+                    barcodeBuffer = value;
+                    dbgBuffer.textContent = barcodeBuffer.length;
+                    dbgPreview.textContent = barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : '');
+                    resetScanTimer();
                 }
             });
         }
@@ -1420,8 +1425,15 @@
                 dbgLast.textContent = e.key === 'Enter' ? 'ENTER' : e.key;
             }
 
+            // IMPORTANT: Many barcode scanners send CR/LF during the payload (not only at the end).
+            // Treat Enter as a newline separator, and rely on inactivity timeout to finalize the scan.
             if (e.key === 'Enter') {
-                if (barcodeBuffer.length > 10) handleCompleteScan(barcodeBuffer);
+                if (barcodeBuffer.length > 0) {
+                    barcodeBuffer += '\n';
+                    dbgBuffer.textContent = barcodeBuffer.length;
+                    dbgPreview.textContent = barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : '');
+                    resetScanTimer();
+                }
                 e.preventDefault();
             } else if (isPrintable) {
                 barcodeBuffer += e.key;
