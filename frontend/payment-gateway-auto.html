@@ -1692,6 +1692,20 @@
             showError('Missing Sale ID');
         } else {
             ensureFocus();
+
+            // Zero-click embedded iPad fallback: begin listening immediately so the clerk doesn't need to tap Scan
+            // multiple times. In iframe mode, keystrokes/popups are often blocked, so we guide scanning into the POS note.
+            if (isEmbedded) {
+                scanCard.classList.add('scanning');
+                statusIndicator.classList.add('scanning');
+                statusText.textContent = 'Scan into POS Notes';
+                dbgApi.textContent = 'EMBEDDED MODE';
+                if (scanSubtitle) {
+                    scanSubtitle.textContent = 'Tap Notes, scan the ID, tap out to save.';
+                }
+                startStatusPolling();
+                startNoteScanPolling();
+            }
         }
         function openRemoteScanner() {
             if (!saleId) {
@@ -1757,11 +1771,18 @@
         function startNoteScanPolling() {
             if (notePollInterval) return;
             let attempts = 0;
+            statusText.textContent = 'Waiting for note scan...';
+            dbgApi.textContent = 'NOTE POLL...';
             notePollInterval = setInterval(async () => {
                 attempts++;
                 if (attempts > 60) { // ~60s
                     clearInterval(notePollInterval);
                     notePollInterval = null;
+                    statusText.textContent = 'Timed out';
+                    dbgApi.textContent = 'NOTE POLL TIMEOUT';
+                    if (scanSubtitle) {
+                        scanSubtitle.textContent = 'No scan found. Tap Notes, scan again, and tap Scan once.';
+                    }
                     return;
                 }
 
@@ -1781,6 +1802,12 @@
                             if (scanSubtitle) {
                                 scanSubtitle.textContent = 'Scan the full ID into Notes (starts with @ANSI). Try again.';
                             }
+                        } else if (data && data.error === 'NO_SCAN_IN_NOTE') {
+                            statusText.textContent = 'Waiting for note scan...';
+                            dbgApi.textContent = `NOTE POLL ${attempts}/60`;
+                            if (scanSubtitle) {
+                                scanSubtitle.textContent = 'Tap Notes, scan the ID, then tap out to save.';
+                            }
                         }
                         // NO_SCAN_IN_NOTE or parse issues: keep waiting.
                         return;
@@ -1790,12 +1817,19 @@
                         clearInterval(notePollInterval);
                         notePollInterval = null;
                     } else if (!response.ok) {
+                        if (response.status === 503) {
+                            statusText.textContent = 'System unavailable';
+                            dbgApi.textContent = 'LIGHTSPEED DOWN';
+                            if (scanSubtitle) {
+                                scanSubtitle.textContent = 'Lightspeed API unavailable. Try again or switch to New Tab.';
+                            }
+                        }
                         console.warn('[NoteScan] verify-from-note failed', data);
                     }
                 } catch (e) {
                     console.warn('[NoteScan] network error', e);
                 }
-            }, 1000);
+            }, 1200);
         }
 
 </script>
