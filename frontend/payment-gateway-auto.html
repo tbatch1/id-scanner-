@@ -1115,7 +1115,9 @@
 
         const isEmbedded = window.self !== window.top;
         const remoteScanEnabled = ['1', 'true', 'yes'].includes((urlParams.get('remoteScan') || '').toLowerCase());
-        const cashUiEnabled = ['1', 'true', 'yes'].includes((urlParams.get('cashUi') || '').toLowerCase());
+        const cashUiParam = (urlParams.get('cashUi') || '').toLowerCase();
+        const cashUiExplicitlyDisabled = ['0', 'false', 'no', 'off'].includes(cashUiParam);
+        const cashUiEnabledFromParam = ['1', 'true', 'yes', 'on'].includes(cashUiParam);
         if (isEmbedded) {
             document.body.classList.add('embedded');
         }
@@ -1467,6 +1469,9 @@
         const paymentType = (urlParams.get('type') || urlParams.get('paymentType') || 'cash').toLowerCase();
         const isRefund = Number.isFinite(saleAmount) && saleAmount < 0;
         const cardMode = (urlParams.get('cardMode') || (urlParams.get('card_mode') || '')).toLowerCase() || 'precheck'; // 'precheck' | 'external'
+        const cashUiEnabled = cashUiExplicitlyDisabled
+            ? false
+            : (cashUiEnabledFromParam || (paymentType === 'cash' && !isRefund));
 
         console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount, paymentType, remoteScanEnabled, cashUiEnabled });
         sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} cardMode=${cardMode} amount=${saleAmount} refund=${isRefund} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled}`);
