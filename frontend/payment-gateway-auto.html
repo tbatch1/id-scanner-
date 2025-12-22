@@ -1093,7 +1093,7 @@
         }
 
         const isEmbedded = window.self !== window.top;
-        const remoteScanEnabled = ['1', 'true', 'yes'].includes((urlParams.get('remoteScan') || '').toLowerCase()) || isEmbedded;
+        const remoteScanEnabled = ['1', 'true', 'yes'].includes((urlParams.get('remoteScan') || '').toLowerCase());
         const cashUiEnabled = ['1', 'true', 'yes'].includes((urlParams.get('cashUi') || '').toLowerCase());
 
         function safeJson(value, maxLen = 400) {
@@ -1256,15 +1256,8 @@
             statusIndicator.classList.add('scanning');
 
             if (isEmbedded) {
-                statusText.textContent = 'Tap box, then scan';
-                dbgApi.textContent = 'EMBEDDED...';
-                if (attemptIframeBreakout()) {
-                    return;
-                }
-
-                // Start note-based fallback immediately in embedded mode so staff can complete the flow even when
-                // the iPad POS iframe blocks focus/popup navigation.
-                startNoteScanPolling();
+                statusText.textContent = 'Scan now';
+                dbgApi.textContent = 'IFRAME READY';
             }
 
             if (remoteScanEnabled) {
@@ -1274,14 +1267,11 @@
                     statusText.textContent = 'Waiting for scan...';
                     dbgApi.textContent = 'REMOTE...';
                 } else {
-                    statusText.textContent = isEmbedded ? 'Tap box or use Notes' : 'Scan into POS Notes';
+                    statusText.textContent = 'Scan now';
                     dbgApi.textContent = 'POPUP BLOCKED';
                     if (scanSubtitle) {
-                        scanSubtitle.textContent = isEmbedded
-                            ? 'Tap the box below and scan. If it stays empty, scan into Notes, then tap out to save.'
-                            : 'Tap the sale Notes field, scan the ID, then wait...';
+                        scanSubtitle.textContent = 'Popup blocked. Scan in the box on this page.';
                     }
-                    startStatusPolling();
                 }
             } else {
                 statusText.textContent = 'Scan now';
@@ -1907,21 +1897,19 @@
         } else {
             ensureFocus();
 
-             // Zero-click embedded iPad fallback: begin listening immediately so the clerk doesn't need to tap Scan
-             // multiple times. In iframe mode, keystrokes/popups are often blocked, so we guide scanning into the POS note.
-             if (isEmbedded) {
+            // Embedded iPad mode: show the scan box and wait for the scanner keystrokes.
+            if (isEmbedded) {
                  if (scanInputSection) {
                      scanInputSection.classList.remove('hidden');
                  }
                  scanCard.classList.add('scanning');
                  statusIndicator.classList.add('scanning');
-                 statusText.textContent = 'Tap box, then scan';
+                 statusText.textContent = 'Scan now';
                  dbgApi.textContent = 'EMBEDDED MODE';
                  if (scanSubtitle) {
-                     scanSubtitle.textContent = 'Tap the box below and scan. If it stays empty, scan into Notes and tap out to save.';
+                     scanSubtitle.textContent = 'Tap the box below, then scan the ID.';
                  }
-                 startStatusPolling();
-                 startNoteScanPolling();
+                 scanBoxPreferred = true;
              }
         }
         function openRemoteScanner() {
@@ -2048,6 +2036,56 @@
                 }
             }, 1200);
         }
+
+        // ========== STABILITY OVERRIDES (retry without auto-fail loops) ==========
+        function stopAllPolling() {
+            try { clearInterval(pollInterval); } catch (e) { }
+            try { if (statusPollInterval) clearInterval(statusPollInterval); } catch (e) { }
+            try { if (notePollInterval) clearInterval(notePollInterval); } catch (e) { }
+            statusPollInterval = null;
+            notePollInterval = null;
+        }
+
+        function resetScanUi() {
+            stopAllPolling();
+            try { if (scanTimer) clearTimeout(scanTimer); } catch (e) { }
+            scanTimer = null;
+            barcodeBuffer = '';
+            try { hiddenInput.value = ''; } catch (e) { }
+            try { if (scanInput) scanInput.value = ''; } catch (e) { }
+
+            if (scanInputSection) scanInputSection.classList.remove('hidden');
+            scanBoxPreferred = true;
+            scanCard.classList.remove('hidden');
+            scanCard.classList.add('scanning');
+            statusIndicator.classList.add('scanning');
+            successCard.classList.remove('active');
+            errorCard.classList.remove('active');
+            statusText.textContent = 'Scan now';
+            if (scanSubtitle) scanSubtitle.textContent = 'Tap the box below, then scan the ID.';
+            dbgApi.textContent = 'READY';
+            focusScannerTarget();
+        }
+
+        // Override the inline onclick handler target.
+        window.retry = function retry() {
+            resetScanUi();
+        };
+
+        const originalShowError = window.showError || showError;
+        window.showError = function showErrorPatched(message) {
+            stopAllPolling();
+            sendDebugLog('warn', `ui error: ${message}`);
+            return originalShowError(message);
+        };
+        showError = window.showError;
+
+        const originalShowSuccess = window.showSuccess || showSuccess;
+        window.showSuccess = function showSuccessPatched(data) {
+            stopAllPolling();
+            return originalShowSuccess(data);
+        };
+        showSuccess = window.showSuccess;
 
 </script>
 
