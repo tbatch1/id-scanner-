@@ -79,6 +79,36 @@ function seedSales() {
 
 seedSales();
 
+function listVerifications({ location, status, limit = 100, offset = 0 } = {}) {
+  const normalizedLimit = Math.max(0, Number.parseInt(limit, 10) || 0);
+  const normalizedOffset = Math.max(0, Number.parseInt(offset, 10) || 0);
+
+  const rows = Array.from(verificationStore.values())
+    .filter((record) => {
+      if (location && record.locationId !== location) return false;
+      if (status && record.status !== status) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map((record) => ({
+      verification_id: record.verificationId,
+      sale_id: record.saleId,
+      first_name: record.firstName,
+      last_name: record.lastName,
+      age: record.age,
+      date_of_birth: record.dob,
+      status: record.status,
+      reason: record.reason,
+      document_type: record.documentType || 'drivers_license',
+      location_id: record.locationId,
+      clerk_id: record.clerkId,
+      created_at: record.createdAt,
+      source: record.source || 'pdf417'
+    }));
+
+  return rows.slice(normalizedOffset, normalizedOffset + normalizedLimit);
+}
+
 function getSaleById(saleId) {
   const sale = saleStore.get(saleId);
   if (!sale) {
@@ -283,6 +313,7 @@ module.exports = {
   recordVerification,
   completeSale,
   listSales,
+  listVerifications,
   getComplianceReport,
   getAuthState
 };

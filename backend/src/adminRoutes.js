@@ -51,6 +51,40 @@ router.post('/refresh', async (req, res) => {
 // GET /api/admin/pending/:locationId - Get pending/rejected sales for specific location
 router.get('/pending/:locationId', async (req, res) => {
   if (!db.pool) {
+    if (typeof lightspeed.listVerifications === 'function') {
+      const { locationId } = req.params;
+      const pending = lightspeed.listVerifications({
+        location: locationId,
+        status: 'rejected',
+        limit: 50,
+        offset: 0
+      });
+
+      const now = Date.now();
+      const formatted = pending.map((entry) => ({
+        verification_id: entry.verification_id,
+        sale_id: entry.sale_id,
+        first_name: entry.first_name,
+        last_name: entry.last_name,
+        age: entry.age,
+        date_of_birth: entry.date_of_birth,
+        status: entry.status,
+        reason: entry.reason,
+        document_type: entry.document_type,
+        location_id: entry.location_id,
+        clerk_id: entry.clerk_id,
+        created_at: entry.created_at,
+        seconds_ago: entry.created_at ? (now - new Date(entry.created_at).getTime()) / 1000 : null
+      }));
+
+      return res.status(200).json({
+        success: true,
+        location: locationId,
+        count: formatted.length,
+        pending: formatted
+      });
+    }
+
     return res.status(503).json({
       error: 'DATABASE_UNAVAILABLE',
       message: 'Database connection required'
@@ -105,6 +139,22 @@ router.get('/pending/:locationId', async (req, res) => {
 // GET /api/admin/scans - Get all scans with optional filters
 router.get('/scans', async (req, res) => {
   if (!db.pool) {
+    if (typeof lightspeed.listVerifications === 'function') {
+      const { location, status, limit = 100, offset = 0 } = req.query;
+      const scans = lightspeed.listVerifications({
+        location: location || undefined,
+        status: status || undefined,
+        limit,
+        offset
+      });
+
+      return res.status(200).json({
+        success: true,
+        count: scans.length,
+        scans
+      });
+    }
+
     return res.status(503).json({
       error: 'DATABASE_UNAVAILABLE',
       message: 'Database connection required'

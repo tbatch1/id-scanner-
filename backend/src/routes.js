@@ -443,6 +443,7 @@ router.post('/test-scan', (req, res) => {
     bodyLength: JSON.stringify(req.body).length,
     barcodeLength: req.body.barcodeData ? req.body.barcodeData.length : 0
   });
+});
 
   router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     const { saleId } = req.params;

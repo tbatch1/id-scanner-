@@ -868,8 +868,8 @@
                 <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="logo" id="logo">
             </div>
 
-            <h1 class="scan-title">Tap to Scan</h1>
-            <p class="scan-subtitle">Touch here to activate scanner</p>
+            <h1 class="scan-title" id="scanTitle">Tap to Scan</h1>
+            <p class="scan-subtitle" id="scanSubtitle">Touch here to activate scanner</p>
 
             <div class="status-indicator" id="statusIndicator">
                 <span class="status-dot"></span>
@@ -887,7 +887,7 @@
             <div class="result-icon">✅</div>
             <h1 class="result-title">Verified</h1>
             <p class="result-details" id="successDetails">Age 21+ Confirmed</p>
-            <button class="btn btn-success" onclick="completeCashSale()">Complete Sale</button>
+            <button class="btn btn-success" id="successPrimaryBtn">Return to POS</button>
         </div>
 
         <!-- ========== ERROR STATE ========== -->
@@ -998,7 +998,7 @@
         </div>
     </div>
 
-    <!-- DEBUG PANEL - REMOVE AFTER TESTING -->
+    <!-- DEBUG PANEL (enable with ?debug=1) -->
     <div id="debugPanel"
         style="position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.9); color: #0f0; font-family: monospace; font-size: 12px; padding: 8px; z-index: 9999; border-bottom: 2px solid #0f0;">
         <b>🔧 DEBUG:</b>
@@ -1019,6 +1019,17 @@
     </div>
 
     <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const debugEnabled = ['1', 'true', 'yes'].includes((urlParams.get('debug') || '').toLowerCase());
+        const debugPanel = document.getElementById('debugPanel');
+        if (debugPanel && !debugEnabled) {
+            debugPanel.style.display = 'none';
+        }
+
+        const isEmbedded = window.self !== window.top;
+        const remoteScanEnabled = ['1', 'true', 'yes'].includes((urlParams.get('remoteScan') || '').toLowerCase()) || isEmbedded;
+        const cashUiEnabled = ['1', 'true', 'yes'].includes((urlParams.get('cashUi') || '').toLowerCase());
+
         // ========== ELEMENTS ==========
         const scanCard = document.getElementById('scanCard');
         const successCard = document.getElementById('successCard');
@@ -1029,6 +1040,9 @@
         const statusIndicator = document.getElementById('statusIndicator');
         const statusText = document.getElementById('statusText');
         const hiddenInput = document.getElementById('hiddenScannerInput');
+        const scanTitle = document.getElementById('scanTitle');
+        const scanSubtitle = document.getElementById('scanSubtitle');
+        const successPrimaryBtn = document.getElementById('successPrimaryBtn');
 
         // ========== PARTICLES ==========
         function createParticles() {
@@ -1096,11 +1110,17 @@
 
         function activateScanning() {
             ensureFocus();
-            openRemoteScanner(); // Automatically open the side-channel tab
             scanCard.classList.add('scanning');
             statusIndicator.classList.add('scanning');
-            statusText.textContent = 'Waiting for Remote Scan...';
-            dbgApi.textContent = 'POLLING REMOTE...';
+
+            if (remoteScanEnabled) {
+                openRemoteScanner();
+                statusText.textContent = 'Waiting for scan...';
+                dbgApi.textContent = 'REMOTE...';
+            } else {
+                statusText.textContent = 'Scanning...';
+                dbgApi.textContent = 'LISTENING...';
+            }
 
             gsap.to('.logo', {
                 filter: 'drop-shadow(0 0 50px rgba(229, 92, 44, 0.8))',
@@ -1204,14 +1224,56 @@
         });
 
         // ========== API INTEGRATION ==========
-        const urlParams = new URLSearchParams(window.location.search);
         const saleId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
         const registerId = urlParams.get('register_id') || urlParams.get('registerId') || urlParams.get('outlet_id');
         const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
         const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
         const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
+        const paymentType = (urlParams.get('type') || urlParams.get('paymentType') || 'cash').toLowerCase();
 
-        console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount });
+        console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount, paymentType, remoteScanEnabled, cashUiEnabled });
+
+        function buildReturnUrl() {
+            const explicit = urlParams.get('return') || urlParams.get('returnUrl') || urlParams.get('return_url');
+            if (explicit) return explicit;
+
+            const pos = (urlParams.get('pos') || urlParams.get('platform') || '').toLowerCase();
+            if (pos.includes('merchantos') || pos.includes('rseries') || pos.includes('r-series')) {
+                return 'https://us.merchantos.com/?name=register';
+            }
+
+            if (saleId) {
+                return `https://retail.lightspeed.app/sales/${encodeURIComponent(saleId)}?platform=ios&action=view`;
+            }
+
+            return 'https://retail.lightspeed.app/sell';
+        }
+
+        function returnToPOS() {
+            const targetUrl = buildReturnUrl();
+            try {
+                if (window.top && window.top !== window.self) {
+                    window.top.location.href = targetUrl;
+                } else {
+                    window.location.href = targetUrl;
+                }
+            } catch (e) {
+                window.location.href = targetUrl;
+            }
+        }
+
+        function finishCashFlow() {
+            if (isEmbedded) {
+                try {
+                    window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
+                    window.parent.postMessage('ACCEPT', '*');
+                    window.parent.postMessage('CLOSE', '*');
+                } catch (e) { }
+                return;
+            }
+
+            returnToPOS();
+        }
 
         // ========== CASH SCREEN ELEMENTS ==========
         const cashScreenWrap = document.getElementById('cashScreenWrap');
@@ -1403,7 +1465,12 @@
                 if (data.success && data.approved) {
                     clearInterval(pollInterval);
                     showSuccess({ customerName: data.customerName || 'Customer' });
-                    setTimeout(showCashScreen, 1500);
+
+                    if (paymentType === 'cash' && cashUiEnabled) {
+                        setTimeout(showCashScreen, 1200);
+                    } else {
+                        setTimeout(finishCashFlow, 1200);
+                    }
                 } else {
                     showError(data.reason || 'Verification Failed');
                 }
@@ -1416,6 +1483,12 @@
         function cancelVerification() {
             clearInterval(pollInterval);
             console.log('[Cancel] Signaling Lightspeed...');
+
+            if (!isEmbedded) {
+                returnToPOS();
+                return;
+            }
+
             try {
                 window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
                 window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
@@ -1501,7 +1574,11 @@
                 if (data.success) {
                     closeOverrideModal();
                     showSuccess({ customerName: 'Manual Override' });
-                    setTimeout(showCashScreen, 1500);
+                    if (paymentType === 'cash' && cashUiEnabled) {
+                        setTimeout(showCashScreen, 1200);
+                    } else {
+                        setTimeout(finishCashFlow, 1200);
+                    }
                 } else {
                     pinError.textContent = data.message || 'Invalid PIN';
                     currentPin = '';
@@ -1550,8 +1627,34 @@
 
         gsap.from('.scan-card', { scale: 0.9, opacity: 0, duration: 0.6, ease: 'back.out(1.5)' });
 
-        if (!saleId) showError('Missing Sale ID');
-        else startStatusPolling();
+        if (scanTitle && scanSubtitle) {
+            if (remoteScanEnabled) {
+                scanTitle.textContent = 'Tap to Scan';
+                scanSubtitle.textContent = 'Opens scanner in a new tab';
+            } else {
+                scanTitle.textContent = 'Scan Customer ID';
+                scanSubtitle.textContent = 'Scan now (Netum scanner)';
+            }
+        }
+
+        if (successPrimaryBtn) {
+            successPrimaryBtn.textContent = paymentType === 'cash' && cashUiEnabled ? 'Continue' : 'Return to POS';
+            successPrimaryBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (paymentType === 'cash' && cashUiEnabled) {
+                    showCashScreen();
+                } else {
+                    finishCashFlow();
+                }
+            });
+        }
+
+        if (!saleId) {
+            showError('Missing Sale ID');
+        } else {
+            if (remoteScanEnabled) startStatusPolling();
+            ensureFocus();
+        }
         function openRemoteScanner() {
             if (!saleId) {
                 showError('Missing Sale ID');
@@ -1570,7 +1673,7 @@
                     const response = await fetch(`/api/sales/${saleId}/status`);
                     const data = await response.json();
 
-                    if (data.status === 'approved') {
+                    if (data.status === 'approved' || data.status === 'approved_override') {
                         console.log('[Poll] REMOTE SCAN APPROVED!');
                         clearInterval(statusPollInterval);
                         statusText.textContent = 'VERIFIED ✓';
@@ -1578,7 +1681,11 @@
                         statusIndicator.style.background = 'rgba(46, 167, 80, 0.2)';
                         statusIndicator.style.color = '#2ea750';
                         showSuccess({ customerName: data.customerName });
-                        setTimeout(showCashScreen, 1500);
+                        if (paymentType === 'cash' && cashUiEnabled) {
+                            setTimeout(showCashScreen, 1200);
+                        } else {
+                            setTimeout(finishCashFlow, 1200);
+                        }
                     } else if (data.status === 'rejected') {
                         console.log('[Poll] REMOTE SCAN REJECTED:', data.reason);
                         clearInterval(statusPollInterval);
@@ -1589,6 +1696,8 @@
                 }
             }, 500);
         }
+
+</script>
 
 </body >
 
