@@ -1772,12 +1772,20 @@
                         body: JSON.stringify({ clerkId: clerkId || null, registerId: registerId || null })
                     });
 
+                    const data = await response.json().catch(() => ({}));
+
                     if (response.status === 409) {
-                        // No scan in note yet; keep waiting.
+                        if (data && data.error === 'SCAN_NOT_PARSEABLE') {
+                            statusText.textContent = 'Scan incomplete';
+                            dbgApi.textContent = 'NOTE PARSE FAILED';
+                            if (scanSubtitle) {
+                                scanSubtitle.textContent = 'Scan the full ID into Notes (starts with @ANSI). Try again.';
+                            }
+                        }
+                        // NO_SCAN_IN_NOTE or parse issues: keep waiting.
                         return;
                     }
 
-                    const data = await response.json().catch(() => ({}));
                     if (response.ok && data.success) {
                         clearInterval(notePollInterval);
                         notePollInterval = null;
