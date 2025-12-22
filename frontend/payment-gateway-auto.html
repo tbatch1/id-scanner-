@@ -208,6 +208,64 @@
             margin-bottom: 25px;
         }
 
+        /* In-iframe scan box (gives HID scanners a real focus target) */
+        .scan-input-section {
+            margin-top: 18px;
+            text-align: left;
+        }
+
+        .scan-input-hint {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+            margin: 0 0 10px;
+        }
+
+        .scan-input {
+            width: 100%;
+            min-height: 110px;
+            resize: none;
+            padding: 12px;
+            border-radius: 14px;
+            border: 2px solid rgba(66, 180, 230, 0.25);
+            background: rgba(0, 0, 0, 0.25);
+            color: rgba(255, 255, 255, 0.95);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.35;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .scan-input:focus {
+            border-color: rgba(66, 180, 230, 0.8);
+            box-shadow: 0 0 0 3px rgba(66, 180, 230, 0.15);
+        }
+
+        .scan-card-close {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            background: rgba(0, 0, 0, 0.25);
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .scan-card-close:active {
+            transform: scale(0.97);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
         /* Status indicator */
         .status-indicator {
             display: inline-flex;
@@ -861,6 +919,7 @@
         <!-- ========== SCAN STATE ========== -->
         <div class="scan-card" id="scanCard">
             <div class="scan-line" id="scanLine"></div>
+            <button class="scan-card-close" id="closeIframeBtn" type="button" aria-label="Close">×</button>
 
             <div class="logo-container">
                 <div class="logo-glow"></div>
@@ -874,6 +933,13 @@
             <div class="status-indicator" id="statusIndicator">
                 <span class="status-dot"></span>
                 <span id="statusText">Ready</span>
+            </div>
+
+            <div class="scan-input-section hidden" id="scanInputSection">
+                <p class="scan-input-hint" id="scanInputHint">Tap the box, then scan. If nothing types here, scan into the
+                    sale Notes field instead.</p>
+                <textarea id="scanInput" class="scan-input" rows="5" placeholder="Tap here, then scan ID (the scan should appear here)…"
+                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="none"></textarea>
             </div>
 
             <div class="action-row">
@@ -1043,6 +1109,10 @@
         const scanTitle = document.getElementById('scanTitle');
         const scanSubtitle = document.getElementById('scanSubtitle');
         const successPrimaryBtn = document.getElementById('successPrimaryBtn');
+        const scanInputSection = document.getElementById('scanInputSection');
+        const scanInput = document.getElementById('scanInput');
+        const scanInputHint = document.getElementById('scanInputHint');
+        const closeIframeBtn = document.getElementById('closeIframeBtn');
 
         // ========== PARTICLES ==========
         function createParticles() {
@@ -1081,41 +1151,84 @@
 
         // ========== iOS FOCUS ==========
         let focusAttempts = 0;
+        let scanBoxPreferred = false;
+        function isScanBoxVisible() {
+            return !!(scanInputSection && !scanInputSection.classList.contains('hidden') && scanInput);
+        }
+
+        function focusScannerTarget() {
+            const target = (isEmbedded && scanBoxPreferred && isScanBoxVisible()) ? scanInput : hiddenInput;
+            if (!target) return;
+            try { target.focus(); } catch (e) { }
+            try {
+                if (document.activeElement !== target) {
+                    target.click();
+                    target.focus();
+                }
+            } catch (e) { }
+        }
+
         function ensureFocus() {
             // CRITICAL: Does not interrupt if a scan is currently coming in
             if (barcodeBuffer.length > 0) return;
 
-            if (document.activeElement !== hiddenInput) {
-                focusAttempts++;
-                console.log('[Scanner] Focus lost, restoring... (Attempt ' + focusAttempts + ')');
-                hiddenInput.focus();
+            // Don't steal focus from the visible scan box (needed for some iPad iframe + HID setups).
+            if (document.activeElement === hiddenInput || document.activeElement === scanInput) return;
 
-                // Safety: if focus still failed, try click
-                if (document.activeElement !== hiddenInput) {
-                    hiddenInput.click();
-                    hiddenInput.focus();
-                }
-            }
+            focusAttempts++;
+            console.log('[Scanner] Focus lost, restoring... (Attempt ' + focusAttempts + ')');
+            focusScannerTarget();
         }
 
         setInterval(ensureFocus, 1500);
 
         // ========== TOUCH HANDLING ==========
+        function isInteractiveTarget(target) {
+            if (!target || !target.closest) return false;
+            return !!target.closest('textarea, input, button, a, select, label');
+        }
+
         scanCard.addEventListener('touchstart', (e) => {
+            if (isInteractiveTarget(e.target)) return;
             e.preventDefault();
             activateScanning();
         });
 
-        scanCard.addEventListener('click', activateScanning);
+        scanCard.addEventListener('click', (e) => {
+            if (isInteractiveTarget(e.target)) return;
+            activateScanning();
+        });
+
+        if (closeIframeBtn) {
+            closeIframeBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cancelVerification();
+            });
+            closeIframeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cancelVerification();
+            });
+        }
 
         function activateScanning() {
-            ensureFocus();
+            if (isEmbedded && scanInputSection) {
+                scanInputSection.classList.remove('hidden');
+                if (scanInputHint) {
+                    scanInputHint.textContent = 'Tap the box, then scan. If nothing types here, scan into the sale Notes field instead.';
+                }
+            }
+
+            // Best effort: focus the scan box in a user gesture; fallback to hidden input.
+            scanBoxPreferred = true;
+            focusScannerTarget();
             scanCard.classList.add('scanning');
             statusIndicator.classList.add('scanning');
 
             if (isEmbedded) {
-                statusText.textContent = 'Opening fullscreen...';
-                dbgApi.textContent = 'BREAKOUT...';
+                statusText.textContent = 'Tap box, then scan';
+                dbgApi.textContent = 'EMBEDDED...';
                 if (attemptIframeBreakout()) {
                     return;
                 }
@@ -1132,10 +1245,12 @@
                     statusText.textContent = 'Waiting for scan...';
                     dbgApi.textContent = 'REMOTE...';
                 } else {
-                    statusText.textContent = 'Scan into POS Notes';
+                    statusText.textContent = isEmbedded ? 'Tap box or use Notes' : 'Scan into POS Notes';
                     dbgApi.textContent = 'POPUP BLOCKED';
                     if (scanSubtitle) {
-                        scanSubtitle.textContent = 'Tap the sale Notes field, scan the ID, then wait...';
+                        scanSubtitle.textContent = isEmbedded
+                            ? 'Tap the box below and scan. If it stays empty, scan into Notes, then tap out to save.'
+                            : 'Tap the sale Notes field, scan the ID, then wait...';
                     }
                     startStatusPolling();
                 }
@@ -1185,7 +1300,10 @@
         let keyCount = 0;
 
         setInterval(() => {
-            dbgFocus.textContent = document.activeElement === hiddenInput ? '✅ YES' : '❌ NO';
+            const active = document.activeElement;
+            if (active === scanInput) dbgFocus.textContent = 'BOX';
+            else if (active === hiddenInput) dbgFocus.textContent = 'HIDDEN';
+            else dbgFocus.textContent = '--';
         }, 1000);
 
         function handleCompleteScan(data) {
@@ -1195,6 +1313,7 @@
             handleBluetoothScan(data);
             barcodeBuffer = '';
             hiddenInput.value = '';
+            if (scanInput) scanInput.value = '';
             if (scanTimer) clearTimeout(scanTimer);
         }
 
@@ -1222,7 +1341,42 @@
             }
         });
 
+        if (scanInput) {
+            // Keep focus/typing inside the box when embedded in an iframe.
+            scanInput.addEventListener('click', (e) => e.stopPropagation());
+            scanInput.addEventListener('touchstart', (e) => e.stopPropagation());
+
+            scanInput.addEventListener('focus', () => {
+                activateScanning();
+            });
+
+            scanInput.addEventListener('input', () => {
+                const value = scanInput.value || '';
+                if (!value) return;
+                barcodeBuffer = value;
+                keyCount++;
+                dbgKeys.textContent = keyCount;
+                dbgBuffer.textContent = barcodeBuffer.length;
+                dbgLast.textContent = 'BOX:' + barcodeBuffer.slice(-1);
+                dbgPreview.textContent = barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : '');
+                dbgRaw.textContent = 'BOX_INPUT';
+                resetScanTimer();
+            });
+
+            scanInput.addEventListener('keydown', (e) => {
+                // Many scanners end with Enter or Tab; submit immediately.
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    const value = scanInput.value || barcodeBuffer;
+                    if (value && value.length > 10) handleCompleteScan(value);
+                }
+            });
+        }
+
         document.addEventListener('keydown', (e) => {
+            // If the scan box is focused, rely on its handlers (avoid double-counting + preserve text).
+            if (document.activeElement === scanInput) return;
+
             // Log EVERY key for diagnosis
             dbgRaw.textContent = `RAW: ${e.key} (${e.keyCode})`;
 
@@ -1489,6 +1643,10 @@
 
         async function handleBluetoothScan(barcodeData) {
             statusText.textContent = 'Processing...';
+            try {
+                if (notePollInterval) { clearInterval(notePollInterval); notePollInterval = null; }
+                if (statusPollInterval) { clearInterval(statusPollInterval); statusPollInterval = null; }
+            } catch (e) { }
             let cleanData = barcodeData;
             if (cleanData.startsWith(PDF417_PREFIX)) {
                 cleanData = cleanData.substring(PDF417_PREFIX.length);
@@ -1693,19 +1851,22 @@
         } else {
             ensureFocus();
 
-            // Zero-click embedded iPad fallback: begin listening immediately so the clerk doesn't need to tap Scan
-            // multiple times. In iframe mode, keystrokes/popups are often blocked, so we guide scanning into the POS note.
-            if (isEmbedded) {
-                scanCard.classList.add('scanning');
-                statusIndicator.classList.add('scanning');
-                statusText.textContent = 'Scan into POS Notes';
-                dbgApi.textContent = 'EMBEDDED MODE';
-                if (scanSubtitle) {
-                    scanSubtitle.textContent = 'Tap Notes, scan the ID, tap out to save.';
-                }
-                startStatusPolling();
-                startNoteScanPolling();
-            }
+             // Zero-click embedded iPad fallback: begin listening immediately so the clerk doesn't need to tap Scan
+             // multiple times. In iframe mode, keystrokes/popups are often blocked, so we guide scanning into the POS note.
+             if (isEmbedded) {
+                 if (scanInputSection) {
+                     scanInputSection.classList.remove('hidden');
+                 }
+                 scanCard.classList.add('scanning');
+                 statusIndicator.classList.add('scanning');
+                 statusText.textContent = 'Tap box, then scan';
+                 dbgApi.textContent = 'EMBEDDED MODE';
+                 if (scanSubtitle) {
+                     scanSubtitle.textContent = 'Tap the box below and scan. If it stays empty, scan into Notes and tap out to save.';
+                 }
+                 startStatusPolling();
+                 startNoteScanPolling();
+             }
         }
         function openRemoteScanner() {
             if (!saleId) {
@@ -1771,7 +1932,7 @@
         function startNoteScanPolling() {
             if (notePollInterval) return;
             let attempts = 0;
-            statusText.textContent = 'Waiting for note scan...';
+            statusText.textContent = isScanBoxVisible() ? 'Waiting for scan...' : 'Waiting for note scan...';
             dbgApi.textContent = 'NOTE POLL...';
             notePollInterval = setInterval(async () => {
                 attempts++;
@@ -1781,7 +1942,7 @@
                     statusText.textContent = 'Timed out';
                     dbgApi.textContent = 'NOTE POLL TIMEOUT';
                     if (scanSubtitle) {
-                        scanSubtitle.textContent = 'No scan found. Tap Notes, scan again, and tap Scan once.';
+                        scanSubtitle.textContent = 'No scan found. Try scanning in the box, or scan into Notes and tap out to save.';
                     }
                     return;
                 }
@@ -1800,13 +1961,13 @@
                             statusText.textContent = 'Scan incomplete';
                             dbgApi.textContent = 'NOTE PARSE FAILED';
                             if (scanSubtitle) {
-                                scanSubtitle.textContent = 'Scan the full ID into Notes (starts with @ANSI). Try again.';
+                                scanSubtitle.textContent = 'Scan the full ID. If using Notes, it should start with @ANSI.';
                             }
                         } else if (data && data.error === 'NO_SCAN_IN_NOTE') {
-                            statusText.textContent = 'Waiting for note scan...';
+                            statusText.textContent = isScanBoxVisible() ? 'Waiting for scan...' : 'Waiting for note scan...';
                             dbgApi.textContent = `NOTE POLL ${attempts}/60`;
                             if (scanSubtitle) {
-                                scanSubtitle.textContent = 'Tap Notes, scan the ID, then tap out to save.';
+                                scanSubtitle.textContent = 'Tap the box and scan. If it stays empty, scan into Notes and tap out to save.';
                             }
                         }
                         // NO_SCAN_IN_NOTE or parse issues: keep waiting.
