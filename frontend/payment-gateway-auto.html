@@ -1537,11 +1537,16 @@
         }
 
         function finishCardPrecheckFlow() {
-            // Pre-check only: DO NOT mark payment accepted; just close the overlay so staff can run card tender in POS.
+            // Pre-check only: close the overlay so staff can run card tender in POS (no /complete call).
             if (isEmbedded) {
                 try {
+                    // Some Lightspeed embeds won't close on CLOSE alone. Send a small "bundle" of hints.
+                    window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
+                    window.parent.postMessage('ACCEPT', '*');
                     window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
                     window.parent.postMessage('CLOSE', '*');
+                    window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
+                    window.parent.postMessage('EXIT', '*');
                 } catch (e) { }
                 return;
             }
@@ -1753,8 +1758,8 @@
 
                     if (paymentType === 'card' && cardMode === 'precheck') {
                         const details = document.getElementById('successDetails');
-                        if (details) details.textContent = 'ID verified — take card payment in POS';
-                        if (successPrimaryBtn) successPrimaryBtn.textContent = 'Take Card Payment';
+                        if (details) details.textContent = 'ID verified — tap Card in POS';
+                        if (successPrimaryBtn) successPrimaryBtn.textContent = 'Back to POS (Tap Card)';
                         setTimeout(finishCardPrecheckFlow, 700);
                     } else if (paymentType === 'cash' && cashUiEnabled) {
                         setTimeout(showCashScreen, 1200);
@@ -1936,7 +1941,7 @@
 
         if (successPrimaryBtn) {
             if (paymentType === 'card' && cardMode === 'precheck') {
-                successPrimaryBtn.textContent = 'Take Card Payment';
+                successPrimaryBtn.textContent = 'Back to POS (Tap Card)';
             } else {
                 successPrimaryBtn.textContent = paymentType === 'cash' && cashUiEnabled ? 'Continue' : 'Return to POS';
             }
