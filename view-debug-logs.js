@@ -22,9 +22,12 @@ https.get('https://id-scanner-project.vercel.app/api/debug-logs', (res) => {
                 sessions[log.session_id].push(log);
             });
 
-            // Get latest session
-            const sessionIds = Object.keys(sessions);
-            const latestSession = sessionIds[0];
+            // Get latest session by newest created_at (API returns newest first, but keys are unordered)
+            const newestLog = logs.reduce((best, current) => {
+                if (!best) return current;
+                return new Date(current.created_at).getTime() > new Date(best.created_at).getTime() ? current : best;
+            }, null);
+            const latestSession = newestLog?.session_id || Object.keys(sessions)[0];
 
             console.log('════════════════════════════════════════════════════════');
             console.log('LATEST SCANNING SESSION DEBUG LOGS');
