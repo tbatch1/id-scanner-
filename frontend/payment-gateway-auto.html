@@ -40,6 +40,27 @@
             touch-action: manipulation;
         }
 
+        /* Embedded iframe mode: reduce visual noise in POS */
+        body.embedded {
+            background: #0f1419;
+            overflow: hidden;
+        }
+
+        body.embedded .grid-bg,
+        body.embedded #particles {
+            display: none !important;
+        }
+
+        body.embedded .scanner-wrap {
+            max-width: 520px;
+            padding: 12px;
+        }
+
+        body.embedded .scan-card,
+        body.embedded .result-card {
+            box-shadow: none;
+        }
+
         /* Animated grid background */
         .grid-bg {
             position: fixed;
@@ -1095,6 +1116,9 @@
         const isEmbedded = window.self !== window.top;
         const remoteScanEnabled = ['1', 'true', 'yes'].includes((urlParams.get('remoteScan') || '').toLowerCase());
         const cashUiEnabled = ['1', 'true', 'yes'].includes((urlParams.get('cashUi') || '').toLowerCase());
+        if (isEmbedded) {
+            document.body.classList.add('embedded');
+        }
 
         function safeJson(value, maxLen = 400) {
             try {
