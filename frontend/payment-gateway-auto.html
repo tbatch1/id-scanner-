@@ -1466,9 +1466,10 @@
         const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
         const paymentType = (urlParams.get('type') || urlParams.get('paymentType') || 'cash').toLowerCase();
         const isRefund = Number.isFinite(saleAmount) && saleAmount < 0;
+        const cardMode = (urlParams.get('cardMode') || (urlParams.get('card_mode') || '')).toLowerCase() || 'precheck'; // 'precheck' | 'external'
 
         console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount, paymentType, remoteScanEnabled, cashUiEnabled });
-        sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} amount=${saleAmount} refund=${isRefund} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled}`);
+        sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} cardMode=${cardMode} amount=${saleAmount} refund=${isRefund} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled}`);
 
         function buildReturnUrl() {
             const explicit = urlParams.get('return') || urlParams.get('returnUrl') || urlParams.get('return_url');
@@ -1526,6 +1527,18 @@
                 return;
             }
 
+            returnToPOS();
+        }
+
+        function finishCardPrecheckFlow() {
+            // Pre-check only: DO NOT mark payment accepted; just close the overlay so staff can run card tender in POS.
+            if (isEmbedded) {
+                try {
+                    window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
+                    window.parent.postMessage('CLOSE', '*');
+                } catch (e) { }
+                return;
+            }
             returnToPOS();
         }
 
@@ -1732,7 +1745,12 @@
                     clearInterval(pollInterval);
                     showSuccess({ customerName: data.customerName || 'Customer' });
 
-                    if (paymentType === 'cash' && cashUiEnabled) {
+                    if (paymentType === 'card' && cardMode === 'precheck') {
+                        const details = document.getElementById('successDetails');
+                        if (details) details.textContent = 'ID verified — take card payment in POS';
+                        if (successPrimaryBtn) successPrimaryBtn.textContent = 'Take Card Payment';
+                        setTimeout(finishCardPrecheckFlow, 700);
+                    } else if (paymentType === 'cash' && cashUiEnabled) {
                         setTimeout(showCashScreen, 1200);
                     } else {
                         setTimeout(finishCashFlow, 1200);
@@ -1906,11 +1924,19 @@
         }
 
         if (successPrimaryBtn) {
-            successPrimaryBtn.textContent = paymentType === 'cash' && cashUiEnabled ? 'Continue' : 'Return to POS';
+            if (paymentType === 'card' && cardMode === 'precheck') {
+                successPrimaryBtn.textContent = 'Take Card Payment';
+            } else {
+                successPrimaryBtn.textContent = paymentType === 'cash' && cashUiEnabled ? 'Continue' : 'Return to POS';
+            }
             successPrimaryBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 if (isRefund) {
                     finishCashFlow();
+                    return;
+                }
+                if (paymentType === 'card' && cardMode === 'precheck') {
+                    finishCardPrecheckFlow();
                     return;
                 }
                 if (paymentType === 'cash' && cashUiEnabled) {
