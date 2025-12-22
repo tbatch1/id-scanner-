@@ -1107,8 +1107,8 @@
 
         async function sendDebugLog(level, message) {
             // Persist minimal, non-PII logs for diagnosing iPad iframe issues.
-            // Only ship logs when debug is enabled OR for errors.
-            const shouldSend = debugEnabled || level === 'error' || level === 'warn';
+            // Always ship logs in embedded mode (iframe), and also for warnings/errors.
+            const shouldSend = isEmbedded || debugEnabled || level === 'error' || level === 'warn';
             if (!shouldSend) return;
             try {
                 const sessionId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id') || 'unknown';
