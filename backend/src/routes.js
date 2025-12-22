@@ -669,6 +669,7 @@ router.post('/test-scan', (req, res) => {
         approved,
         customerName: verificationResult.customerName,
         age: parsed.age,
+        dob: parsed.dob ? parsed.dob.toISOString().slice(0, 10) : null,
         reason,
         dbSaved,
         noteUpdated
@@ -1478,6 +1479,7 @@ router.post('/test-scan', (req, res) => {
         approved,
         customerName,
         age: parsed.age,
+        dob: parsed.dob ? parsed.dob.toISOString().slice(0, 10) : null,
         reason
       });
     } catch (error) {

@@ -102,14 +102,27 @@ async function recordVerification({ saleId, clerkId, verificationData }) {
 
   try {
     const response = await api.get(`/sales/${saleId}`);
-    const currentNote = response?.data?.data?.note || '';
+    let currentNote = response?.data?.data?.note || '';
+
+    // If a raw scan blob got pasted into Notes, strip it before appending our audit line.
+    const ansiIndex = currentNote.indexOf('@ANSI');
+    const aimIndex = currentNote.indexOf(']L');
+    const markerIndex = ansiIndex >= 0 ? ansiIndex : (aimIndex >= 0 ? aimIndex : -1);
+    if (markerIndex >= 0) {
+      currentNote = currentNote.slice(0, markerIndex).trimEnd();
+    }
 
     const timestamp = new Date().toLocaleString('en-US', { hour12: false });
     const status = verificationData.approved ? 'APPROVED' : 'REJECTED';
     const ageText = Number.isFinite(Number(verificationData.age)) ? `Age ${verificationData.age}` : 'Age unknown';
     const reason = !verificationData.approved && verificationData.reason ? ` (${verificationData.reason})` : '';
+    const dobYear =
+      typeof verificationData.dob === 'string' && verificationData.dob.length >= 4
+        ? verificationData.dob.slice(0, 4)
+        : null;
+    const dobText = dobYear ? ` (DOB ${dobYear})` : '';
 
-    const line = `ID Check ${status}: ${ageText}${reason} — ${timestamp}`;
+    const line = `ID Check ${status}: ${ageText}${dobText}${reason} — ${timestamp}`;
     const note = (currentNote ? `${currentNote}\n` : '') + line;
 
     // Keep note from growing unbounded.

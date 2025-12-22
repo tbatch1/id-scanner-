@@ -1745,10 +1745,10 @@
                     return;
                 }
 
-                sendDebugLog('info', `verify-bluetooth ok approved=${!!data.approved} dbSaved=${data.dbSaved === true}`);
+                sendDebugLog('info', `verify-bluetooth ok approved=${!!data.approved} dbSaved=${data.dbSaved === true} dob=${data.dob || 'null'}`);
                 if (data.success && data.approved) {
                     clearInterval(pollInterval);
-                    showSuccess({ customerName: data.customerName || 'Customer' });
+                    showSuccess({ customerName: data.customerName || 'Customer', age: data.age ?? null, dob: data.dob ?? null });
 
                     if (paymentType === 'card' && cardMode === 'precheck') {
                         const details = document.getElementById('successDetails');
@@ -1798,7 +1798,12 @@
             scanCard.classList.add('hidden');
             errorCard.classList.remove('active');
             successCard.classList.add('active');
-            document.getElementById('successDetails').textContent = `${data.customerName || 'Customer'} verified ✓`;
+            const ageText = (data && Number.isFinite(Number(data.age))) ? `Age ${data.age}` : null;
+            const dobYear = (data && typeof data.dob === 'string' && data.dob.length >= 4) ? data.dob.slice(0, 4) : null;
+            const dobText = dobYear ? `DOB ${dobYear}` : null;
+            const extras = [ageText, dobText].filter(Boolean).join(' • ');
+            document.getElementById('successDetails').textContent =
+                extras ? `${data.customerName || 'Customer'} verified (${extras})` : `${data.customerName || 'Customer'} verified`;
         }
 
         function showError(message) {
