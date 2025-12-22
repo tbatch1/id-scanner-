@@ -382,6 +382,22 @@ function parseAAMVA(data) {
   }
 
   const dobRaw = extract('DBB');
+  // DOB fallback: some scanners remove separators, causing extract() to capture extra fields.
+  // Try to find a DBB date anywhere in the payload.
+  const dobFallback = (() => {
+    if (dobRaw) return dobRaw;
+    const candidates = [
+      /DBB\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i,
+      /DBB\s*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/i,
+      /DBB\s*([0-9]{8})/i,
+      /DBB[^0-9]*([0-9]{8})/i
+    ];
+    for (const re of candidates) {
+      const m = normalizedData.match(re);
+      if (m && m[1]) return m[1].trim();
+    }
+    return null;
+  })();
   const docNumber = extract('DAQ');
   const expiryRaw = extract('DBA');
   const sex = extract('DBC');
@@ -391,29 +407,44 @@ function parseAAMVA(data) {
   // Parse DOB (YYYYMMDD or MMDDYYYY)
   let dob = null;
   let age = null;
-  if (dobRaw) {
-    // Try YYYYMMDD
-    if (dobRaw.match(/^\d{8}$/)) {
-      // Check if it's likely YYYYMMDD (Year starts with 19 or 20)
-      if (dobRaw.startsWith('19') || dobRaw.startsWith('20')) {
-        const y = parseInt(dobRaw.substring(0, 4));
-        const m = parseInt(dobRaw.substring(4, 6)) - 1;
-        const d = parseInt(dobRaw.substring(6, 8));
+  if (dobFallback) {
+    const digits = (dobFallback.match(/\d/g) || []).join('');
+    // Prefer 8 digit format if present.
+    const raw8 = digits.length >= 8 ? digits.substring(0, 8) : null;
+    if (raw8 && raw8.match(/^\d{8}$/)) {
+      // YYYYMMDD if it starts with a plausible year, otherwise MMDDYYYY if the last 4 is a plausible year.
+      const startsWithYear = raw8.startsWith('19') || raw8.startsWith('20');
+      const endsWithYear = raw8.substring(4, 8).startsWith('19') || raw8.substring(4, 8).startsWith('20');
+      if (startsWithYear) {
+        const y = parseInt(raw8.substring(0, 4), 10);
+        const m = parseInt(raw8.substring(4, 6), 10) - 1;
+        const d = parseInt(raw8.substring(6, 8), 10);
         dob = new Date(y, m, d);
-      } else {
-        // Assume MMDDYYYY
-        const m = parseInt(dobRaw.substring(0, 2)) - 1;
-        const d = parseInt(dobRaw.substring(2, 4));
-        const y = parseInt(dobRaw.substring(4, 8));
+      } else if (endsWithYear) {
+        const m = parseInt(raw8.substring(0, 2), 10) - 1;
+        const d = parseInt(raw8.substring(2, 4), 10);
+        const y = parseInt(raw8.substring(4, 8), 10);
         dob = new Date(y, m, d);
       }
     }
 
-    if (dob && !isNaN(dob.getTime())) {
-      const diff = Date.now() - dob.getTime();
-      const ageDate = new Date(diff);
-      age = Math.abs(ageDate.getUTCFullYear() - 1970);
+    // YYYY-MM-DD
+    if (!dob || isNaN(dob.getTime())) {
+      const m = dobFallback.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (m) dob = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
     }
+
+    // MM/DD/YYYY
+    if (!dob || isNaN(dob.getTime())) {
+      const m = dobFallback.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (m) dob = new Date(parseInt(m[3], 10), parseInt(m[1], 10) - 1, parseInt(m[2], 10));
+    }
+  }
+
+  if (dob && !isNaN(dob.getTime())) {
+    const diff = Date.now() - dob.getTime();
+    const ageDate = new Date(diff);
+    age = Math.abs(ageDate.getUTCFullYear() - 1970);
   }
 
   return {
