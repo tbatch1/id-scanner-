@@ -1232,6 +1232,184 @@ router.post('/test-scan', (req, res) => {
     }
   });
 
+  // Fallback for iPad embedded flows where HID keystrokes never reach the iframe:
+  // scan the PDF417 into the Lightspeed sale note field, then call this endpoint to verify.
+  router.post('/sales/:saleId/verify-from-note', validateSaleId, async (req, res) => {
+    const { saleId } = req.params;
+    const { clerkId, registerId } = req.body || {};
+
+    if (!process.env.LIGHTSPEED_API_KEY) {
+      return res.status(503).json({
+        error: 'LIGHTSPEED_UNAVAILABLE',
+        message: 'Lightspeed credentials are not configured.'
+      });
+    }
+
+    let sale = null;
+    try {
+      sale = await lightspeed.getSaleById(saleId);
+      if (!sale) {
+        return res.status(404).json({
+          error: 'SALE_NOT_FOUND',
+          message: 'Sale not found.'
+        });
+      }
+    } catch (saleError) {
+      logger.logAPIError('get_sale_for_note_verification', saleError, { saleId });
+      return res.status(502).json({
+        error: 'SALE_LOOKUP_FAILED',
+        message: 'Unable to retrieve sale from Lightspeed.'
+      });
+    }
+
+    const noteRaw = (sale.note || '').toString();
+    const note = noteRaw.replace(/\\r\\n/g, '\n').replace(/\\r/g, '\n');
+    const ansiIndex = note.indexOf('@ANSI');
+    const aimIndex = note.indexOf(']L');
+    const markerIndex =
+      ansiIndex >= 0 ? ansiIndex : (aimIndex >= 0 ? aimIndex : -1);
+
+    if (markerIndex < 0 || note.length - markerIndex < 20) {
+      return res.status(409).json({
+        error: 'NO_SCAN_IN_NOTE',
+        message: 'No scan data found in sale note. Scan the ID into the Notes field first.'
+      });
+    }
+
+    const payload = note.substring(markerIndex);
+
+    try {
+      const parsed = parseAAMVA(payload);
+
+      if (!parsed) {
+        return res.status(409).json({
+          error: 'SCAN_NOT_PARSEABLE',
+          message: 'Found note content but could not parse an AAMVA barcode.'
+        });
+      }
+
+      let approved = false;
+      let reason = null;
+
+      if (parsed.age !== null && parsed.age !== undefined) {
+        if (parsed.age >= 21) {
+          approved = true;
+        } else {
+          approved = false;
+          reason = `Underage (${parsed.age})`;
+        }
+      } else {
+        approved = false;
+        reason = 'Could not read DOB';
+      }
+
+      // Check banned list if configured.
+      if (db.pool && parsed.documentNumber) {
+        try {
+          const bannedRecord = await complianceStore.findBannedCustomer({
+            documentType: 'drivers_license',
+            documentNumber: parsed.documentNumber,
+            issuingCountry: parsed.issuingCountry
+          });
+
+          if (bannedRecord) {
+            approved = false;
+            reason = bannedRecord.notes || 'BANNED_CUSTOMER';
+            logger.logSecurity('banned_customer_attempt_note', {
+              saleId,
+              documentNumber: parsed.documentNumber,
+              bannedId: bannedRecord.id
+            });
+          }
+        } catch (banError) {
+          logger.logAPIError('find_banned_customer_note', banError, { saleId });
+        }
+      }
+
+      // Ensure a pending in-memory verification exists so polling UIs can update.
+      if (!saleVerificationStore.getVerification(saleId)) {
+        saleVerificationStore.createVerification(saleId, { registerId: registerId || null });
+      }
+
+      const customerName =
+        `${parsed.firstName || ''} ${parsed.lastName || ''}`.trim() || 'Customer';
+
+      const verificationResult = {
+        approved,
+        customerId: parsed.documentNumber || null,
+        customerName,
+        age: parsed.age || null,
+        reason,
+        registerId: registerId || sale.registerId || null
+      };
+
+      if (db.pool) {
+        const locationId = determineLocationId(req, sale);
+        const dbVerification = {
+          verificationId: require('crypto').randomUUID(),
+          saleId,
+          clerkId: clerkId || 'POS_NOTE',
+          status: approved ? 'approved' : 'rejected',
+          reason,
+          firstName: parsed.firstName,
+          lastName: parsed.lastName,
+          dob: parsed.dob ? parsed.dob.toISOString() : null,
+          age: parsed.age,
+          documentType: 'drivers_license',
+          documentNumber: parsed.documentNumber,
+          issuingCountry: parsed.issuingCountry,
+          nationality: parsed.issuingCountry,
+          sex: parsed.sex,
+          source: 'pos_note'
+        };
+
+        await complianceStore.saveVerification(dbVerification, {
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+          locationId
+        });
+      }
+
+      // Overwrite the sale note with a clean audit message (removes the raw AAMVA blob).
+      try {
+        await lightspeed.recordVerification({
+          saleId,
+          clerkId: clerkId || 'POS_NOTE',
+          verificationData: {
+            approved,
+            firstName: parsed.firstName || null,
+            lastName: parsed.lastName || null,
+            age: parsed.age || null,
+            dob: parsed.dob ? parsed.dob.toISOString().split('T')[0] : null,
+            documentNumber: parsed.documentNumber || null,
+            documentType: 'drivers_license',
+            issuingCountry: parsed.issuingCountry || null,
+            source: 'pos_note',
+            reason
+          }
+        });
+      } catch (noteError) {
+        logger.warn({ event: 'lightspeed_note_update_failed', saleId, error: noteError.message });
+      }
+
+      saleVerificationStore.updateVerification(saleId, verificationResult);
+
+      return res.status(200).json({
+        success: true,
+        approved,
+        customerName,
+        age: parsed.age,
+        reason
+      });
+    } catch (error) {
+      logger.logAPIError('verify_from_note', error, { saleId });
+      return res.status(500).json({
+        error: 'INTERNAL_ERROR',
+        message: 'Failed to verify scan from sale note.'
+      });
+    }
+  });
+
   /**
    * Cron job endpoint for data retention enforcement
    * Called daily by Vercel Cron to delete old records per TABC compliance

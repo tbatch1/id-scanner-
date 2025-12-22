@@ -1128,11 +1128,13 @@
                     statusText.textContent = 'Waiting for scan...';
                     dbgApi.textContent = 'REMOTE...';
                 } else {
-                    statusText.textContent = 'Scan now';
+                    statusText.textContent = 'Scan into POS Notes';
                     dbgApi.textContent = 'POPUP BLOCKED';
                     if (scanSubtitle) {
-                        scanSubtitle.textContent = 'Pop-up blocked. Set Lightspeed button to open in a new tab.';
+                        scanSubtitle.textContent = 'Tap the sale Notes field, scan the ID, then wait...';
                     }
+                    startStatusPolling();
+                    startNoteScanPolling();
                 }
             } else {
                 statusText.textContent = 'Scan now';
@@ -1733,6 +1735,44 @@
                     console.error('[Poll] Error checking status', e);
                 }
             }, 500);
+        }
+
+        // ========== NOTE SCAN FALLBACK (for embedded iPad iframe) ==========
+        let notePollInterval = null;
+        function startNoteScanPolling() {
+            if (notePollInterval) return;
+            let attempts = 0;
+            notePollInterval = setInterval(async () => {
+                attempts++;
+                if (attempts > 60) { // ~60s
+                    clearInterval(notePollInterval);
+                    notePollInterval = null;
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/sales/${saleId}/verify-from-note`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ clerkId: clerkId || null, registerId: registerId || null })
+                    });
+
+                    if (response.status === 409) {
+                        // No scan in note yet; keep waiting.
+                        return;
+                    }
+
+                    const data = await response.json().catch(() => ({}));
+                    if (response.ok && data.success) {
+                        clearInterval(notePollInterval);
+                        notePollInterval = null;
+                    } else if (!response.ok) {
+                        console.warn('[NoteScan] verify-from-note failed', data);
+                    }
+                } catch (e) {
+                    console.warn('[NoteScan] network error', e);
+                }
+            }, 1000);
         }
 
 </script>

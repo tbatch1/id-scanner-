@@ -78,6 +78,7 @@ async function getSaleById(saleId) {
       userId: sale.user_id,
       employeeName: employeeName,
       customerId: sale.customer_id,
+      note: sale.note || null,
       items: sale.line_items || [],
       verification: null,
       status: sale.status,
