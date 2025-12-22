@@ -6,6 +6,32 @@ const logger = require('./logger');
 
 const router = express.Router();
 
+function parseIdCheckNote(note) {
+  const raw = (note || '').toString();
+  if (!raw.trim()) return { hasIdNote: false };
+
+  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const mostRecent = [...lines].reverse().find((line) => /^(ID Check|ID Verified)/i.test(line)) || null;
+  if (!mostRecent) return { hasIdNote: false };
+
+  const statusMatch = mostRecent.match(/ID\s+(?:Check|Verified)\s+(APPROVED|REJECTED)/i);
+  const status = statusMatch ? statusMatch[1].toUpperCase() : null;
+
+  const ageMatch = mostRecent.match(/\bAge\s+(\d{1,3})\b/i);
+  const age = ageMatch ? Number.parseInt(ageMatch[1], 10) : null;
+
+  const dobYearMatch = mostRecent.match(/\bDOB\s+(\d{4})\b/i);
+  const dobYear = dobYearMatch ? dobYearMatch[1] : null;
+
+  return {
+    hasIdNote: true,
+    noteLine: mostRecent,
+    noteStatus: status,
+    noteAge: Number.isFinite(age) ? age : null,
+    noteDobYear: dobYear
+  };
+}
+
 function buildAuthStatus() {
   const baseState =
     typeof lightspeed.getAuthState === 'function'
@@ -219,6 +245,90 @@ router.get('/scans', async (req, res) => {
     res.status(500).json({
       error: 'INTERNAL_ERROR',
       message: 'Failed to retrieve scans'
+    });
+  }
+});
+
+// GET /admin/transactions - Recent sales with ID-note audit (notification center source)
+router.get('/transactions', async (req, res) => {
+  const { status = 'CLOSED', limit = 50 } = req.query || {};
+  const normalizedLimit = Math.max(1, Math.min(Number.parseInt(limit, 10) || 50, 200));
+
+  try {
+    const sales = await lightspeed.listSales({ status, limit: normalizedLimit });
+    const transactions = (sales || []).map((sale) => {
+      const noteInfo = parseIdCheckNote(sale?.note);
+      return {
+        sale_id: sale?.saleId || sale?.sale_id || sale?.id || null,
+        total: sale?.total ?? null,
+        status: sale?.status ?? null,
+        outlet_id: sale?.outletId ?? null,
+        register_id: sale?.registerId ?? null,
+        user_id: sale?.userId ?? null,
+        created_at: sale?.createdAt ?? null,
+        updated_at: sale?.updatedAt ?? null,
+        ...noteInfo
+      };
+    }).filter((row) => row.sale_id);
+
+    let verificationBySaleId = {};
+    if (db.pool && transactions.length > 0) {
+      const saleIds = transactions.map((t) => t.sale_id);
+      const { rows } = await db.pool.query(
+        `
+          SELECT DISTINCT ON (sale_id)
+            sale_id,
+            status AS verification_status,
+            age AS verification_age,
+            date_of_birth AS verification_dob,
+            created_at AS verification_created_at
+          FROM verifications
+          WHERE sale_id = ANY($1)
+          ORDER BY sale_id, created_at DESC
+        `,
+        [saleIds]
+      );
+      verificationBySaleId = rows.reduce((acc, row) => {
+        acc[row.sale_id] = row;
+        return acc;
+      }, {});
+    }
+
+    const enriched = transactions.map((t) => {
+      const verification = verificationBySaleId[t.sale_id] || null;
+      const hasVerification = Boolean(verification);
+      const hasIdNote = Boolean(t.hasIdNote);
+      const approved =
+        (verification && String(verification.verification_status).startsWith('approved')) ||
+        t.noteStatus === 'APPROVED';
+      return {
+        ...t,
+        hasVerification,
+        approved,
+        verification_status: verification?.verification_status || null,
+        verification_age: verification?.verification_age ?? null,
+        verification_dob: verification?.verification_dob || null,
+        verification_created_at: verification?.verification_created_at || null,
+        missingNote: !hasIdNote,
+        missingVerification: !hasVerification
+      };
+    });
+
+    const missingNotes = enriched.filter((t) => t.missingNote);
+    res.status(200).json({
+      success: true,
+      status,
+      limit: normalizedLimit,
+      count: enriched.length,
+      missingNoteCount: missingNotes.length,
+      missingVerificationCount: enriched.filter((t) => t.missingVerification).length,
+      transactions: enriched
+    });
+  } catch (error) {
+    logger.logAPIError('admin_transactions', error, { status });
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to retrieve transactions'
     });
   }
 });

@@ -344,6 +344,7 @@
 
     <div class="nav-links">
 
+        <a href="admin-audit.html" class="nav-link">Transaction Audit</a>
         <a href="admin-banned.html" class="nav-link">Banned Customers</a>
         <a href="admin-overrides.html" class="nav-link">Override History</a>
     </div>
@@ -396,6 +397,8 @@
                 const html = scans.map(scan => {
                     const time = new Date(scan.created_at).toLocaleString();
                     const name = [scan.first_name, scan.last_name].filter(Boolean).join(' ') || 'Unknown';
+                    const isManualOverride = scan.status === 'approved_override' && (scan.document_type === 'manual' || scan.source === 'manual_override');
+                    const ageCell = isManualOverride ? 'Override' : (scan.age ?? 'N/A');
                     const statusClass = `status-${scan.status.replace('_', '-')}`;
                     const source = scan.source === 'bluetooth_gun' ? '🔫 Gun' : (scan.source || '📱 App');
 
@@ -403,7 +406,7 @@
                         <tr>
                             <td>${time}</td>
                             <td>${name}</td>
-                            <td>${scan.age || 'N/A'}</td>
+                            <td>${ageCell}</td>
                             <td><span class="status-badge ${statusClass}">${scan.status}</span></td>
                             <td>${source}</td>
                             <td>${scan.reason || '-'}</td>

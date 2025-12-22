@@ -11,7 +11,7 @@
       "destination": "/api"
     },
     {
-      "source": "/admin/(pending|scans|status|refresh)",
+      "source": "/admin/(pending|scans|status|refresh|transactions)",
       "destination": "/api"
     },
     {
@@ -53,6 +53,10 @@
     {
       "source": "/admin/overrides.html",
       "destination": "/frontend/admin-overrides.html"
+    },
+    {
+      "source": "/admin/audit.html",
+      "destination": "/frontend/admin-audit.html"
     }
   ],
   "redirects": [

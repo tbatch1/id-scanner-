@@ -244,8 +244,20 @@ function completeSale({ saleId, verificationId, paymentType, sale: saleContext, 
   };
 }
 
-function listSales() {
-  return Array.from(saleStore.values()).map((sale) => getSaleById(sale.saleID));
+function listSales({ status, limit = 50 } = {}) {
+  const normalizedLimit = Math.max(1, Math.min(Number.parseInt(limit, 10) || 50, 200));
+  const rows = Array.from(saleStore.values())
+    .filter((sale) => {
+      if (!status) return true;
+      const normalizedStatus = String(status).toUpperCase();
+      if (normalizedStatus === 'OPEN') return sale.status !== 'completed';
+      if (normalizedStatus === 'CLOSED') return sale.status === 'completed';
+      return true;
+    })
+    .slice(0, normalizedLimit)
+    .map((sale) => getSaleById(sale.saleID));
+
+  return rows;
 }
 
 function getComplianceReport() {

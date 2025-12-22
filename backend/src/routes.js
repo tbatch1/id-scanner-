@@ -1103,6 +1103,31 @@ router.post('/test-scan', (req, res) => {
         }
       }
 
+      // 5. Write an audit note back to Lightspeed (best-effort)
+      try {
+        await lightspeed.recordVerification({
+          saleId,
+          clerkId: clerkId || 'MANAGER_OVERRIDE',
+          verificationData: {
+            approved: true,
+            reason: note ? `MANUAL_OVERRIDE: ${note}` : 'MANUAL_OVERRIDE',
+            firstName: null,
+            lastName: null,
+            dob: null,
+            age: null,
+            documentType: 'manual',
+            documentNumber: 'no-scan',
+            issuingCountry: null,
+            nationality: null,
+            sex: null,
+            source: 'manual_override',
+            documentExpiry: null
+          }
+        });
+      } catch (noteError) {
+        logger.warn({ event: 'override_note_update_failed', saleId, error: noteError.message }, 'Failed to update Lightspeed note for override');
+      }
+
       res.json({
         success: true,
         message: 'Override successful',

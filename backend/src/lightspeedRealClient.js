@@ -157,12 +157,28 @@ async function completeSale({ saleId, verificationId, paymentType }) {
   }
 }
 
-async function listSales() {
+async function listSales({ status = 'OPEN', limit = 10, outletId = null } = {}) {
   try {
     const response = await api.get('/sales', {
-      params: { page_size: 10, status: 'OPEN' }
+      params: {
+        page_size: Math.max(1, Math.min(Number.parseInt(limit, 10) || 10, 200)),
+        status,
+        ...(outletId ? { outlet_id: outletId } : {})
+      }
     });
-    return response.data.data || [];
+    const sales = response.data.data || [];
+    return sales.map((sale) => ({
+      saleId: sale.id,
+      total: parseFloat(sale.total_price || 0),
+      currency: 'USD',
+      outletId: sale.outlet_id || null,
+      registerId: sale.register_id || null,
+      userId: sale.user_id || null,
+      status: sale.status || null,
+      note: sale.note || null,
+      createdAt: sale.created_at || null,
+      updatedAt: sale.updated_at || null
+    }));
   } catch (error) {
     logger.error({ event: 'list_sales_failed', error: error.message });
     return [];
