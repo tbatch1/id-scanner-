@@ -1122,12 +1122,20 @@
             }
 
             if (remoteScanEnabled) {
-                openRemoteScanner();
-                startStatusPolling();
-                statusText.textContent = 'Waiting for scan...';
-                dbgApi.textContent = 'REMOTE...';
+                const opened = openRemoteScanner();
+                if (opened) {
+                    startStatusPolling();
+                    statusText.textContent = 'Waiting for scan...';
+                    dbgApi.textContent = 'REMOTE...';
+                } else {
+                    statusText.textContent = 'Scan now';
+                    dbgApi.textContent = 'POPUP BLOCKED';
+                    if (scanSubtitle) {
+                        scanSubtitle.textContent = 'Pop-up blocked. Set Lightspeed button to open in a new tab.';
+                    }
+                }
             } else {
-                statusText.textContent = 'Scanning...';
+                statusText.textContent = 'Scan now';
                 dbgApi.textContent = 'LISTENING...';
             }
 
@@ -1678,15 +1686,19 @@
         if (!saleId) {
             showError('Missing Sale ID');
         } else {
-            if (remoteScanEnabled) startStatusPolling();
             ensureFocus();
         }
         function openRemoteScanner() {
             if (!saleId) {
                 showError('Missing Sale ID');
-                return;
+                return false;
             }
-            window.open(`/scanner.html?sale_id=${saleId}`, '_blank');
+            const openedWindow = window.open(`/scanner.html?sale_id=${encodeURIComponent(saleId)}`, '_blank', 'noopener');
+            if (!openedWindow) {
+                return false;
+            }
+            try { openedWindow.focus(); } catch (e) { }
+            return true;
         }
 
         // ========== POLLING FOR REMOTE SCANS ==========
