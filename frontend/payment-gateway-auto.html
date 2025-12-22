@@ -1096,6 +1096,35 @@
         const remoteScanEnabled = ['1', 'true', 'yes'].includes((urlParams.get('remoteScan') || '').toLowerCase()) || isEmbedded;
         const cashUiEnabled = ['1', 'true', 'yes'].includes((urlParams.get('cashUi') || '').toLowerCase());
 
+        function safeJson(value, maxLen = 400) {
+            try {
+                const text = typeof value === 'string' ? value : JSON.stringify(value);
+                return (text || '').length > maxLen ? (text || '').slice(0, maxLen) + '…' : (text || '');
+            } catch (e) {
+                return '[unserializable]';
+            }
+        }
+
+        async function sendDebugLog(level, message) {
+            // Persist minimal, non-PII logs for diagnosing iPad iframe issues.
+            // Only ship logs when debug is enabled OR for errors.
+            const shouldSend = debugEnabled || level === 'error' || level === 'warn';
+            if (!shouldSend) return;
+            try {
+                const sessionId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id') || 'unknown';
+                await fetch('/api/debug-logs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: String(sessionId),
+                        level: level || 'info',
+                        message: String(message || ''),
+                        user_agent: navigator.userAgent
+                    })
+                });
+            } catch (e) { }
+        }
+
         // ========== ELEMENTS ==========
         const scanCard = document.getElementById('scanCard');
         const successCard = document.getElementById('successCard');
@@ -1289,6 +1318,7 @@
         let barcodeBuffer = '';
         let scanTimer = null;
         const SCAN_TIMEOUT = 800; // Increased even more for unstable Bluetooth
+        const PDF417_PREFIX = ']L';
 
         const dbgFocus = document.getElementById('dbgFocus');
         const dbgKeys = document.getElementById('dbgKeys');
@@ -1310,6 +1340,7 @@
             if (data.length < 10) return;
             console.log('[Scanner] FINAL SCAN DATA:', data);
             dbgApi.textContent = 'SENDING...';
+            sendDebugLog('info', `scan complete len=${data.length} hasANSI=${data.includes('@ANSI')} has]L=${data.includes(']L')}`);
             handleBluetoothScan(data);
             barcodeBuffer = '';
             hiddenInput.value = '';
@@ -1410,6 +1441,7 @@
         const paymentType = (urlParams.get('type') || urlParams.get('paymentType') || 'cash').toLowerCase();
 
         console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount, paymentType, remoteScanEnabled, cashUiEnabled });
+        sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled}`);
 
         function buildReturnUrl() {
             const explicit = urlParams.get('return') || urlParams.get('returnUrl') || urlParams.get('return_url');
@@ -1655,12 +1687,20 @@
                 if (cleanData.length > 0 && !isNaN(parseInt(cleanData[0]))) cleanData = cleanData.substring(1);
             }
             try {
+                sendDebugLog('info', `verify-bluetooth request saleId=${saleId || 'missing'} len=${cleanData?.length || 0}`);
                 const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ barcodeData: cleanData, registerId: registerId || 'NETUM-NT1200', clerkId: clerkId })
                 });
-                const data = await response.json();
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    sendDebugLog('error', `verify-bluetooth http=${response.status} body=${safeJson(data)}`);
+                    showError(data.reason || data.error || `Server error (${response.status})`);
+                    return;
+                }
+
+                sendDebugLog('info', `verify-bluetooth ok approved=${!!data.approved} dbSaved=${data.dbSaved === true}`);
                 if (data.success && data.approved) {
                     clearInterval(pollInterval);
                     showSuccess({ customerName: data.customerName || 'Customer' });
@@ -1671,10 +1711,12 @@
                         setTimeout(finishCashFlow, 1200);
                     }
                 } else {
+                    sendDebugLog('warn', `verify-bluetooth rejected reason=${data.reason || data.error || 'unknown'}`);
                     showError(data.reason || 'Verification Failed');
                 }
             } catch (e) {
                 console.error('Scan error', e);
+                sendDebugLog('error', `verify-bluetooth exception=${e?.message || 'unknown'}`);
                 showError('Processing failed');
             }
         }

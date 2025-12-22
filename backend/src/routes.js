@@ -349,6 +349,14 @@ router.get('/sales/:saleId', async (req, res, next) => {
 function parseAAMVA(data) {
   if (!data || typeof data !== 'string') return null;
 
+  // Normalize common barcode control characters so parsing works across scanners.
+  // Many PDF417/AAMVA payloads use FS/GS/RS/US separators instead of CR/LF.
+  const normalizedData = data
+    .replace(/\r\n/g, '\n')
+    .replace(/[\r\n]/g, '\n')
+    .replace(/[\x1c-\x1f]/g, '\n')
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1b]/g, '');
+
   // Basic AAMVA parsing logic
   // Looks for subfile designators like "DAA", "DBB", etc.
 
@@ -356,7 +364,7 @@ function parseAAMVA(data) {
     // Regex to find the key followed by data, ending at a terminator or new field
     // AAMVA fields are often separated by LF (0x0A) or CR (0x0D)
     const regex = new RegExp(`${key}([^\\n\\r]+)`, 'i');
-    const match = data.match(regex);
+    const match = normalizedData.match(regex);
     return match ? match[1].trim() : null;
   };
 
@@ -543,36 +551,46 @@ router.post('/test-scan', (req, res) => {
 
       // 5. Persist to Database FIRST (Dashboard Integration - CRITICAL)
       // Database save must succeed before in-memory update to ensure data integrity
+      let dbSaved = false;
       if (db.pool) {
-        // Need to fetch sale to get location/outlet info first
-        const sale = await lightspeed.getSaleById(saleId);
-        const locationId = determineLocationId(req, sale);
+        let sale = null;
+        let locationId = determineLocationId(req, null);
+        try {
+          sale = await lightspeed.getSaleById(saleId);
+          locationId = determineLocationId(req, sale);
+        } catch (e) {
+          logger.warn({ event: 'bluetooth_sale_lookup_failed', saleId }, 'Failed to load sale for bluetooth scan; continuing without sale context');
+        }
 
-        // Construct verification object for DB
-        const dbVerification = {
-          verificationId: require('crypto').randomUUID(), // Node 14.17+
-          saleId,
-          clerkId: clerkId || 'BLUETOOTH_DEVICE',
-          status: approved ? 'approved' : 'rejected',
-          reason,
-          firstName: parsed.firstName,
-          lastName: parsed.lastName,
-          dob: parsed.dob ? parsed.dob.toISOString() : null,
-          age: parsed.age,
-          documentType: 'drivers_license',
-          documentNumber: parsed.documentNumber,
-          issuingCountry: parsed.issuingCountry,
-          nationality: parsed.issuingCountry,
-          sex: parsed.sex,
-          source: 'bluetooth_gun'
-        };
+        try {
+          // Construct verification object for DB
+          const dbVerification = {
+            verificationId: require('crypto').randomUUID(), // Node 14.17+
+            saleId,
+            clerkId: clerkId || 'BLUETOOTH_DEVICE',
+            status: approved ? 'approved' : 'rejected',
+            reason,
+            firstName: parsed.firstName,
+            lastName: parsed.lastName,
+            dob: parsed.dob ? parsed.dob.toISOString() : null,
+            age: parsed.age,
+            documentType: 'drivers_license',
+            documentNumber: parsed.documentNumber,
+            issuingCountry: parsed.issuingCountry,
+            nationality: parsed.issuingCountry,
+            sex: parsed.sex,
+            source: 'bluetooth_gun'
+          };
 
-        // Let database errors propagate - if DB save fails, entire request fails
-        await complianceStore.saveVerification(dbVerification, {
-          ipAddress: req.ip,
-          userAgent: req.get('user-agent'),
-          locationId
-        });
+          await complianceStore.saveVerification(dbVerification, {
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+            locationId
+          });
+          dbSaved = true;
+        } catch (dbError) {
+          logger.error({ event: 'bluetooth_db_save_failed', saleId }, 'Failed to save bluetooth verification to DB');
+        }
       }
 
       // 6. Update In-Memory Store (for Polling) - ONLY after DB save succeeds
@@ -592,7 +610,8 @@ router.post('/test-scan', (req, res) => {
         approved,
         customerName: verificationResult.customerName,
         age: parsed.age,
-        reason
+        reason,
+        dbSaved
       });
 
     } catch (error) {

@@ -1,6 +1,6 @@
 const https = require('https');
 
-https.get('https://id-scanner-project-ixcqvolmj-tommys-projects-c5147bad.vercel.app/api/debug-logs', (res) => {
+https.get('https://id-scanner-project.vercel.app/api/debug-logs', (res) => {
     let data = '';
     res.on('data', chunk => data += chunk);
     res.on('end', () => {
