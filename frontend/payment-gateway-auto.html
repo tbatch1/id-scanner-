@@ -1119,6 +1119,10 @@
                 if (attemptIframeBreakout()) {
                     return;
                 }
+
+                // Start note-based fallback immediately in embedded mode so staff can complete the flow even when
+                // the iPad POS iframe blocks focus/popup navigation.
+                startNoteScanPolling();
             }
 
             if (remoteScanEnabled) {
@@ -1134,7 +1138,6 @@
                         scanSubtitle.textContent = 'Tap the sale Notes field, scan the ID, then wait...';
                     }
                     startStatusPolling();
-                    startNoteScanPolling();
                 }
             } else {
                 statusText.textContent = 'Scan now';
@@ -1695,8 +1698,20 @@
                 showError('Missing Sale ID');
                 return false;
             }
-            const openedWindow = window.open(`/scanner.html?sale_id=${encodeURIComponent(saleId)}`, '_blank', 'noopener');
+            const scannerUrl = `/scanner.html?sale_id=${encodeURIComponent(saleId)}`;
+            let openedWindow = null;
+            try {
+                openedWindow = window.open(scannerUrl, '_blank', 'noopener');
+            } catch (e) {
+                return false;
+            }
             if (!openedWindow) {
+                return false;
+            }
+            try {
+                // Some iOS in-app iframes return a WindowProxy but block access; treat that as popup blocked.
+                void openedWindow.location.href;
+            } catch (e) {
                 return false;
             }
             try { openedWindow.focus(); } catch (e) { }
