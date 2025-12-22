@@ -1113,8 +1113,17 @@
             scanCard.classList.add('scanning');
             statusIndicator.classList.add('scanning');
 
+            if (isEmbedded) {
+                statusText.textContent = 'Opening fullscreen...';
+                dbgApi.textContent = 'BREAKOUT...';
+                if (attemptIframeBreakout()) {
+                    return;
+                }
+            }
+
             if (remoteScanEnabled) {
                 openRemoteScanner();
+                startStatusPolling();
                 statusText.textContent = 'Waiting for scan...';
                 dbgApi.textContent = 'REMOTE...';
             } else {
@@ -1247,6 +1256,23 @@
             }
 
             return 'https://retail.lightspeed.app/sell';
+        }
+
+        function attemptIframeBreakout() {
+            if (!isEmbedded) return false;
+            if (['1', 'true', 'yes'].includes((urlParams.get('noBreakout') || '').toLowerCase())) return false;
+
+            try {
+                window.top.location.href = window.location.href;
+                return true;
+            } catch (e) { }
+
+            try {
+                window.parent.location.href = window.location.href;
+                return true;
+            } catch (e) { }
+
+            return false;
         }
 
         function returnToPOS() {
@@ -1630,7 +1656,7 @@
         if (scanTitle && scanSubtitle) {
             if (remoteScanEnabled) {
                 scanTitle.textContent = 'Tap to Scan';
-                scanSubtitle.textContent = 'Opens scanner in a new tab';
+                scanSubtitle.textContent = isEmbedded ? 'Opens fullscreen (or scanner tab if blocked)' : 'Opens scanner in a new tab';
             } else {
                 scanTitle.textContent = 'Scan Customer ID';
                 scanSubtitle.textContent = 'Scan now (Netum scanner)';
