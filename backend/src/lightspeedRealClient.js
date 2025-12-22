@@ -101,8 +101,20 @@ async function recordVerification({ saleId, clerkId, verificationData }) {
   };
 
   try {
-    const note = `ID Verified: ${verificationData.firstName} ${verificationData.lastName}, Age ${verificationData.age}`;
-    await api.put(`/sales/${saleId}`, { note });
+    const response = await api.get(`/sales/${saleId}`);
+    const currentNote = response?.data?.data?.note || '';
+
+    const timestamp = new Date().toLocaleString('en-US', { hour12: false });
+    const status = verificationData.approved ? 'APPROVED' : 'REJECTED';
+    const ageText = Number.isFinite(Number(verificationData.age)) ? `Age ${verificationData.age}` : 'Age unknown';
+    const reason = !verificationData.approved && verificationData.reason ? ` (${verificationData.reason})` : '';
+
+    const line = `ID Check ${status}: ${ageText}${reason} — ${timestamp}`;
+    const note = (currentNote ? `${currentNote}\n` : '') + line;
+
+    // Keep note from growing unbounded.
+    const capped = note.length > 1800 ? note.slice(note.length - 1800) : note;
+    await api.put(`/sales/${saleId}`, { note: capped });
     logger.info({ event: 'verification_recorded', saleId });
   } catch (error) {
     logger.error({ event: 'record_verification_failed', saleId, error: error.message });

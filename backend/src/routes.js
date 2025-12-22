@@ -510,6 +510,14 @@ router.post('/test-scan', (req, res) => {
     }
 
     try {
+      // Best-effort sale context (used for outlet/location resolution and note writing).
+      let sale = null;
+      let locationId = determineLocationId(req, null);
+      try {
+        sale = await lightspeed.getSaleById(saleId);
+        locationId = determineLocationId(req, sale);
+      } catch (e) { }
+
       // 1. Parse the Barcode
       let parsed = parseAAMVA(barcodeData);
 
@@ -580,19 +588,39 @@ router.post('/test-scan', (req, res) => {
         registerId: registerId || 'BLUETOOTH-SCANNER'
       };
 
+      // 4.5 Write an audit note back to Lightspeed (best-effort, never blocks checkout)
+      let noteUpdated = false;
+      try {
+        await lightspeed.recordVerification({
+          saleId,
+          clerkId: clerkId || 'BLUETOOTH_DEVICE',
+          verificationData: {
+            approved,
+            reason,
+            firstName: parsed.firstName,
+            lastName: parsed.lastName,
+            dob: parsed.dob ? parsed.dob.toISOString().slice(0, 10) : null,
+            age: parsed.age,
+            documentType: 'drivers_license',
+            documentNumber: parsed.documentNumber,
+            issuingCountry: parsed.issuingCountry,
+            nationality: parsed.issuingCountry,
+            sex: parsed.sex,
+            source: 'bluetooth_gun',
+            documentExpiry: parsed.documentExpiry || null
+          },
+          sale,
+          locationId
+        });
+        noteUpdated = true;
+      } catch (e) {
+        logger.warn({ event: 'bluetooth_note_update_failed', saleId }, 'Failed to update Lightspeed note for bluetooth scan');
+      }
+
       // 5. Persist to Database FIRST (Dashboard Integration - CRITICAL)
       // Database save must succeed before in-memory update to ensure data integrity
       let dbSaved = false;
       if (db.pool) {
-        let sale = null;
-        let locationId = determineLocationId(req, null);
-        try {
-          sale = await lightspeed.getSaleById(saleId);
-          locationId = determineLocationId(req, sale);
-        } catch (e) {
-          logger.warn({ event: 'bluetooth_sale_lookup_failed', saleId }, 'Failed to load sale for bluetooth scan; continuing without sale context');
-        }
-
         try {
           // Construct verification object for DB
           const dbVerification = {
@@ -642,7 +670,8 @@ router.post('/test-scan', (req, res) => {
         customerName: verificationResult.customerName,
         age: parsed.age,
         reason,
-        dbSaved
+        dbSaved,
+        noteUpdated
       });
 
     } catch (error) {
