@@ -251,12 +251,152 @@ router.get('/scans', async (req, res) => {
 
 // GET /admin/transactions - Recent sales with ID-note audit (notification center source)
 router.get('/transactions', async (req, res) => {
-  const { status = 'CLOSED', limit = 50 } = req.query || {};
+  const { status = 'ALL', limit = 50 } = req.query || {};
+  const normalizedStatus = String(status || 'ALL').toUpperCase();
   const normalizedLimit = Math.max(1, Math.min(Number.parseInt(limit, 10) || 50, 200));
 
   try {
-    const sales = await lightspeed.listSales({ status, limit: normalizedLimit });
-    const transactions = (sales || []).map((sale) => {
+    // Prefer DB-driven audit: every flow should produce a verification record.
+    // Then we fetch the sale note from Lightspeed to ensure the audit note actually got written.
+    if (db.pool) {
+      const baseCte = `
+        WITH latest AS (
+          SELECT
+            v.sale_id,
+            v.verification_id,
+            v.status AS verification_status,
+            v.age AS verification_age,
+            v.date_of_birth AS verification_dob,
+            v.location_id,
+            v.clerk_id,
+            v.created_at AS verification_created_at,
+            ROW_NUMBER() OVER (PARTITION BY v.sale_id ORDER BY v.created_at DESC) AS rn
+          FROM verifications v
+        )
+      `;
+
+      const queryWithCompletions = `
+        ${baseCte}
+        SELECT
+          l.sale_id,
+          l.verification_id,
+          l.verification_status,
+          l.verification_age,
+          l.verification_dob,
+          l.location_id,
+          l.clerk_id,
+          l.verification_created_at,
+          sc.payment_type,
+          sc.amount,
+          sc.completed_at
+        FROM latest l
+        LEFT JOIN sales_completions sc
+          ON sc.sale_id = l.sale_id
+        WHERE l.rn = 1
+        ORDER BY l.verification_created_at DESC
+        LIMIT $1
+      `;
+
+      const queryWithoutCompletions = `
+        ${baseCte}
+        SELECT
+          l.sale_id,
+          l.verification_id,
+          l.verification_status,
+          l.verification_age,
+          l.verification_dob,
+          l.location_id,
+          l.clerk_id,
+          l.verification_created_at,
+          NULL::text AS payment_type,
+          NULL::numeric AS amount,
+          NULL::timestamp AS completed_at
+        FROM latest l
+        WHERE l.rn = 1
+        ORDER BY l.verification_created_at DESC
+        LIMIT $1
+      `;
+
+      let rows;
+      try {
+        ({ rows } = await db.pool.query(queryWithCompletions, [normalizedLimit]));
+      } catch (error) {
+        if (error?.code === '42P01' && /sales_completions/i.test(String(error?.message || ''))) {
+          ({ rows } = await db.pool.query(queryWithoutCompletions, [normalizedLimit]));
+        } else {
+          throw error;
+        }
+      }
+
+      const concurrency = 5;
+      const enriched = [];
+      for (let i = 0; i < rows.length; i += concurrency) {
+        const batch = rows.slice(i, i + concurrency);
+        const sales = await Promise.allSettled(
+          batch.map(async (row) => {
+            return await lightspeed.getSaleById(row.sale_id);
+          })
+        );
+
+        for (let j = 0; j < batch.length; j++) {
+          const row = batch[j];
+          const saleResult = sales[j];
+          const sale = saleResult.status === 'fulfilled' ? saleResult.value : null;
+
+          if (normalizedStatus !== 'ALL' && sale?.status && sale.status !== normalizedStatus) {
+            continue;
+          }
+
+          const saleFetchOk = Boolean(sale);
+          const noteInfo = saleFetchOk ? parseIdCheckNote(sale.note) : { hasIdNote: false };
+          const verifiedApproved = String(row.verification_status || '').startsWith('approved');
+          enriched.push({
+            sale_id: row.sale_id,
+            verification_id: row.verification_id,
+            total: sale?.total ?? null,
+            status: sale?.status ?? null,
+            outlet_id: sale?.outletId ?? null,
+            register_id: sale?.registerId ?? null,
+            user_id: sale?.userId ?? null,
+            created_at: sale?.createdAt ?? null,
+            updated_at: sale?.updatedAt ?? null,
+            ...noteInfo,
+            saleFetchOk,
+            hasVerification: true,
+            approved: verifiedApproved || noteInfo.noteStatus === 'APPROVED',
+            verification_status: row.verification_status,
+            verification_age: row.verification_age ?? null,
+            verification_dob: row.verification_dob || null,
+            verification_created_at: row.verification_created_at || null,
+            payment_type: row.payment_type || null,
+            amount: row.amount ?? null,
+            completed_at: row.completed_at || null,
+            missingNote: saleFetchOk ? !noteInfo.hasIdNote : null,
+            missingVerification: false
+          });
+        }
+      }
+
+      const missingNotes = enriched.filter((t) => t.missingNote === true);
+      const saleFetchErrorCount = enriched.filter((t) => t.saleFetchOk === false).length;
+      return res.status(200).json({
+        success: true,
+        status: normalizedStatus,
+        limit: normalizedLimit,
+        count: enriched.length,
+        missingNoteCount: missingNotes.length,
+        missingVerificationCount: 0,
+        saleFetchErrorCount,
+        transactions: enriched
+      });
+    }
+
+    // Fallback: without DB, use Lightspeed sales listing and note parsing.
+    const sales = await lightspeed.listSales({
+      status: normalizedStatus === 'ALL' ? null : normalizedStatus,
+      limit: normalizedLimit
+    });
+    const enriched = (sales || []).map((sale) => {
       const noteInfo = parseIdCheckNote(sale?.note);
       return {
         sale_id: sale?.saleId || sale?.sale_id || sale?.id || null,
@@ -267,57 +407,22 @@ router.get('/transactions', async (req, res) => {
         user_id: sale?.userId ?? null,
         created_at: sale?.createdAt ?? null,
         updated_at: sale?.updatedAt ?? null,
-        ...noteInfo
+        ...noteInfo,
+        hasVerification: false,
+        approved: noteInfo.noteStatus === 'APPROVED',
+        verification_status: null,
+        verification_age: null,
+        verification_dob: null,
+        verification_created_at: null,
+        missingNote: !noteInfo.hasIdNote,
+        missingVerification: true
       };
     }).filter((row) => row.sale_id);
 
-    let verificationBySaleId = {};
-    if (db.pool && transactions.length > 0) {
-      const saleIds = transactions.map((t) => t.sale_id);
-      const { rows } = await db.pool.query(
-        `
-          SELECT DISTINCT ON (sale_id)
-            sale_id,
-            status AS verification_status,
-            age AS verification_age,
-            date_of_birth AS verification_dob,
-            created_at AS verification_created_at
-          FROM verifications
-          WHERE sale_id = ANY($1)
-          ORDER BY sale_id, created_at DESC
-        `,
-        [saleIds]
-      );
-      verificationBySaleId = rows.reduce((acc, row) => {
-        acc[row.sale_id] = row;
-        return acc;
-      }, {});
-    }
-
-    const enriched = transactions.map((t) => {
-      const verification = verificationBySaleId[t.sale_id] || null;
-      const hasVerification = Boolean(verification);
-      const hasIdNote = Boolean(t.hasIdNote);
-      const approved =
-        (verification && String(verification.verification_status).startsWith('approved')) ||
-        t.noteStatus === 'APPROVED';
-      return {
-        ...t,
-        hasVerification,
-        approved,
-        verification_status: verification?.verification_status || null,
-        verification_age: verification?.verification_age ?? null,
-        verification_dob: verification?.verification_dob || null,
-        verification_created_at: verification?.verification_created_at || null,
-        missingNote: !hasIdNote,
-        missingVerification: !hasVerification
-      };
-    });
-
-    const missingNotes = enriched.filter((t) => t.missingNote);
+    const missingNotes = enriched.filter((t) => t.missingNote === true);
     res.status(200).json({
       success: true,
-      status,
+      status: normalizedStatus,
       limit: normalizedLimit,
       count: enriched.length,
       missingNoteCount: missingNotes.length,

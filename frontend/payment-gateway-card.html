@@ -1261,7 +1261,8 @@
 
         // ========== API INTEGRATION ==========
         const urlParams = new URLSearchParams(window.location.search);
-        const saleId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id');
+        // Lightspeed passes multiple IDs; prefer explicit sale_id/saleId for API calls + note writing.
+        const saleId = urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('transaction_id') || urlParams.get('reference_id') || urlParams.get('reference');
         const registerId = urlParams.get('register_id') || urlParams.get('registerId') || urlParams.get('outlet_id');
         const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
         const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';

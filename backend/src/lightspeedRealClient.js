@@ -1,8 +1,8 @@
 const axios = require('axios');
 const logger = require('./logger');
 
-const PERSONAL_TOKEN = process.env.LIGHTSPEED_API_KEY;
-const DOMAIN_PREFIX = process.env.LIGHTSPEED_DOMAIN_PREFIX || process.env.LIGHTSPEED_ACCOUNT_ID;
+const PERSONAL_TOKEN = (process.env.LIGHTSPEED_API_KEY || '').trim();
+const DOMAIN_PREFIX = (process.env.LIGHTSPEED_DOMAIN_PREFIX || process.env.LIGHTSPEED_ACCOUNT_ID || '').trim();
 const BASE_URL = `https://${DOMAIN_PREFIX}.retail.lightspeed.app/api/2.0`;
 
 const api = axios.create({
@@ -159,12 +159,17 @@ async function completeSale({ saleId, verificationId, paymentType }) {
 
 async function listSales({ status = 'OPEN', limit = 10, outletId = null } = {}) {
   try {
+    const params = {
+      page_size: Math.max(1, Math.min(Number.parseInt(limit, 10) || 10, 200)),
+      ...(outletId ? { outlet_id: outletId } : {})
+    };
+
+    if (status) {
+      params.status = status;
+    }
+
     const response = await api.get('/sales', {
-      params: {
-        page_size: Math.max(1, Math.min(Number.parseInt(limit, 10) || 10, 200)),
-        status,
-        ...(outletId ? { outlet_id: outletId } : {})
-      }
+      params
     });
     const sales = response.data.data || [];
     return sales.map((sale) => ({

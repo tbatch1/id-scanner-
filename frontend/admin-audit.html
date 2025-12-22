@@ -162,7 +162,8 @@
 
   <div class="controls">
     <select id="statusSelect">
-      <option value="CLOSED" selected>CLOSED</option>
+      <option value="ALL" selected>ALL</option>
+      <option value="CLOSED">CLOSED</option>
       <option value="OPEN">OPEN</option>
     </select>
     <select id="limitSelect">
@@ -178,7 +179,7 @@
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
       <div>
         <div style="font-weight:700;">Notification Center</div>
-        <div class="muted">Flags transactions missing an “ID Check …” note.</div>
+        <div class="muted">Flags transactions missing an "ID Check ..." note.</div>
       </div>
       <div class="muted" id="lastUpdated">—</div>
     </div>
@@ -243,25 +244,29 @@
       missingList.textContent = 'Loading…';
 
       try {
-        const params = new URLSearchParams({ status, limit });
+        const params = new URLSearchParams({ limit });
+        if (status && status !== 'ALL') params.set('status', status);
         const res = await fetch(`/admin/transactions?${params}`, { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.message || 'Failed to load transactions');
 
         const items = data.transactions || [];
-        const missing = items.filter(x => x.missingNote);
+        const missing = items.filter(x => x.missingNote === true);
+        const fetchErrors = Number(data.saleFetchErrorCount) || 0;
 
         lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
 
         if (missing.length > 0) {
-          summaryPill.textContent = `${missing.length} missing ID note`;
+          summaryPill.textContent = `${missing.length} missing ID note${fetchErrors ? ` • ${fetchErrors} sale fetch errors` : ''}`;
           summaryPill.className = 'pill bad';
           const preview = missing.slice(0, 10).map(x => x.sale_id).join(', ');
           missingList.innerHTML = `<span class="badge bad">Missing notes</span> ${preview}${missing.length > 10 ? '…' : ''}`;
         } else {
-          summaryPill.textContent = 'All good (no missing notes)';
+          summaryPill.textContent = `All good (no missing notes)${fetchErrors ? ` • ${fetchErrors} sale fetch errors` : ''}`;
           summaryPill.className = 'pill';
-          missingList.innerHTML = `<span class="badge ok">OK</span> No missing notes in this list.`;
+          missingList.innerHTML = fetchErrors
+            ? `<span class="badge warn">WARN</span> Notes couldn't be checked for ${fetchErrors} sale(s) due to Lightspeed fetch errors.`
+            : `<span class="badge ok">OK</span> No missing notes in this list.`;
         }
 
         if (items.length === 0) {
@@ -270,20 +275,24 @@
         }
 
         tbody.innerHTML = items.map((t) => {
-          const noteBadge = t.hasIdNote
-            ? `<span class="badge ok">${t.noteStatus || 'ID NOTE'}</span> ${t.noteAge ? `Age ${t.noteAge}` : ''} ${t.noteDobYear ? `DOB ${t.noteDobYear}` : ''}`
-            : `<span class="badge bad">MISSING</span>`;
+          const noteBadge = t.missingNote === null
+            ? `<span class="badge warn">UNKNOWN</span>`
+            : (t.hasIdNote
+              ? `<span class="badge ok">${t.noteStatus || 'ID NOTE'}</span> ${t.noteAge ? `Age ${t.noteAge}` : ''} ${t.noteDobYear ? `DOB ${t.noteDobYear}` : ''}`
+              : `<span class="badge bad">MISSING</span>`);
 
+          const isOverride = String(t.verification_status || '') === 'approved_override';
+          const verAgeText = isOverride ? 'Override' : (t.verification_age ? `Age ${t.verification_age}` : '');
           const verBadge = t.hasVerification
-            ? `<span class="badge ${String(t.verification_status || '').startsWith('approved') ? 'ok' : 'warn'}">${t.verification_status}</span> ${t.verification_age ? `Age ${t.verification_age}` : ''}`
+            ? `<span class="badge ${String(t.verification_status || '').startsWith('approved') ? 'ok' : 'warn'}">${t.verification_status}</span> ${verAgeText}`
             : `<span class="badge warn">NO DB</span>`;
 
-          const rowClass = t.missingNote ? 'missing-note' : '';
+          const rowClass = t.missingNote === true ? 'missing-note' : '';
 
           return `
             <tr class="${rowClass}">
               <td>${makeSaleLink(t.sale_id)}</td>
-              <td>${t.status || '—'}</td>
+              <td>${t.saleFetchOk === false ? 'FETCH_FAILED' : (t.status || '—')}</td>
               <td>${fmtMoney(t.total)}</td>
               <td>${noteBadge}</td>
               <td>${verBadge}</td>
@@ -306,4 +315,3 @@
 </body>
 
 </html>
-
