@@ -1465,9 +1465,10 @@
         const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
         const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
         const paymentType = (urlParams.get('type') || urlParams.get('paymentType') || 'cash').toLowerCase();
+        const isRefund = Number.isFinite(saleAmount) && saleAmount < 0;
 
         console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount, paymentType, remoteScanEnabled, cashUiEnabled });
-        sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled}`);
+        sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} amount=${saleAmount} refund=${isRefund} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled}`);
 
         function buildReturnUrl() {
             const explicit = urlParams.get('return') || urlParams.get('returnUrl') || urlParams.get('return_url');
@@ -1908,6 +1909,10 @@
             successPrimaryBtn.textContent = paymentType === 'cash' && cashUiEnabled ? 'Continue' : 'Return to POS';
             successPrimaryBtn.addEventListener('click', (e) => {
                 e.preventDefault();
+                if (isRefund) {
+                    finishCashFlow();
+                    return;
+                }
                 if (paymentType === 'cash' && cashUiEnabled) {
                     showCashScreen();
                 } else {
@@ -1919,6 +1924,14 @@
         if (!saleId) {
             showError('Missing Sale ID');
         } else {
+            if (isRefund) {
+                sendDebugLog('info', `refund bypass: amount=${saleAmount}`);
+                showSuccess({ customerName: 'Refund' });
+                const details = document.getElementById('successDetails');
+                if (details) details.textContent = 'Refund: ID not required';
+                if (successPrimaryBtn) successPrimaryBtn.textContent = 'Return to POS';
+                setTimeout(() => finishCashFlow(), 400);
+            } else {
             ensureFocus();
 
             // Embedded iPad mode: show the scan box and wait for the scanner keystrokes.
@@ -1934,7 +1947,8 @@
                      scanSubtitle.textContent = 'Tap the box below, then scan the ID.';
                  }
                  scanBoxPreferred = true;
-             }
+              }
+            }
         }
         function openRemoteScanner() {
             if (!saleId) {
