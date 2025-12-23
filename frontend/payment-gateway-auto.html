@@ -1467,7 +1467,15 @@
         const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
         const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
         const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
-        const paymentType = (urlParams.get('type') || urlParams.get('paymentType') || 'cash').toLowerCase();
+        const paymentTypeRaw = (
+            urlParams.get('type') ||
+            urlParams.get('paymentType') ||
+            urlParams.get('payment_type') ||
+            urlParams.get('tender') ||
+            urlParams.get('method') ||
+            'cash'
+        ).toLowerCase();
+        const paymentType = paymentTypeRaw.includes('card') ? 'card' : 'cash';
         const isRefund = Number.isFinite(saleAmount) && saleAmount < 0;
         const cardMode = (urlParams.get('cardMode') || (urlParams.get('card_mode') || '')).toLowerCase() || 'precheck'; // 'precheck' | 'external'
         const cashUiEnabled = cashUiExplicitlyDisabled
@@ -1540,13 +1548,20 @@
             // Pre-check only: close the overlay so staff can run card tender in POS (no /complete call).
             if (isEmbedded) {
                 try {
-                    // Some Lightspeed embeds won't close on CLOSE alone. Send a small "bundle" of hints.
-                    window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
-                    window.parent.postMessage('ACCEPT', '*');
+                    // DO NOT send ACCEPT here: card flow must not complete/close the sale.
+                    // Try a few close signals because different Lightspeed embeds listen to different ones.
                     window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
                     window.parent.postMessage('CLOSE', '*');
                     window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
                     window.parent.postMessage('EXIT', '*');
+                    setTimeout(() => {
+                        try {
+                            window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
+                            window.parent.postMessage('CLOSE', '*');
+                            window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
+                            window.parent.postMessage('EXIT', '*');
+                        } catch (e) { }
+                    }, 250);
                 } catch (e) { }
                 return;
             }
@@ -1758,7 +1773,7 @@
 
                     if (paymentType === 'card' && cardMode === 'precheck') {
                         const details = document.getElementById('successDetails');
-                        if (details) details.textContent = 'ID verified — tap Card in POS';
+                        if (details) details.textContent = 'Verified 21+ - tap Card in POS';
                         if (successPrimaryBtn) successPrimaryBtn.textContent = 'Back to POS (Tap Card)';
                         setTimeout(finishCardPrecheckFlow, 700);
                     } else if (paymentType === 'cash' && cashUiEnabled) {

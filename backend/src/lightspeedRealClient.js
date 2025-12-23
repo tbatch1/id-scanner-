@@ -122,7 +122,7 @@ async function recordVerification({ saleId, clerkId, verificationData }) {
         : null;
     const dobText = dobYear ? ` (DOB ${dobYear})` : '';
 
-    const line = `ID Check ${status}: ${ageText}${dobText}${reason} — ${timestamp}`;
+    const line = `ID Verified ${status}: ${ageText}${dobText}${reason} — ${timestamp}`;
     const note = (currentNote ? `${currentNote}\n` : '') + line;
 
     // Keep note from growing unbounded.
