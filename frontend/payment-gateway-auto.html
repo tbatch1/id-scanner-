@@ -918,6 +918,83 @@
             background: rgba(46, 167, 80, 0.5);
         }
 
+        .mode-picker {
+            margin-top: 10px;
+            padding: 12px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .mode-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .mode-label {
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.72);
+        }
+
+        .mode-badge {
+            font-size: 12px;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+        }
+
+        .mode-badge.cash {
+            background: rgba(245, 158, 11, 0.18);
+            border-color: rgba(245, 158, 11, 0.35);
+        }
+
+        .mode-badge.card {
+            background: rgba(46, 167, 80, 0.22);
+            border-color: rgba(46, 167, 80, 0.35);
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+            font-weight: 800;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .mode-btn:active {
+            transform: scale(0.99);
+        }
+
+        .mode-btn.cash {
+            border-color: rgba(245, 158, 11, 0.35);
+        }
+
+        .mode-btn.card {
+            border-color: rgba(46, 167, 80, 0.35);
+        }
+
+        .mode-hint {
+            margin-top: 10px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
         .hidden {
             display: none !important;
         }
@@ -950,6 +1027,18 @@
 
             <h1 class="scan-title" id="scanTitle">Tap to Scan</h1>
             <p class="scan-subtitle" id="scanSubtitle">Touch here to activate scanner</p>
+
+            <div class="mode-picker hidden" id="modePickerWrap">
+                <div class="mode-row">
+                    <div class="mode-label">Tender</div>
+                    <div class="mode-badge" id="modeBadge">UNKNOWN</div>
+                </div>
+                <div class="mode-buttons" id="modeButtons">
+                    <button class="mode-btn cash" id="btnModeCash" type="button">Cash</button>
+                    <button class="mode-btn card" id="btnModeCard" type="button">Card</button>
+                </div>
+                <div class="mode-hint" id="modeHint">If you tapped the ID Card button, choose Card.</div>
+            </div>
 
             <div class="status-indicator" id="statusIndicator">
                 <span class="status-dot"></span>
@@ -1477,17 +1566,55 @@
             'cash'
         ).toLowerCase();
         const cardModeKeyPresent = urlParams.has('cardMode') || urlParams.has('card_mode');
-        // If Lightspeed doesn't pass an explicit payment type but does pass a cardMode param (common for card buttons),
-        // assume this is the card flow. Otherwise default to cash for backwards compatibility.
-        const paymentType = (paymentTypeRaw.includes('card') || (!paymentTypeKeyPresent && cardModeKeyPresent)) ? 'card' : 'cash';
+        const hasExplicitCashSignal = paymentTypeKeyPresent && !paymentTypeRaw.includes('card');
+        const inferredPaymentType =
+            paymentTypeRaw.includes('card')
+                ? 'card'
+                : (!paymentTypeKeyPresent && cardModeKeyPresent)
+                    ? 'card'
+                    : hasExplicitCashSignal
+                        ? 'cash'
+                        : null;
+
+        // If Lightspeed doesn't tell us whether this is cash vs card, we can't guess.
+        // We'll prompt the cashier (1 tap) only in that ambiguous case.
+        let paymentType = inferredPaymentType || 'cash';
         const isRefund = Number.isFinite(saleAmount) && saleAmount < 0;
         const cardMode = (urlParams.get('cardMode') || (urlParams.get('card_mode') || '')).toLowerCase() || 'precheck'; // 'precheck' | 'external'
-        const cashUiEnabled = cashUiExplicitlyDisabled
+        let cashUiEnabled = cashUiExplicitlyDisabled
             ? false
             : (cashUiEnabledFromParam || (paymentType === 'cash' && !isRefund));
 
         console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount, paymentType, remoteScanEnabled, cashUiEnabled });
-        sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} typeRaw=${paymentTypeRaw || 'n/a'} typeKey=${paymentTypeKeyPresent} cardModeKey=${cardModeKeyPresent} cardMode=${cardMode} amount=${saleAmount} refund=${isRefund} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled}`);
+        const paramKeys = Array.from(urlParams.keys()).sort().join(',');
+        sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} inferred=${inferredPaymentType || 'none'} typeRaw=${paymentTypeRaw || 'n/a'} typeKey=${paymentTypeKeyPresent} cardModeKey=${cardModeKeyPresent} cardMode=${cardMode} amount=${saleAmount} refund=${isRefund} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled} keys=${paramKeys}`);
+
+        function applyPaymentType(nextType) {
+            paymentType = nextType === 'card' ? 'card' : 'cash';
+            cashUiEnabled = cashUiExplicitlyDisabled
+                ? false
+                : (cashUiEnabledFromParam || (paymentType === 'cash' && !isRefund));
+
+            try {
+                const modeBadge = document.getElementById('modeBadge');
+                if (modeBadge) {
+                    modeBadge.textContent = paymentType === 'card' ? 'CARD' : 'CASH';
+                    modeBadge.className = 'mode-badge ' + (paymentType === 'card' ? 'card' : 'cash');
+                }
+            } catch (e) { }
+
+            if (scanTitle && scanSubtitle) {
+                if (paymentType === 'card') {
+                    scanTitle.textContent = 'Scan Customer ID';
+                    scanSubtitle.textContent = 'ID check only — then tap Card in POS';
+                } else {
+                    scanTitle.textContent = 'Scan Customer ID';
+                    scanSubtitle.textContent = cashUiEnabled ? 'Scan, then enter cash received' : 'Scan now (Netum scanner)';
+                }
+            }
+
+            sendDebugLog('info', `paymentType selected=${paymentType} cashUi=${cashUiEnabled}`);
+        }
 
         function buildReturnUrl() {
             const explicit = urlParams.get('return') || urlParams.get('returnUrl') || urlParams.get('return_url');
@@ -1751,6 +1878,11 @@
         }
 
         async function handleBluetoothScan(barcodeData) {
+            if (!paymentTypeChosen && inferredPaymentType === null && !isRefund) {
+                showModePicker();
+                statusText.textContent = 'Select Cash or Card';
+                return;
+            }
             statusText.textContent = 'Processing...';
             try {
                 if (notePollInterval) { clearInterval(notePollInterval); notePollInterval = null; }
@@ -1953,13 +2085,62 @@
 
         gsap.from('.scan-card', { scale: 0.9, opacity: 0, duration: 0.6, ease: 'back.out(1.5)' });
 
+        const modePickerWrap = document.getElementById('modePickerWrap');
+        const modeButtons = document.getElementById('modeButtons');
+        const btnModeCash = document.getElementById('btnModeCash');
+        const btnModeCard = document.getElementById('btnModeCard');
+        let paymentTypeChosen = inferredPaymentType !== null || isRefund;
+
+        function showModePicker() {
+            if (!modePickerWrap) return;
+            modePickerWrap.classList.remove('hidden');
+            if (modeButtons) modeButtons.classList.remove('hidden');
+            const badge = document.getElementById('modeBadge');
+            if (badge) {
+                badge.textContent = paymentTypeChosen ? (paymentType === 'card' ? 'CARD' : 'CASH') : 'CHOOSE';
+                badge.className = 'mode-badge ' + (paymentType === 'card' ? 'card' : 'cash');
+            }
+        }
+
+        if (btnModeCash) {
+            const handler = (e) => {
+                e.preventDefault();
+                paymentTypeChosen = true;
+                applyPaymentType('cash');
+                if (modeButtons) modeButtons.classList.add('hidden');
+                statusText.textContent = 'Ready';
+                ensureFocus();
+            };
+            btnModeCash.addEventListener('touchend', handler);
+            btnModeCash.addEventListener('click', handler);
+        }
+
+        if (btnModeCard) {
+            const handler = (e) => {
+                e.preventDefault();
+                paymentTypeChosen = true;
+                applyPaymentType('card');
+                if (modeButtons) modeButtons.classList.add('hidden');
+                statusText.textContent = 'Ready';
+                ensureFocus();
+            };
+            btnModeCard.addEventListener('touchend', handler);
+            btnModeCard.addEventListener('click', handler);
+        }
+
         if (scanTitle && scanSubtitle) {
             if (remoteScanEnabled) {
                 scanTitle.textContent = 'Tap to Scan';
                 scanSubtitle.textContent = isEmbedded ? 'Opens fullscreen (or scanner tab if blocked)' : 'Opens scanner in a new tab';
             } else {
-                scanTitle.textContent = 'Scan Customer ID';
-                scanSubtitle.textContent = 'Scan now (Netum scanner)';
+                if (!paymentTypeChosen && inferredPaymentType === null && !isRefund) {
+                    scanTitle.textContent = 'Select Tender Type';
+                    scanSubtitle.textContent = 'Choose Cash or Card, then scan the ID.';
+                    showModePicker();
+                } else {
+                    applyPaymentType(paymentType);
+                    if (modePickerWrap) modePickerWrap.classList.add('hidden');
+                }
             }
         }
 
