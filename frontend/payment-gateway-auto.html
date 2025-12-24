@@ -1549,13 +1549,18 @@
             if (isEmbedded) {
                 try {
                     // DO NOT send ACCEPT here: card flow must not complete/close the sale.
-                    // Try a few close signals because different Lightspeed embeds listen to different ones.
+                    // After a successful ID check, we want to return to the POS sale screen so staff can tap the native Card tender.
+                    // Use DECLINE/CLOSE/EXIT signals to close the iframe without completing the sale.
+                    window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
+                    window.parent.postMessage('DECLINE', '*');
                     window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
                     window.parent.postMessage('CLOSE', '*');
                     window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
                     window.parent.postMessage('EXIT', '*');
                     setTimeout(() => {
                         try {
+                            window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
+                            window.parent.postMessage('DECLINE', '*');
                             window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
                             window.parent.postMessage('CLOSE', '*');
                             window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
