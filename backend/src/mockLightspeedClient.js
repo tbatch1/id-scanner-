@@ -320,12 +320,138 @@ function getAuthState() {
   };
 }
 
+// Mock data for BI features
+const mockOutlets = [
+  { outletId: 'OUTLET-001', name: 'Westheimer', code: 'WH', label: 'Westheimer', currency: 'USD', timezone: 'America/Chicago' },
+  { outletId: 'OUTLET-002', name: 'Galleria', code: 'GA', label: 'Galleria', currency: 'USD', timezone: 'America/Chicago' }
+];
+
+const mockProducts = [
+  { productId: 'PROD-001', name: 'THC Club House Preroll 1g', sku: 'PRE-001', price: 12.99, categoryName: 'Prerolls', active: true },
+  { productId: 'PROD-002', name: 'Infused Gummies 10-pack', sku: 'GUM-001', price: 19.75, categoryName: 'Edibles', active: true },
+  { productId: 'PROD-003', name: 'Premium Flower 3.5g', sku: 'FLW-001', price: 47.98, categoryName: 'Flower', active: true },
+  { productId: 'PROD-004', name: 'Vape Cartridge 1g', sku: 'VAP-001', price: 35.00, categoryName: 'Vapes', active: true },
+  { productId: 'PROD-005', name: 'CBD Tincture 30ml', sku: 'TNC-001', price: 29.99, categoryName: 'Tinctures', active: true }
+];
+
+const mockInventory = [
+  { productId: 'PROD-001', productName: 'THC Club House Preroll 1g', sku: 'PRE-001', outletId: 'OUTLET-001', currentAmount: 45, reorderPoint: 20, averageCost: 6.50, retailPrice: 12.99 },
+  { productId: 'PROD-002', productName: 'Infused Gummies 10-pack', sku: 'GUM-001', outletId: 'OUTLET-001', currentAmount: 8, reorderPoint: 15, averageCost: 9.00, retailPrice: 19.75 },
+  { productId: 'PROD-003', productName: 'Premium Flower 3.5g', sku: 'FLW-001', outletId: 'OUTLET-001', currentAmount: 22, reorderPoint: 10, averageCost: 22.00, retailPrice: 47.98 },
+  { productId: 'PROD-004', productName: 'Vape Cartridge 1g', sku: 'VAP-001', outletId: 'OUTLET-001', currentAmount: 3, reorderPoint: 10, averageCost: 15.00, retailPrice: 35.00 },
+  { productId: 'PROD-005', productName: 'CBD Tincture 30ml', sku: 'TNC-001', outletId: 'OUTLET-001', currentAmount: 18, reorderPoint: 8, averageCost: 12.00, retailPrice: 29.99 },
+  { productId: 'PROD-001', productName: 'THC Club House Preroll 1g', sku: 'PRE-001', outletId: 'OUTLET-002', currentAmount: 32, reorderPoint: 20, averageCost: 6.50, retailPrice: 12.99 },
+  { productId: 'PROD-002', productName: 'Infused Gummies 10-pack', sku: 'GUM-001', outletId: 'OUTLET-002', currentAmount: 25, reorderPoint: 15, averageCost: 9.00, retailPrice: 19.75 },
+  { productId: 'PROD-003', productName: 'Premium Flower 3.5g', sku: 'FLW-001', outletId: 'OUTLET-002', currentAmount: 15, reorderPoint: 10, averageCost: 22.00, retailPrice: 47.98 }
+];
+
+const mockCustomers = [
+  { customerId: 'CUST-001', name: 'Alex Rivera', firstName: 'Alex', lastName: 'Rivera', email: 'alex@example.com', yearToDate: 1250.00, loyaltyBalance: 125 },
+  { customerId: 'CUST-002', name: 'Jordan Lee', firstName: 'Jordan', lastName: 'Lee', email: 'jordan@example.com', yearToDate: 890.50, loyaltyBalance: 89 },
+  { customerId: 'CUST-003', name: 'Sam Chen', firstName: 'Sam', lastName: 'Chen', email: 'sam@example.com', yearToDate: 2100.00, loyaltyBalance: 210 }
+];
+
+const mockUsers = [
+  { userId: 'USER-001', name: 'John Smith', firstName: 'John', lastName: 'Smith', email: 'john@store.com', username: 'jsmith' },
+  { userId: 'USER-002', name: 'Sarah Johnson', firstName: 'Sarah', lastName: 'Johnson', email: 'sarah@store.com', username: 'sjohnson' }
+];
+
+function listOutlets() {
+  return mockOutlets;
+}
+
+function listProducts({ limit = 200, active = true } = {}) {
+  let products = mockProducts;
+  if (active !== null) {
+    products = products.filter(p => p.active === active);
+  }
+  return products.slice(0, limit);
+}
+
+function listInventory({ outletId = null, limit = 200 } = {}) {
+  let inventory = mockInventory;
+  if (outletId) {
+    inventory = inventory.filter(i => i.outletId === outletId);
+  }
+  return inventory.slice(0, limit);
+}
+
+function listCustomers({ limit = 200 } = {}) {
+  return mockCustomers.slice(0, limit);
+}
+
+function listUsers() {
+  return mockUsers;
+}
+
+function listCategories() {
+  return [
+    { categoryId: 'CAT-001', name: 'Prerolls', parentId: null },
+    { categoryId: 'CAT-002', name: 'Edibles', parentId: null },
+    { categoryId: 'CAT-003', name: 'Flower', parentId: null },
+    { categoryId: 'CAT-004', name: 'Vapes', parentId: null },
+    { categoryId: 'CAT-005', name: 'Tinctures', parentId: null }
+  ];
+}
+
+function listSalesWithLineItems({ status = 'CLOSED', limit = 200, outletId = null } = {}) {
+  // Generate mock sales with line items for snapshot testing
+  const now = new Date();
+  const mockSalesData = [];
+
+  for (let i = 0; i < 10; i++) {
+    const saleDate = new Date(now.getTime() - i * 3600000); // Each sale 1 hour apart
+    const outlet = outletId ? mockOutlets.find(o => o.outletId === outletId) : mockOutlets[i % 2];
+
+    mockSalesData.push({
+      saleId: `SALE-${1000 + i}`,
+      total: 50 + Math.random() * 100,
+      totalTax: 5 + Math.random() * 10,
+      outletId: outlet?.outletId || 'OUTLET-001',
+      registerId: 'REG-001',
+      userId: mockUsers[i % 2].userId,
+      customerId: i % 3 === 0 ? mockCustomers[i % 3]?.customerId : null,
+      status: 'CLOSED',
+      saleDate: saleDate.toISOString(),
+      lineItems: [
+        {
+          productId: mockProducts[i % mockProducts.length].productId,
+          productName: mockProducts[i % mockProducts.length].name,
+          sku: mockProducts[i % mockProducts.length].sku,
+          quantity: 1 + Math.floor(Math.random() * 3),
+          unitPrice: mockProducts[i % mockProducts.length].price,
+          lineTotal: mockProducts[i % mockProducts.length].price * (1 + Math.floor(Math.random() * 3))
+        }
+      ]
+    });
+  }
+
+  return mockSalesData.slice(0, limit);
+}
+
+function getUserById(userId) {
+  return mockUsers.find(u => u.userId === userId) || null;
+}
+
+function getOutletById(outletId) {
+  return mockOutlets.find(o => o.outletId === outletId) || null;
+}
+
 module.exports = {
   getSaleById,
   recordVerification,
   completeSale,
   listSales,
+  listSalesWithLineItems,
   listVerifications,
   getComplianceReport,
-  getAuthState
+  getAuthState,
+  listOutlets,
+  listProducts,
+  listInventory,
+  listCustomers,
+  listUsers,
+  listCategories,
+  getUserById,
+  getOutletById
 };

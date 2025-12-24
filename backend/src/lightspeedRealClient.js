@@ -179,6 +179,7 @@ async function listSales({ status = 'OPEN', limit = 10, outletId = null } = {}) 
       outletId: sale.outlet_id || null,
       registerId: sale.register_id || null,
       userId: sale.user_id || null,
+      customerId: sale.customer_id || null,
       status: sale.status || null,
       note: sale.note || null,
       createdAt: sale.created_at || null,
@@ -190,9 +191,208 @@ async function listSales({ status = 'OPEN', limit = 10, outletId = null } = {}) 
   }
 }
 
+// List sales with full line item details (for snapshot aggregation)
+async function listSalesWithLineItems({ status = 'CLOSED', limit = 200, outletId = null, dateFrom = null, dateTo = null } = {}) {
+  try {
+    const params = {
+      page_size: Math.max(1, Math.min(Number.parseInt(limit, 10) || 200, 200)),
+      ...(outletId ? { outlet_id: outletId } : {}),
+      ...(dateFrom ? { date_from: dateFrom } : {}),
+      ...(dateTo ? { date_to: dateTo } : {})
+    };
+
+    if (status) {
+      params.status = status;
+    }
+
+    const response = await api.get('/sales', { params });
+    const sales = response.data.data || [];
+
+    return sales.map((sale) => ({
+      saleId: sale.id,
+      total: parseFloat(sale.total_price || 0),
+      totalTax: parseFloat(sale.total_tax || 0),
+      outletId: sale.outlet_id || null,
+      registerId: sale.register_id || null,
+      userId: sale.user_id || null,
+      customerId: sale.customer_id || null,
+      status: sale.status || null,
+      saleDate: sale.sale_date || sale.created_at || null,
+      lineItems: (sale.line_items || []).map((item) => ({
+        productId: item.product_id || null,
+        productName: item.product?.name || item.name || null,
+        sku: item.product?.sku || item.sku || null,
+        quantity: parseFloat(item.quantity || 0),
+        unitPrice: parseFloat(item.price || 0),
+        lineTotal: parseFloat(item.total || item.price * item.quantity || 0)
+      }))
+    }));
+  } catch (error) {
+    logger.error({ event: 'list_sales_with_line_items_failed', error: error.message });
+    return [];
+  }
+}
+
+// List all outlets
+async function listOutlets() {
+  try {
+    const response = await api.get('/outlets');
+    const outlets = response.data.data || [];
+    return outlets.map((outlet) => ({
+      outletId: outlet.id,
+      name: outlet.name || null,
+      code: outlet.code || null,
+      label: outlet.name || outlet.code || outlet.id,
+      currency: outlet.currency || 'USD',
+      timezone: outlet.time_zone || null
+    }));
+  } catch (error) {
+    logger.error({ event: 'list_outlets_failed', error: error.message });
+    return [];
+  }
+}
+
+// List products with optional filters
+async function listProducts({ limit = 200, active = true, categoryId = null } = {}) {
+  try {
+    const params = {
+      page_size: Math.max(1, Math.min(Number.parseInt(limit, 10) || 200, 200)),
+      ...(active !== null ? { active: active } : {}),
+      ...(categoryId ? { category_id: categoryId } : {})
+    };
+
+    const response = await api.get('/products', { params });
+    const products = response.data.data || [];
+
+    return products.map((product) => ({
+      productId: product.id,
+      name: product.name || null,
+      sku: product.sku || null,
+      description: product.description || null,
+      active: product.active ?? true,
+      brandId: product.brand_id || null,
+      brandName: product.brand?.name || null,
+      categoryId: product.product_category_id || null,
+      categoryName: product.category?.name || null,
+      supplierId: product.supplier_id || null,
+      supplierName: product.supplier?.name || null,
+      price: parseFloat(product.price || 0),
+      supplyPrice: parseFloat(product.supply_price || 0),
+      taxId: product.tax_id || null
+    }));
+  } catch (error) {
+    logger.error({ event: 'list_products_failed', error: error.message });
+    return [];
+  }
+}
+
+// Get inventory levels by outlet
+async function listInventory({ outletId = null, limit = 200 } = {}) {
+  try {
+    const params = {
+      page_size: Math.max(1, Math.min(Number.parseInt(limit, 10) || 200, 200)),
+      ...(outletId ? { outlet_id: outletId } : {})
+    };
+
+    const response = await api.get('/inventory', { params });
+    const inventory = response.data.data || [];
+
+    return inventory.map((item) => ({
+      productId: item.product_id || null,
+      productName: item.product?.name || null,
+      sku: item.product?.sku || null,
+      outletId: item.outlet_id || null,
+      currentAmount: parseFloat(item.current_amount || 0),
+      reorderPoint: parseFloat(item.reorder_point || 0),
+      reorderAmount: parseFloat(item.reorder_amount || 0),
+      averageCost: parseFloat(item.average_cost || 0),
+      retailPrice: parseFloat(item.product?.price || 0)
+    }));
+  } catch (error) {
+    logger.error({ event: 'list_inventory_failed', error: error.message });
+    return [];
+  }
+}
+
+// List customers with optional filters
+async function listCustomers({ limit = 200, email = null } = {}) {
+  try {
+    const params = {
+      page_size: Math.max(1, Math.min(Number.parseInt(limit, 10) || 200, 200)),
+      ...(email ? { email: email } : {})
+    };
+
+    const response = await api.get('/customers', { params });
+    const customers = response.data.data || [];
+
+    return customers.map((customer) => ({
+      customerId: customer.id,
+      name: customer.name || `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || null,
+      firstName: customer.first_name || null,
+      lastName: customer.last_name || null,
+      email: customer.email || null,
+      phone: customer.phone || null,
+      customerGroupId: customer.customer_group_id || null,
+      yearToDate: parseFloat(customer.year_to_date || 0),
+      balance: parseFloat(customer.balance || 0),
+      loyaltyBalance: parseFloat(customer.loyalty_balance || 0),
+      createdAt: customer.created_at || null
+    }));
+  } catch (error) {
+    logger.error({ event: 'list_customers_failed', error: error.message });
+    return [];
+  }
+}
+
+// Get product categories
+async function listCategories() {
+  try {
+    const response = await api.get('/product-categories');
+    const categories = response.data.data || [];
+
+    return categories.map((cat) => ({
+      categoryId: cat.id,
+      name: cat.name || null,
+      parentId: cat.parent_id || null
+    }));
+  } catch (error) {
+    logger.error({ event: 'list_categories_failed', error: error.message });
+    return [];
+  }
+}
+
+// List all users (employees)
+async function listUsers() {
+  try {
+    const response = await api.get('/users');
+    const users = response.data.data || [];
+
+    return users.map((user) => ({
+      userId: user.id,
+      name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || null,
+      firstName: user.first_name || null,
+      lastName: user.last_name || null,
+      email: user.email || null,
+      username: user.username || null
+    }));
+  } catch (error) {
+    logger.error({ event: 'list_users_failed', error: error.message });
+    return [];
+  }
+}
+
 module.exports = {
   getSaleById,
   recordVerification,
   completeSale,
-  listSales
+  listSales,
+  listSalesWithLineItems,
+  listOutlets,
+  listProducts,
+  listInventory,
+  listCustomers,
+  listCategories,
+  listUsers,
+  getUserById,
+  getOutletById
 };

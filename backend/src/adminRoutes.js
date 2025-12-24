@@ -3,6 +3,7 @@ const lightspeed = require('./lightspeedClient');
 const config = require('./config');
 const db = require('./db');
 const logger = require('./logger');
+const chatService = require('./chatService');
 
 const router = express.Router();
 
@@ -436,6 +437,71 @@ router.get('/transactions', async (req, res) => {
       message: 'Failed to retrieve transactions'
     });
   }
+});
+
+// POST /admin/chat - AI-powered business intelligence chat
+router.post('/chat', async (req, res) => {
+  const { message, history = [] } = req.body || {};
+
+  if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    return res.status(400).json({
+      error: 'INVALID_REQUEST',
+      message: 'Message is required'
+    });
+  }
+
+  // Rate limiting - simple in-memory (for production, use Redis)
+  const clientIp = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+
+  try {
+    // Check if service is configured
+    if (!chatService.isConfigured()) {
+      return res.status(503).json({
+        error: 'NOT_CONFIGURED',
+        message: 'AI assistant is not configured. Set ANTHROPIC_API_KEY environment variable.'
+      });
+    }
+
+    // Log the request
+    logger.info({
+      event: 'chat_request',
+      clientIp,
+      messageLength: message.length,
+      historyLength: history.length
+    });
+
+    // Process chat
+    const result = await chatService.chat(message.trim(), history);
+
+    if (!result.success) {
+      return res.status(500).json({
+        error: result.error,
+        message: result.message
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      response: result.message,
+      toolsUsed: result.toolsUsed,
+      usage: result.usage
+    });
+
+  } catch (error) {
+    logger.logAPIError('admin_chat', error, { messageLength: message?.length });
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to process chat request'
+    });
+  }
+});
+
+// GET /admin/chat/status - Check if chat is configured
+router.get('/chat/status', (req, res) => {
+  res.json({
+    configured: chatService.isConfigured(),
+    features: ['sales', 'inventory', 'customers', 'compliance']
+  });
 });
 
 router.get('/', (req, res) => {
