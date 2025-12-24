@@ -1467,6 +1467,7 @@
         const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
         const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
         const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
+        const paymentTypeKeyPresent = ['type', 'paymentType', 'payment_type', 'tender', 'method'].some((k) => urlParams.has(k));
         const paymentTypeRaw = (
             urlParams.get('type') ||
             urlParams.get('paymentType') ||
@@ -1475,7 +1476,10 @@
             urlParams.get('method') ||
             'cash'
         ).toLowerCase();
-        const paymentType = paymentTypeRaw.includes('card') ? 'card' : 'cash';
+        const cardModeKeyPresent = urlParams.has('cardMode') || urlParams.has('card_mode');
+        // If Lightspeed doesn't pass an explicit payment type but does pass a cardMode param (common for card buttons),
+        // assume this is the card flow. Otherwise default to cash for backwards compatibility.
+        const paymentType = (paymentTypeRaw.includes('card') || (!paymentTypeKeyPresent && cardModeKeyPresent)) ? 'card' : 'cash';
         const isRefund = Number.isFinite(saleAmount) && saleAmount < 0;
         const cardMode = (urlParams.get('cardMode') || (urlParams.get('card_mode') || '')).toLowerCase() || 'precheck'; // 'precheck' | 'external'
         const cashUiEnabled = cashUiExplicitlyDisabled
@@ -1483,7 +1487,7 @@
             : (cashUiEnabledFromParam || (paymentType === 'cash' && !isRefund));
 
         console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount, paymentType, remoteScanEnabled, cashUiEnabled });
-        sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} cardMode=${cardMode} amount=${saleAmount} refund=${isRefund} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled}`);
+        sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} typeRaw=${paymentTypeRaw || 'n/a'} typeKey=${paymentTypeKeyPresent} cardModeKey=${cardModeKeyPresent} cardMode=${cardMode} amount=${saleAmount} refund=${isRefund} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled}`);
 
         function buildReturnUrl() {
             const explicit = urlParams.get('return') || urlParams.get('returnUrl') || urlParams.get('return_url');
