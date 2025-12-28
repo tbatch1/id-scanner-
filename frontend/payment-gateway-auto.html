@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>THC Club - ID Verification</title>
+    <title>THC Club - Smart Checkout</title>
 
     <!-- GSAP Animation Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
@@ -25,48 +25,21 @@
             --success: #10b981;
             --error: #ef4444;
             --warning: #f59e0b;
+            --bg-dark: #0f1419;
+            --card-bg: rgba(26, 26, 46, 0.95);
         }
 
         body {
             font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f1419 100%);
+            background: var(--bg-dark);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: auto;
-            -webkit-overflow-scrolling: touch;
-            position: relative;
-            touch-action: manipulation;
-        }
-
-        /* Embedded iframe mode: reduce visual noise in POS */
-        body.embedded {
-            background: #0f1419;
+            color: white;
             overflow-y: auto;
             overflow-x: hidden;
-            display: block;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             padding-top: 20px;
-        }
-
-        body.embedded .scanner-wrap {
-            margin: 0 auto;
-        }
-
-
-        body.embedded .grid-bg,
-        body.embedded #particles {
-            display: none !important;
-        }
-
-        body.embedded .scanner-wrap {
-            max-width: 520px;
-            padding: 12px;
-        }
-
-        body.embedded .scan-card,
-        body.embedded .result-card {
-            box-shadow: none;
         }
 
         /* Animated grid background */
@@ -81,106 +54,35 @@
                 linear-gradient(90deg, rgba(66, 180, 230, 0.03) 1px, transparent 1px);
             background-size: 50px 50px;
             pointer-events: none;
+            z-index: -1;
         }
 
-        /* Floating particles */
-        .particle {
-            position: absolute;
-            border-radius: 50%;
-            pointer-events: none;
-            opacity: 0.6;
-        }
-
-        /* Main container */
         .scanner-wrap {
             position: relative;
             width: 100%;
             max-width: 480px;
             padding: 20px;
-        }
-
-        /* ========== SCAN STATE ========== */
-        .scan-card {
-            background: linear-gradient(145deg, rgba(26, 26, 46, 0.95), rgba(15, 20, 25, 0.98));
-            border: 2px solid rgba(66, 180, 230, 0.2);
-            border-radius: 24px;
-            padding: 40px 30px;
             text-align: center;
-            position: relative;
-            overflow: hidden;
-            box-shadow:
-                0 0 60px rgba(66, 180, 230, 0.15),
-                0 25px 50px rgba(0, 0, 0, 0.5),
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
-            cursor: pointer;
-            transition: all 0.3s ease;
         }
 
-        .scan-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(66, 180, 230, 0.1), transparent);
-            transition: left 0.5s ease;
-        }
-
-        .scan-card:active {
-            transform: scale(0.98);
-            border-color: var(--thc-orange);
-        }
-
-        .scan-card:active::before {
-            left: 100%;
-        }
-
-        /* Logo container with glow */
+        /* ========== LOGO & RING ========== */
         .logo-container {
             position: relative;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .logo {
-            width: 200px;
+            width: 140px;
             height: auto;
-            filter: drop-shadow(0 0 30px rgba(66, 180, 230, 0.4));
-            transition: all 0.3s ease;
+            filter: drop-shadow(0 0 30px rgba(66, 180, 230, 0.3));
+            z-index: 2;
         }
 
-        .logo-glow {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 250px;
-            height: 250px;
-            background: radial-gradient(circle, rgba(66, 180, 230, 0.2) 0%, transparent 70%);
-            border-radius: 50%;
-            animation: logoGlow 3s ease-in-out infinite;
-        }
-
-        @keyframes logoGlow {
-
-            0%,
-            100% {
-                opacity: 0.5;
-                transform: translate(-50%, -50%) scale(1);
-            }
-
-            50% {
-                opacity: 0.8;
-                transform: translate(-50%, -50%) scale(1.1);
-            }
-        }
-
-        /* Scanning ring animation */
         .scan-ring {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
             width: 180px;
             height: 180px;
             border: 3px solid transparent;
@@ -188,6 +90,7 @@
             border-right-color: var(--thc-blue);
             border-radius: 50%;
             opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
         .scanning .scan-ring {
@@ -197,810 +100,244 @@
 
         @keyframes spinRing {
             to {
-                transform: translate(-50%, -50%) rotate(360deg);
+                transform: rotate(360deg);
             }
         }
 
-        /* Scan line effect */
-        .scan-line {
-            position: absolute;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: linear-gradient(90deg,
-                    transparent 0%,
-                    var(--thc-blue) 20%,
-                    var(--thc-orange) 50%,
-                    var(--thc-blue) 80%,
-                    transparent 100%);
-            box-shadow:
-                0 0 20px var(--thc-blue),
-                0 0 40px rgba(66, 180, 230, 0.5);
-            opacity: 0;
-            top: -10px;
-        }
-
-        /* Title styling */
-        .scan-title {
-            color: #fff;
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 10px;
+        /* ========== HEADERS ========== */
+        .main-title {
+            font-size: 28px;
+            font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 3px;
-            text-shadow: 0 0 20px rgba(66, 180, 230, 0.5);
+            letter-spacing: 2px;
+            margin-bottom: 5px;
         }
 
-        .scan-subtitle {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 16px;
-            margin-bottom: 25px;
+        .subtitle {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
         }
 
-        /* In-iframe scan box (gives HID scanners a real focus target) */
-        .scan-input-section {
-            margin-top: 18px;
+        /* ========== TENDER SELECTION BOX ========== */
+        .tender-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 30px;
+            position: relative;
             text-align: left;
         }
 
-        .scan-input-hint {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 13px;
-            margin: 0 0 10px;
-        }
-
-        .scan-input {
-            width: 100%;
-            min-height: 110px;
-            resize: none;
-            padding: 12px;
-            border-radius: 14px;
-            border: 2px solid rgba(66, 180, 230, 0.25);
-            background: rgba(0, 0, 0, 0.25);
-            color: rgba(255, 255, 255, 0.95);
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        .tender-label {
             font-size: 12px;
-            line-height: 1.35;
-            outline: none;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .scan-input:focus {
-            border-color: rgba(66, 180, 230, 0.8);
-            box-shadow: 0 0 0 3px rgba(66, 180, 230, 0.15);
-        }
-
-        .scan-card-close {
-            position: absolute;
-            top: 14px;
-            right: 14px;
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            border: 2px solid rgba(255, 255, 255, 0.15);
-            background: rgba(0, 0, 0, 0.25);
-            color: rgba(255, 255, 255, 0.85);
-            font-size: 22px;
-            line-height: 1;
-            cursor: pointer;
-            z-index: 2;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            justify-content: center;
-            -webkit-tap-highlight-color: transparent;
         }
 
-        .scan-card-close:active {
-            transform: scale(0.97);
-            background: rgba(255, 255, 255, 0.08);
+        .choose-badge {
+            background: var(--thc-orange);
+            color: black;
+            font-weight: 900;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 5px;
         }
 
-        /* Status indicator */
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 28px;
-            background: rgba(46, 167, 80, 0.15);
-            border: 2px solid var(--thc-green);
+        .tender-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .tender-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .tender-btn:active {
+            transform: scale(0.95);
+        }
+
+        .tender-btn.selected {
+            border-color: var(--thc-blue);
+            background: rgba(66, 180, 230, 0.1);
+            box-shadow: 0 0 20px rgba(66, 180, 230, 0.3);
+        }
+
+        .tender-hint {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        /* ========== SCAN BUTTON ========== */
+        .scan-now-btn {
+            background: rgba(229, 92, 44, 0.1);
+            border: 2px solid var(--thc-orange);
+            color: var(--thc-orange);
+            width: 100%;
+            padding: 15px 40px;
             border-radius: 50px;
-            color: var(--thc-green);
-            font-weight: 600;
-            font-size: 14px;
+            font-size: 18px;
+            font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 2px;
-            box-shadow: 0 0 20px rgba(46, 167, 80, 0.2);
-            animation: statusPulse 2s ease-in-out infinite;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin: 0 auto;
+            opacity: 0.5;
+            pointer-events: none;
         }
 
-        .status-indicator.scanning {
-            background: rgba(229, 92, 44, 0.15);
-            border-color: var(--thc-orange);
-            color: var(--thc-orange);
-            box-shadow: 0 0 20px rgba(229, 92, 44, 0.3);
+        .scan-now-btn.ready {
+            opacity: 1;
+            pointer-events: auto;
+            background: rgba(229, 92, 44, 0.2);
+            box-shadow: 0 0 30px rgba(229, 92, 44, 0.2);
         }
 
-        @keyframes statusPulse {
-
-            0%,
-            100% {
-                box-shadow: 0 0 20px rgba(46, 167, 80, 0.2);
-            }
-
-            50% {
-                box-shadow: 0 0 35px rgba(46, 167, 80, 0.4);
-            }
+        .scan-now-btn:active {
+            transform: scale(0.97);
         }
 
-        .status-dot {
+        .scan-dot {
             width: 8px;
             height: 8px;
             background: currentColor;
             border-radius: 50%;
-            animation: dotPulse 1s ease-in-out infinite;
         }
 
-        @keyframes dotPulse {
+        .scanning .scan-dot {
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
 
             0%,
             100% {
                 opacity: 1;
+                transform: scale(1);
             }
 
             50% {
                 opacity: 0.4;
+                transform: scale(0.8);
             }
         }
 
-        /* Action buttons */
-        .action-row {
-            margin-top: 30px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+        /* ========== HIDDEN INPUT ========== */
+        #ghostInput {
+            position: fixed;
+            top: -100px;
+            left: -100px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
         }
 
-        .btn {
-            padding: 14px 28px;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: all 0.2s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .btn:active {
-            transform: scale(0.97);
-        }
-
-        .btn-override {
-            background: rgba(245, 158, 11, 0.1);
-            border-color: var(--warning);
-            color: var(--warning);
-        }
-
-        .btn-cancel {
-            background: transparent;
-            border-color: rgba(255, 255, 255, 0.2);
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        /* ========== SUCCESS STATE ========== */
-        .result-card {
+        /* ========== OVERLAYS & SUCCESS/ERROR ========== */
+        .overlay-card {
             display: none;
-            background: linear-gradient(145deg, rgba(26, 26, 46, 0.95), rgba(15, 20, 25, 0.98));
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 30px;
             border: 2px solid var(--thc-green);
-            border-radius: 24px;
-            padding: 50px 30px;
+            margin-top: 20px;
             text-align: center;
-            box-shadow: 0 0 60px rgba(46, 167, 80, 0.2), 0 25px 50px rgba(0, 0, 0, 0.5);
-            animation: fadeIn 0.4s ease;
         }
 
-        .result-card.active {
+        .overlay-card.active {
             display: block;
         }
 
-        .result-card.error {
+        .overlay-card.error {
             border-color: var(--error);
-            box-shadow: 0 0 60px rgba(239, 68, 68, 0.2), 0 25px 50px rgba(0, 0, 0, 0.5);
         }
 
-        .result-icon {
-            font-size: 80px;
-            margin-bottom: 20px;
-            animation: bounceIn 0.5s ease;
-        }
-
-        @keyframes bounceIn {
-            0% {
-                transform: scale(0);
-            }
-
-            50% {
-                transform: scale(1.2);
-            }
-
-            100% {
-                transform: scale(1);
-            }
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .result-title {
-            font-size: 36px;
-            font-weight: 700;
+        .overlay-card h2 {
             margin-bottom: 10px;
             text-transform: uppercase;
-            letter-spacing: 2px;
         }
 
-        .result-card.success .result-title {
-            color: var(--thc-green);
-        }
-
-        .result-card.error .result-title {
-            color: var(--error);
-        }
-
-        .result-details {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 18px;
-            margin-bottom: 30px;
-        }
-
-        .btn-success {
-            background: var(--thc-green);
-            border-color: var(--thc-green);
-            color: white;
-        }
-
-        .btn-retry {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.3);
-            color: white;
-        }
-
-        /* ========== MODAL ========== */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .modal-overlay.active {
-            display: flex;
-        }
-
-        .modal {
-            background: linear-gradient(145deg, #1e293b, #0f172a);
-            border: 2px solid var(--thc-orange);
-            padding: 30px;
-            border-radius: 20px;
-            width: 90%;
-            max-width: 360px;
-            box-shadow: 0 0 40px rgba(229, 92, 44, 0.2);
-            animation: fadeIn 0.3s ease;
-        }
-
-        .modal h2 {
-            color: white;
-            margin-bottom: 10px;
-            font-size: 22px;
-        }
-
-        .modal p {
-            color: rgba(255, 255, 255, 0.6);
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
-
-        .pin-input {
-            width: 100%;
-            padding: 16px;
-            font-size: 32px;
-            letter-spacing: 12px;
-            text-align: center;
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            color: white;
-            margin-bottom: 15px;
-        }
-
-        .pin-input:focus {
-            outline: none;
-            border-color: var(--thc-orange);
-        }
-
-        .note-input {
-            width: 100%;
-            padding: 12px;
-            font-size: 14px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            color: white;
+        .overlay-card p {
+            opacity: 0.8;
             margin-bottom: 20px;
         }
 
-        .modal-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .modal-actions .btn {
-            flex: 1;
-            padding: 12px;
-        }
-
-        /* ========== NUMBER PAD STYLES ========== */
-        .numpad-modal {
-            max-width: 320px;
-            padding: 25px;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-
-        .modal-header h2 {
-            margin: 0;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 24px;
-            cursor: pointer;
-            padding: 5px 10px;
-            border-radius: 8px;
-        }
-
-        .close-btn:active {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .pin-display {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin: 20px 0;
-        }
-
-        .pin-dot {
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            transition: all 0.15s ease;
-        }
-
-        .pin-dot.filled {
+        .btn-action {
             background: var(--thc-orange);
-            border-color: var(--thc-orange);
-            box-shadow: 0 0 10px rgba(229, 92, 44, 0.5);
+            border: none;
+            color: black;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 800;
+            cursor: pointer;
+            text-transform: uppercase;
         }
 
-        .numpad {
+        /* ========== CASH CALCULATOR (re-styled) ========== */
+        .cash-wrap {
+            display: none;
+            width: 100%;
+            max-width: 480px;
+            padding: 20px;
+        }
+
+        .cash-total-banner {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+        }
+
+        .cash-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-top: 15px;
-        }
-
-        .numpad-btn {
-            padding: 20px;
-            font-size: 28px;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 15px;
-            color: white;
-            cursor: pointer;
-            transition: all 0.1s ease;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .numpad-btn:active {
-            background: rgba(255, 255, 255, 0.25);
-            transform: scale(0.95);
-        }
-
-        .numpad-clear {
-            background: rgba(239, 68, 68, 0.2);
-            border-color: rgba(239, 68, 68, 0.4);
-        }
-
-        .numpad-submit {
-            background: rgba(46, 167, 80, 0.3);
-            border-color: var(--thc-green);
-            color: var(--thc-green);
-        }
-
-        .numpad-submit:active {
-            background: rgba(46, 167, 80, 0.5);
-        }
-
-        .error-msg {
-            color: #ef4444;
-            text-align: center;
-            min-height: 20px;
-            margin-top: 10px;
-            font-size: 14px;
-        }
-
-        /* ========== CASH PAYMENT SCREEN ========== */
-        .cash-wrap {
-            max-width: 700px;
-            padding: 15px;
-        }
-
-        .cash-screen {
-            background: linear-gradient(145deg, rgba(26, 26, 46, 0.95), rgba(15, 20, 25, 0.98));
-            border: 2px solid rgba(46, 167, 80, 0.3);
-            border-radius: 20px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 0 60px rgba(46, 167, 80, 0.15), 0 25px 50px rgba(0, 0, 0, 0.5);
-            display: none;
-        }
-
-        .cash-screen.active {
-            display: block;
-        }
-
-        .cash-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .btn-close-cash {
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-            color: #f87171;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .btn-close-cash:active {
-            background: rgba(239, 68, 68, 0.3);
-        }
-
-        .cash-columns {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 15px;
-        }
-
-        .cash-left,
-        .cash-right {
-            flex: 1;
-        }
-
-        .cash-logo-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 15px;
-            padding: 10px;
-        }
-
-        .cash-logo {
-            width: 100px;
-            height: auto;
-            opacity: 0.7;
-            filter: drop-shadow(0 0 15px rgba(66, 180, 230, 0.3));
-        }
-
-        .cash-footer {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-
-        .cash-footer .change-display {
-            flex: 1;
-            margin: 0;
-            padding: 12px;
-        }
-
-        .cash-footer .complete-cash-btn {
-            flex: 1;
-            margin: 0;
-        }
-
-        .cash-total {
-            font-size: 48px;
-            font-weight: 700;
-            color: var(--thc-green);
-            margin-bottom: 5px;
-        }
-
-        .cash-label {
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 20px;
-        }
-
-        .quick-amounts {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 20px;
-            touch-action: manipulation;
-        }
-
-        .quick-amount-btn {
-            padding: 18px 15px;
-            font-size: 22px;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.08);
-            border: 2px solid rgba(255, 255, 255, 0.15);
-            border-radius: 15px;
-            color: white;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            touch-action: manipulation;
-            -webkit-tap-highlight-color: transparent;
-            -webkit-touch-callout: none;
-            user-select: none;
-        }
-
-        .quick-amount-btn:active {
-            background: rgba(46, 167, 80, 0.3);
-            border-color: var(--thc-green);
-            transform: scale(0.97);
-        }
-
-        .quick-amount-btn.exact,
-        .quick-amount-btn.selected {
-            background: rgba(46, 167, 80, 0.2);
-            border-color: var(--thc-green);
-            color: var(--thc-green);
-        }
-
-        .cash-input-row {
-            display: flex;
             gap: 10px;
             margin-bottom: 20px;
         }
 
-        .cash-input {
-            flex: 1;
-            padding: 15px;
-            font-size: 24px;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.2);
+        .cash-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
             border-radius: 12px;
-            color: white;
-            text-align: center;
-        }
-
-        .cash-input:focus {
-            outline: none;
-            border-color: var(--thc-blue);
-        }
-
-        .cash-enter-btn {
-            padding: 15px 25px;
-            font-size: 18px;
-            font-weight: 600;
-            background: var(--thc-blue);
-            border: none;
-            border-radius: 12px;
+            font-size: 20px;
+            font-weight: 700;
             color: white;
             cursor: pointer;
+        }
+
+        .cash-btn:active {
+            background: var(--thc-orange);
+            color: black;
         }
 
         .change-display {
-            background: rgba(46, 167, 80, 0.15);
-            border: 2px solid var(--thc-green);
-            border-radius: 15px;
-            padding: 20px;
-            margin-top: 15px;
-        }
-
-        .change-label {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        .change-amount {
-            font-size: 42px;
-            font-weight: 700;
-            color: var(--thc-green);
-            margin: 5px 0;
-        }
-
-        .complete-cash-btn {
-            width: 100%;
-            padding: 18px;
-            font-size: 20px;
-            font-weight: 600;
-            background: linear-gradient(135deg, var(--thc-orange) 0%, #ff8f00 100%);
-            border: none;
-            border-radius: 15px;
-            color: white;
-            cursor: pointer;
-            margin-top: 15px;
-            transition: all 0.2s ease;
-        }
-
-        .complete-cash-btn:active {
-            transform: scale(0.98);
-        }
-
-        .complete-cash-btn:disabled {
-            background: rgba(229, 92, 44, 0.3);
-            /* Faded THC orange */
-            border: 1px solid rgba(229, 92, 44, 0.1);
-            color: rgba(255, 255, 255, 0.5);
-            cursor: not-allowed;
-        }
-
-        /* Cash numpad for custom amounts */
-        .custom-amount-display {
             font-size: 32px;
-            font-weight: 700;
-            color: var(--thc-blue);
-            padding: 15px;
-            background: rgba(66, 180, 230, 0.1);
-            border: 2px solid rgba(66, 180, 230, 0.3);
-            border-radius: 12px;
-            margin-bottom: 15px;
-        }
-
-        .cash-numpad {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .cash-num-btn {
-            padding: 18px;
-            font-size: 24px;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            color: white;
-            cursor: pointer;
-            transition: all 0.1s ease;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .cash-num-btn:active {
-            background: rgba(255, 255, 255, 0.25);
-            transform: scale(0.95);
-        }
-
-        .cash-num-clear {
-            background: rgba(239, 68, 68, 0.2);
-            border-color: rgba(239, 68, 68, 0.4);
-        }
-
-        .cash-num-apply {
-            background: rgba(46, 167, 80, 0.3);
-            border-color: var(--thc-green);
+            font-weight: 800;
             color: var(--thc-green);
-        }
-
-        .cash-num-apply:active {
-            background: rgba(46, 167, 80, 0.5);
-        }
-
-        .mode-picker {
-            margin-top: 10px;
-            padding: 12px;
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-        }
-
-        .mode-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 10px;
-        }
-
-        .mode-label {
-            font-size: 12px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: rgba(255, 255, 255, 0.72);
-        }
-
-        .mode-badge {
-            font-size: 12px;
-            font-weight: 800;
-            padding: 4px 10px;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.14);
-        }
-
-        .mode-badge.cash {
-            background: rgba(245, 158, 11, 0.18);
-            border-color: rgba(245, 158, 11, 0.35);
-        }
-
-        .mode-badge.card {
-            background: rgba(46, 167, 80, 0.22);
-            border-color: rgba(46, 167, 80, 0.35);
-        }
-
-        .mode-buttons {
-            display: flex;
-            gap: 10px;
-        }
-
-        .mode-btn {
-            flex: 1;
-            padding: 12px;
-            border-radius: 12px;
-            border: 2px solid rgba(255, 255, 255, 0.18);
-            background: rgba(255, 255, 255, 0.08);
-            color: white;
-            font-weight: 800;
-            cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .mode-btn:active {
-            transform: scale(0.99);
-        }
-
-        .mode-btn.cash {
-            border-color: rgba(245, 158, 11, 0.35);
-        }
-
-        .mode-btn.card {
-            border-color: rgba(46, 167, 80, 0.35);
-        }
-
-        .mode-hint {
-            margin-top: 10px;
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.7);
+            margin: 20px 0;
         }
 
         .hidden {
@@ -1009,1382 +346,259 @@
     </style>
 </head>
 
-<body>
-    <!-- Grid background -->
-    <div class="grid-bg" style="pointer-events: none;"></div>
+<body class="embedded">
+    <div class="grid-bg"></div>
+    <input type="text" id="ghostInput" autocomplete="off" inputmode="none">
 
-    <!-- Particles container -->
-    <div id="particles" style="pointer-events: none;"></div>
-
-    <!-- Hidden input for iOS HID focus -->
-    <input type="text" id="hiddenScannerInput"
-        style="position: fixed; top: 0; left: 0; width: 100px; height: 100px; opacity: 0.01; border: none; background: transparent; color: transparent; caret-color: transparent; outline: none; z-index: -1;"
-        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="none" />
-
-    <div class="scanner-wrap">
-        <!-- ========== SCAN STATE ========== -->
-        <div class="scan-card" id="scanCard">
-            <div class="scan-line" id="scanLine"></div>
-            <button class="scan-card-close" id="closeIframeBtn" type="button" aria-label="Close">×</button>
-
-            <div class="logo-container">
-                <div class="logo-glow"></div>
-                <div class="scan-ring" id="scanRing"></div>
-                <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="logo" id="logo">
-            </div>
-
-            <h1 class="scan-title" id="scanTitle">Tap to Scan</h1>
-            <p class="scan-subtitle" id="scanSubtitle">Touch here to activate scanner</p>
-
-            <div class="mode-picker hidden" id="modePickerWrap">
-                <div class="mode-row">
-                    <div class="mode-label">Tender</div>
-                    <div class="mode-badge" id="modeBadge">UNKNOWN</div>
-                </div>
-                <div class="mode-buttons" id="modeButtons">
-                    <button class="mode-btn cash" id="btnModeCash" type="button">Cash</button>
-                    <button class="mode-btn card" id="btnModeCard" type="button">Card</button>
-                </div>
-                <div class="mode-hint" id="modeHint">If you tapped the ID Card button, choose Card.</div>
-            </div>
-
-            <div class="status-indicator" id="statusIndicator">
-                <span class="status-dot"></span>
-                <span id="statusText">Ready</span>
-            </div>
-
-            <div class="scan-input-section hidden" id="scanInputSection">
-                <p class="scan-input-hint" id="scanInputHint">Tap the box, then scan. If nothing types here, scan into
-                    the
-                    sale Notes field instead.</p>
-                <textarea id="scanInput" class="scan-input" rows="5"
-                    placeholder="Tap here, then scan ID (the scan should appear here)…" autocomplete="off"
-                    autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="none"></textarea>
-            </div>
-
-            <div class="action-row">
-                <button class="btn btn-override" onclick="showOverrideModal()">Manual Override</button>
-                <button class="btn btn-cancel" onclick="cancelVerification()">Cancel</button>
-            </div>
+    <div class="scanner-wrap" id="mainWrap">
+        <!-- Logo Area -->
+        <div class="logo-container" id="visualRoot">
+            <div class="scan-ring"></div>
+            <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="logo">
         </div>
 
-        <!-- ========== SUCCESS STATE ========== -->
-        <div class="result-card success" id="successCard">
-            <div class="result-icon">✅</div>
-            <h1 class="result-title">Verified</h1>
-            <p class="result-details" id="successDetails">Age 21+ Confirmed</p>
-            <button class="btn btn-success" id="successPrimaryBtn">Return to POS</button>
+        <h1 class="main-title">Select Tender Type</h1>
+        <p class="subtitle">Tap the box below, then scan the ID.</p>
+
+        <!-- Tender Selection Box -->
+        <div class="tender-box" id="tenderBox">
+            <div class="tender-label">
+                Tender
+                <span class="choose-badge">CHOOSE</span>
+            </div>
+            <div class="tender-buttons">
+                <button class="tender-btn" id="btnCash">Cash</button>
+                <button class="tender-btn" id="btnCard">Card</button>
+            </div>
+            <div class="tender-hint">If you tapped the ID Card button, choose Card.</div>
         </div>
 
-        <!-- ========== ERROR STATE ========== -->
-        <div class="result-card error" id="errorCard">
-            <div class="result-icon">❌</div>
-            <h1 class="result-title">Failed</h1>
-            <p class="result-details" id="errorDetails">Verification failed</p>
-            <div style="display: flex; gap: 10px; justify-content: center;">
-                <button class="btn btn-retry" onclick="retry()">Try Again</button>
-                <button class="btn btn-override" onclick="showOverrideModal()">Override</button>
-            </div>
+        <!-- Scan Trigger -->
+        <button class="scan-now-btn" id="btnScanNow">
+            <span class="scan-dot"></span>
+            Scan Now
+        </button>
+
+        <!-- Success overlay -->
+        <div id="successOverlay" class="overlay-card">
+            <h2 style="color: var(--thc-green)">Verified</h2>
+            <p id="successMsg">Customer is 21+</p>
+            <div id="successDetails" style="font-size: 12px; margin-bottom: 20px; opacity: 0.6;"></div>
+            <button class="btn-action" id="btnContinue">Continue</button>
+        </div>
+
+        <!-- Error overlay -->
+        <div id="errorOverlay" class="overlay-card error">
+            <h2 style="color: var(--error)">Error</h2>
+            <p id="errorMsg">Failed to verify ID</p>
+            <button class="btn-action" style="background: var(--error)" onclick="location.reload()">Try Again</button>
         </div>
     </div>
 
-    <!-- ========== OVERRIDE MODAL WITH NUMBER PAD ========== -->
-    <div id="overrideModal" class="modal-overlay">
-        <div class="modal numpad-modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h2>Manager Override</h2>
-                <button class="close-btn" id="closeModalBtn">✕</button>
-            </div>
-            <p>Enter 4-digit PIN</p>
-
-            <!-- PIN Display -->
-            <div class="pin-display" id="pinDisplay">
-                <span class="pin-dot"></span>
-                <span class="pin-dot"></span>
-                <span class="pin-dot"></span>
-                <span class="pin-dot"></span>
-            </div>
-
-            <!-- Number Pad -->
-            <div class="numpad">
-                <button class="numpad-btn" data-num="1">1</button>
-                <button class="numpad-btn" data-num="2">2</button>
-                <button class="numpad-btn" data-num="3">3</button>
-                <button class="numpad-btn" data-num="4">4</button>
-                <button class="numpad-btn" data-num="5">5</button>
-                <button class="numpad-btn" data-num="6">6</button>
-                <button class="numpad-btn" data-num="7">7</button>
-                <button class="numpad-btn" data-num="8">8</button>
-                <button class="numpad-btn" data-num="9">9</button>
-                <button class="numpad-btn numpad-clear" data-action="clear">⌫</button>
-                <button class="numpad-btn" data-num="0">0</button>
-                <button class="numpad-btn numpad-submit" data-action="submit">✓</button>
-            </div>
-
-            <p class="error-msg" id="pinError"></p>
+    <!-- Cash Calculator -->
+    <div class="cash-wrap" id="cashWrap">
+        <div class="cash-total-banner">
+            <div style="font-size: 12px; opacity: 0.6;">SALE TOTAL</div>
+            <div id="dispSaleTotal" style="font-size: 36px; font-weight: 800;">$0.00</div>
         </div>
-    </div>
 
-    <!-- ========== CASH PAYMENT SCREEN ========== -->
-    <div class="scanner-wrap cash-wrap" id="cashScreenWrap" style="display: none;">
-        <div class="cash-screen active" id="cashScreen">
-            <!-- Header row: Total amount with Close button -->
-            <div class="cash-header">
-                <button class="btn-close-cash" id="btnCloseCash" onclick="cancelVerification()">✕ Close</button>
-                <div class="cash-label">Amount Due</div>
-                <div class="cash-total" id="cashTotal">$0.00</div>
-            </div>
+        <div style="font-size: 12px; opacity: 0.6; margin-bottom: 10px;">CASH RECEIVED</div>
+        <div id="dispReceived" style="font-size: 32px; font-weight: 700; margin-bottom: 20px;">$0.00</div>
 
-            <!-- Two column layout -->
-            <div class="cash-columns">
-                <!-- Left: Quick select buttons -->
-                <div class="cash-left">
-                    <div class="cash-label">Quick Select</div>
-                    <div class="quick-amounts" id="quickAmounts">
-                        <!-- Populated by JavaScript -->
-                    </div>
-                    <!-- THC Logo -->
-                    <div class="cash-logo-container">
-                        <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="cash-logo">
-                    </div>
-                </div>
-
-                <!-- Right: Custom numpad -->
-                <div class="cash-right">
-                    <div class="cash-label">Custom Amount</div>
-                    <div class="custom-amount-display" id="customAmountDisplay">$0.00</div>
-                    <div class="cash-numpad" id="cashNumpad">
-                        <button class="cash-num-btn" data-num="1">1</button>
-                        <button class="cash-num-btn" data-num="2">2</button>
-                        <button class="cash-num-btn" data-num="3">3</button>
-                        <button class="cash-num-btn" data-num="4">4</button>
-                        <button class="cash-num-btn" data-num="5">5</button>
-                        <button class="cash-num-btn" data-num="6">6</button>
-                        <button class="cash-num-btn" data-num="7">7</button>
-                        <button class="cash-num-btn" data-num="8">8</button>
-                        <button class="cash-num-btn" data-num="9">9</button>
-                        <button class="cash-num-btn" data-action="decimal">.</button>
-                        <button class="cash-num-btn" data-num="0">0</button>
-                        <button class="cash-num-btn cash-num-clear" data-action="clear">⌫</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom: Change and Complete -->
-            <div class="cash-footer">
-                <div class="change-display" id="changeDisplay" style="display: none;">
-                    <div class="change-label">Change Due</div>
-                    <div class="change-amount" id="changeAmount">$0.00</div>
-                </div>
-
-                <button class="complete-cash-btn" id="completeCashBtn" disabled>
-                    Complete Sale
-                </button>
-            </div>
+        <div class="cash-grid">
+            <button class="cash-btn" onclick="addMoney('7')">7</button>
+            <button class="cash-btn" onclick="addMoney('8')">8</button>
+            <button class="cash-btn" onclick="addMoney('9')">9</button>
+            <button class="cash-btn" onclick="addMoney('4')">4</button>
+            <button class="cash-btn" onclick="addMoney('5')">5</button>
+            <button class="cash-btn" onclick="addMoney('6')">6</button>
+            <button class="cash-btn" onclick="addMoney('1')">1</button>
+            <button class="cash-btn" onclick="addMoney('2')">2</button>
+            <button class="cash-btn" onclick="addMoney('3')">3</button>
+            <button class="cash-btn" onclick="addMoney('.')">.</button>
+            <button class="cash-btn" onclick="addMoney('0')">0</button>
+            <button class="cash-btn" onclick="clearMoney()" style="color: var(--error)">C</button>
         </div>
-    </div>
 
-    <!-- DEBUG PANEL (enable with ?debug=1) -->
-    <div id="debugPanel"
-        style="position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.9); color: #0f0; font-family: monospace; font-size: 12px; padding: 8px; z-index: 9999; border-bottom: 2px solid #0f0;">
-        <b>🔧 DEBUG:</b>
-        Focus: <span id="dbgFocus" style="padding: 2px 4px; border: 1px solid #0f0; cursor: pointer;"
-            onclick="ensureFocus()">-- (Tap to Repair)</span> |
-        Keys: <span id="dbgKeys">0</span> |
-        Buffer: <span id="dbgBuffer">0</span> chars |
-        Last: <span id="dbgLast">--</span> |
-        API: <span id="dbgApi">waiting</span>
-        <br><b>📄 Scan Preview:</b> <span id="dbgPreview" style="color: #ff0;">--</span>
-        <br><b>⌨️ Raw Event:</b> <span id="dbgRaw" style="color: #0ff;">--</span>
-        <button onclick="ensureFocus()"
-            style="background: #0f0; color: #000; border: none; padding: 2px 8px; font-weight: bold; margin-left: 10px; cursor: pointer;">REPAIR
-            FOCUS</button>
-        <button onclick="openRemoteScanner()"
-            style="background: #42b4e6; color: #fff; border: none; padding: 2px 8px; font-weight: bold; margin-left: 10px; cursor: pointer;">REMOTE
-            SCAN</button>
+        <div id="changeBox" class="hidden">
+            <div style="font-size: 12px; opacity: 0.6;">GIVE CHANGE</div>
+            <div id="dispChange" class="change-display">$0.00</div>
+            <button class="btn-action" id="btnCompleteSale" style="width: 100%; padding: 20px;">Complete Cash
+                Sale</button>
+        </div>
     </div>
 
     <script>
+        // Data from URL
         const urlParams = new URLSearchParams(window.location.search);
-        const debugEnabled = ['1', 'true', 'yes'].includes((urlParams.get('debug') || '').toLowerCase());
-        const debugPanel = document.getElementById('debugPanel');
-        if (debugPanel && !debugEnabled) {
-            debugPanel.style.display = 'none';
-        }
+        const saleId = urlParams.get('sale_id') || urlParams.get('saleId');
+        const rawAmount = urlParams.get('amount') || urlParams.get('total') || '0';
+        const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
 
-        const isEmbedded = window.self !== window.top;
-        const remoteScanEnabled = ['1', 'true', 'yes'].includes((urlParams.get('remoteScan') || '').toLowerCase());
-        const cashUiParam = (urlParams.get('cashUi') || '').toLowerCase();
-        const cashUiExplicitlyDisabled = ['0', 'false', 'no', 'off'].includes(cashUiParam);
-        const cashUiEnabledFromParam = ['1', 'true', 'yes', 'on'].includes(cashUiParam);
-        if (isEmbedded) {
-            document.body.classList.add('embedded');
-        }
-
-        function safeJson(value, maxLen = 400) {
-            try {
-                const text = typeof value === 'string' ? value : JSON.stringify(value);
-                return (text || '').length > maxLen ? (text || '').slice(0, maxLen) + '…' : (text || '');
-            } catch (e) {
-                return '[unserializable]';
-            }
-        }
-
-        async function sendDebugLog(level, message) {
-            // Persist minimal, non-PII logs for diagnosing iPad iframe issues.
-            // Always ship logs in embedded mode (iframe), and also for warnings/errors.
-            const shouldSend = isEmbedded || debugEnabled || level === 'error' || level === 'warn';
-            if (!shouldSend) return;
-            try {
-                const sessionId = urlParams.get('reference_id') || urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('reference') || urlParams.get('transaction_id') || 'unknown';
-                await fetch('/api/debug-logs', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: String(sessionId),
-                        level: level || 'info',
-                        message: String(message || ''),
-                        user_agent: navigator.userAgent
-                    })
-                });
-            } catch (e) { }
-        }
-
-        // ========== ELEMENTS ==========
-        const scanCard = document.getElementById('scanCard');
-        const successCard = document.getElementById('successCard');
-        const errorCard = document.getElementById('errorCard');
-        const scanLine = document.getElementById('scanLine');
-        const scanRing = document.getElementById('scanRing');
-        const logo = document.getElementById('logo');
-        const statusIndicator = document.getElementById('statusIndicator');
-        const statusText = document.getElementById('statusText');
-        const hiddenInput = document.getElementById('hiddenScannerInput');
-        const scanTitle = document.getElementById('scanTitle');
-        const scanSubtitle = document.getElementById('scanSubtitle');
-        const successPrimaryBtn = document.getElementById('successPrimaryBtn');
-        const scanInputSection = document.getElementById('scanInputSection');
-        const scanInput = document.getElementById('scanInput');
-        const scanInputHint = document.getElementById('scanInputHint');
-        const closeIframeBtn = document.getElementById('closeIframeBtn');
-
-        // ========== PARTICLES ==========
-        function createParticles() {
-            const container = document.getElementById('particles');
-            const colors = ['#e55c2c', '#42b4e6', '#2ea750'];
-
-            for (let i = 0; i < 30; i++) {
-                const p = document.createElement('div');
-                p.classList.add('particle');
-                p.style.left = Math.random() * 100 + '%';
-                p.style.top = Math.random() * 100 + '%';
-                p.style.width = (Math.random() * 4 + 2) + 'px';
-                p.style.height = p.style.width;
-                p.style.background = colors[Math.floor(Math.random() * colors.length)];
-                container.appendChild(p);
-
-                gsap.to(p, {
-                    y: -60 - Math.random() * 60,
-                    x: Math.random() * 40 - 20,
-                    opacity: 0,
-                    duration: 3 + Math.random() * 2,
-                    repeat: -1,
-                    delay: Math.random() * 3
-                });
-            }
-        }
-
-        // ========== LOGO ANIMATION ==========
-        gsap.to('.logo', {
-            y: -5,
-            duration: 2,
-            ease: 'power1.inOut',
-            yoyo: true,
-            repeat: -1
-        });
-
-        // ========== iOS FOCUS ==========
-        let focusAttempts = 0;
-        let scanBoxPreferred = false;
-        function isScanBoxVisible() {
-            return !!(scanInputSection && !scanInputSection.classList.contains('hidden') && scanInput);
-        }
-
-        function focusScannerTarget() {
-            const target = (isEmbedded && scanBoxPreferred && isScanBoxVisible()) ? scanInput : hiddenInput;
-            if (!target) return;
-            try { target.focus({ preventScroll: true }); } catch (e) { }
-            try {
-                if (document.activeElement !== target) {
-                    target.click();
-                    target.focus({ preventScroll: true });
-                }
-            } catch (e) { }
-        }
-
-
-        function ensureFocus() {
-            // CRITICAL: Does not interrupt if a scan is currently coming in
-            if (barcodeBuffer.length > 0) return;
-
-            // Don't steal focus from the visible scan box (needed for some iPad iframe + HID setups).
-            if (document.activeElement === hiddenInput || document.activeElement === scanInput) return;
-
-            focusAttempts++;
-            console.log('[Scanner] Focus lost, restoring... (Attempt ' + focusAttempts + ')');
-            focusScannerTarget();
-        }
-
-        setInterval(ensureFocus, 1500);
-
-        // ========== TOUCH HANDLING ==========
-        function isInteractiveTarget(target) {
-            if (!target || !target.closest) return false;
-            return !!target.closest('textarea, input, button, a, select, label');
-        }
-
-        scanCard.addEventListener('touchstart', (e) => {
-            if (isInteractiveTarget(e.target)) return;
-            e.preventDefault();
-            activateScanning();
-        });
-
-        scanCard.addEventListener('click', (e) => {
-            if (isInteractiveTarget(e.target)) return;
-            activateScanning();
-        });
-
-        if (closeIframeBtn) {
-            closeIframeBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                cancelVerification();
-            });
-            closeIframeBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                cancelVerification();
-            });
-        }
-
-        function activateScanning() {
-            if (isEmbedded && scanInputSection) {
-                scanInputSection.classList.remove('hidden');
-                if (scanInputHint) {
-                    scanInputHint.textContent = 'Tap the box, then scan. If nothing types here, scan into the sale Notes field instead.';
-                }
-            }
-
-            // Best effort: focus the scan box in a user gesture; fallback to hidden input.
-            scanBoxPreferred = true;
-            focusScannerTarget();
-            scanCard.classList.add('scanning');
-            statusIndicator.classList.add('scanning');
-
-            if (isEmbedded) {
-                statusText.textContent = 'Scan now';
-                dbgApi.textContent = 'IFRAME READY';
-            }
-
-            if (remoteScanEnabled) {
-                const opened = openRemoteScanner();
-                if (opened) {
-                    startStatusPolling();
-                    statusText.textContent = 'Waiting for scan...';
-                    dbgApi.textContent = 'REMOTE...';
-                } else {
-                    statusText.textContent = 'Scan now';
-                    dbgApi.textContent = 'POPUP BLOCKED';
-                    if (scanSubtitle) {
-                        scanSubtitle.textContent = 'Popup blocked. Scan in the box on this page.';
-                    }
-                }
-            } else {
-                statusText.textContent = 'Scan now';
-                dbgApi.textContent = 'LISTENING...';
-            }
-
-            gsap.to('.logo', {
-                filter: 'drop-shadow(0 0 50px rgba(229, 92, 44, 0.8))',
-                duration: 0.3
-            });
-
-            gsap.fromTo(scanLine,
-                { top: '-10px', opacity: 0 },
-                {
-                    top: '100%',
-                    opacity: 1,
-                    duration: 1.5,
-                    ease: 'power1.inOut',
-                    onComplete: () => {
-                        gsap.to(scanLine, { opacity: 0, duration: 0.3 });
-                    }
-                }
-            );
-
-            gsap.to(scanCard, {
-                scale: 0.98,
-                duration: 0.1,
-                yoyo: true,
-                repeat: 1
-            });
-        }
-
-        // ========== BLUETOOTH SCANNER ==========
+        // State
+        let selectedTender = null;
+        let isScanning = false;
         let barcodeBuffer = '';
         let scanTimer = null;
-        const SCAN_TIMEOUT = 2000; // Longer timeout: scanners often pause between AAMVA subfiles/lines
-        const PDF417_PREFIX = ']L';
+        let receivedAmountStr = "";
 
-        const dbgFocus = document.getElementById('dbgFocus');
-        const dbgKeys = document.getElementById('dbgKeys');
-        const dbgBuffer = document.getElementById('dbgBuffer');
-        const dbgLast = document.getElementById('dbgLast');
-        const dbgApi = document.getElementById('dbgApi');
-        const dbgPreview = document.getElementById('dbgPreview');
-        const dbgRaw = document.getElementById('dbgRaw');
-        let keyCount = 0;
+        // Elements
+        const mainWrap = document.getElementById('mainWrap');
+        const cashWrap = document.getElementById('cashWrap');
+        const tenderBox = document.getElementById('tenderBox');
+        const btnCash = document.getElementById('btnCash');
+        const btnCard = document.getElementById('btnCard');
+        const btnScanNow = document.getElementById('btnScanNow');
+        const visualRoot = document.getElementById('visualRoot');
+        const ghostInput = document.getElementById('ghostInput');
 
+        // Tender Selection
+        function selectTender(type) {
+            selectedTender = type;
+            btnCash.classList.toggle('selected', type === 'cash');
+            btnCard.classList.toggle('selected', type === 'card');
+            btnScanNow.classList.add('ready');
+            gsap.fromTo(type === 'cash' ? btnCash : btnCard, { scale: 0.95 }, { scale: 1, duration: 0.4, ease: "elastic.out(1, 0.3)" });
+        }
+
+        btnCash.onclick = () => selectTender('cash');
+        btnCard.onclick = () => selectTender('card');
+
+        // Scan Activation
+        btnScanNow.onclick = () => {
+            if (!selectedTender) return;
+            isScanning = true;
+            visualRoot.classList.add('scanning');
+            btnScanNow.innerHTML = '<span class="scan-dot"></span> Waiting for ID...';
+            ghostInput.focus({ preventScroll: true });
+        };
+
+        // Ghost Focus Loop
         setInterval(() => {
-            const active = document.activeElement;
-            if (active === scanInput) dbgFocus.textContent = 'BOX';
-            else if (active === hiddenInput) dbgFocus.textContent = 'HIDDEN';
-            else dbgFocus.textContent = '--';
+            if (isScanning && document.activeElement !== ghostInput) {
+                ghostInput.focus({ preventScroll: true });
+            }
         }, 1000);
 
-        function handleCompleteScan(data) {
-            if (data.length < 10) return;
-            console.log('[Scanner] FINAL SCAN DATA:', data);
-            dbgApi.textContent = 'SENDING...';
-            sendDebugLog('info', `scan complete len=${data.length} hasANSI=${data.includes('@ANSI')} has]L=${data.includes(']L')}`);
-            handleBluetoothScan(data);
-            barcodeBuffer = '';
-            hiddenInput.value = '';
-            if (scanInput) scanInput.value = '';
-            if (scanTimer) clearTimeout(scanTimer);
-        }
-
-        function resetScanTimer() {
-            if (scanTimer) clearTimeout(scanTimer);
-            scanTimer = setTimeout(() => {
-                if (barcodeBuffer.length > 10) {
-                    console.log('[Scanner] Inactivity timeout, submitting scan');
-                    handleCompleteScan(barcodeBuffer);
-                }
-            }, SCAN_TIMEOUT);
-        }
-
-        hiddenInput.addEventListener('input', (e) => {
-            const newValue = hiddenInput.value;
-            if (newValue.length > 0) {
-                barcodeBuffer = newValue;
-                keyCount++;
-                dbgKeys.textContent = keyCount;
-                dbgBuffer.textContent = barcodeBuffer.length;
-                dbgLast.textContent = 'INPUT:' + barcodeBuffer.slice(-1);
-                dbgPreview.textContent = barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : '');
-                dbgRaw.textContent = 'INPUT_EVENT: ' + newValue.slice(-10);
-                resetScanTimer();
-            }
-        });
-
-        if (scanInput) {
-            // Keep focus/typing inside the box when embedded in an iframe.
-            scanInput.addEventListener('click', (e) => e.stopPropagation());
-            scanInput.addEventListener('touchstart', (e) => e.stopPropagation());
-
-            scanInput.addEventListener('focus', () => {
-                // Prefer keeping focus on the visible box, but don't trigger any "scan now" flows.
-                scanBoxPreferred = true;
-                if (statusText && isEmbedded) statusText.textContent = 'Scan now';
-            });
-
-            scanInput.addEventListener('input', () => {
-                const value = scanInput.value || '';
-                if (!value) return;
-                barcodeBuffer = value;
-                keyCount++;
-                dbgKeys.textContent = keyCount;
-                dbgBuffer.textContent = barcodeBuffer.length;
-                dbgLast.textContent = 'BOX:' + barcodeBuffer.slice(-1);
-                dbgPreview.textContent = barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : '');
-                dbgRaw.textContent = 'BOX_INPUT';
-                resetScanTimer();
-            });
-
-            scanInput.addEventListener('keydown', (e) => {
-                // Keep focus in the box if the scanner sends Tab.
-                // Do NOT treat Enter as "end of scan" because many scanners include CR/LF within the payload.
-                if (e.key === 'Tab') {
-                    e.preventDefault();
-                    scanInput.value = (scanInput.value || '') + '\n';
-                    const value = scanInput.value || '';
-                    barcodeBuffer = value;
-                    dbgBuffer.textContent = barcodeBuffer.length;
-                    dbgPreview.textContent = barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : '');
-                    resetScanTimer();
-                }
-            });
-        }
-
-        document.addEventListener('keydown', (e) => {
-            // If the scan box is focused, rely on its handlers (avoid double-counting + preserve text).
-            if (document.activeElement === scanInput) return;
-
-            // Log EVERY key for diagnosis
-            dbgRaw.textContent = `RAW: ${e.key} (${e.keyCode})`;
-
-            const isPrintable = e.key.length === 1;
-            if (isPrintable || e.key === 'Enter') {
-                keyCount++;
-                dbgKeys.textContent = keyCount;
-                dbgLast.textContent = e.key === 'Enter' ? 'ENTER' : e.key;
-            }
-
-            // IMPORTANT: Many barcode scanners send CR/LF during the payload (not only at the end).
-            // Treat Enter as a newline separator, and rely on inactivity timeout to finalize the scan.
+        // Barcode Listener
+        ghostInput.onkeydown = (e) => {
             if (e.key === 'Enter') {
-                if (barcodeBuffer.length > 0) {
-                    barcodeBuffer += '\n';
-                    dbgBuffer.textContent = barcodeBuffer.length;
-                    dbgPreview.textContent = barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : '');
-                    resetScanTimer();
-                }
-                e.preventDefault();
-            } else if (isPrintable) {
+                if (barcodeBuffer.length > 20) processScan(barcodeBuffer);
+                barcodeBuffer = '';
+            } else if (e.key.length === 1) {
                 barcodeBuffer += e.key;
-                dbgBuffer.textContent = barcodeBuffer.length;
-                dbgPreview.textContent = barcodeBuffer.substring(0, 50) + (barcodeBuffer.length > 50 ? '...' : '');
-                if (barcodeBuffer.length === 1) activateScanning();
-                resetScanTimer();
             }
-        });
+        };
 
-        // ========== API INTEGRATION ==========
-        // Lightspeed passes multiple IDs; prefer explicit sale_id/saleId for API calls + note writing.
-        const saleId = urlParams.get('sale_id') || urlParams.get('saleId') || urlParams.get('transaction_id') || urlParams.get('reference_id') || urlParams.get('reference');
-        const registerId = urlParams.get('register_id') || urlParams.get('registerId') || urlParams.get('outlet_id');
-        const clerkId = urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('employee_id') || urlParams.get('employeeId') || urlParams.get('user_id') || urlParams.get('userId');
-        const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
-        const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
-        const paymentTypeKeyPresent = ['type', 'paymentType', 'payment_type', 'tender', 'method'].some((k) => urlParams.has(k));
-        const paymentTypeRaw = (
-            urlParams.get('type') ||
-            urlParams.get('paymentType') ||
-            urlParams.get('payment_type') ||
-            urlParams.get('tender') ||
-            urlParams.get('method') ||
-            'cash'
-        ).toLowerCase();
-        const cardModeKeyPresent = urlParams.has('cardMode') || urlParams.has('card_mode');
-        const hasExplicitCashSignal = paymentTypeKeyPresent && !paymentTypeRaw.includes('card');
-        const inferredPaymentType =
-            paymentTypeRaw.includes('card')
-                ? 'card'
-                : (!paymentTypeKeyPresent && cardModeKeyPresent)
-                    ? 'card'
-                    : hasExplicitCashSignal
-                        ? 'cash'
-                        : null;
-
-        // If Lightspeed doesn't tell us whether this is cash vs card, we can't guess.
-        // We'll prompt the cashier (1 tap) only in that ambiguous case.
-        let paymentType = inferredPaymentType || 'cash';
-        const isRefund = Number.isFinite(saleAmount) && saleAmount < 0;
-        const cardMode = (urlParams.get('cardMode') || (urlParams.get('card_mode') || '')).toLowerCase() || 'precheck'; // 'precheck' | 'external'
-        let cashUiEnabled = cashUiExplicitlyDisabled
-            ? false
-            : (cashUiEnabledFromParam || (paymentType === 'cash' && !isRefund));
-
-        console.log('THC Payment Gateway:', { saleId, registerId, clerkId, saleAmount, paymentType, remoteScanEnabled, cashUiEnabled });
-        const paramKeys = Array.from(urlParams.keys()).sort().join(',');
-        sendDebugLog('info', `payment-gateway loaded embedded=${isEmbedded} saleId=${saleId || 'missing'} paymentType=${paymentType} inferred=${inferredPaymentType || 'none'} typeRaw=${paymentTypeRaw || 'n/a'} typeKey=${paymentTypeKeyPresent} cardModeKey=${cardModeKeyPresent} cardMode=${cardMode} amount=${saleAmount} refund=${isRefund} remoteScan=${remoteScanEnabled} cashUi=${cashUiEnabled} keys=${paramKeys}`);
-
-        function applyPaymentType(nextType) {
-            paymentType = nextType === 'card' ? 'card' : 'cash';
-            cashUiEnabled = cashUiExplicitlyDisabled
-                ? false
-                : (cashUiEnabledFromParam || (paymentType === 'cash' && !isRefund));
+        async function processScan(rawData) {
+            isScanning = false;
+            visualRoot.classList.remove('scanning');
+            btnScanNow.innerHTML = 'Processing...';
 
             try {
-                const modeBadge = document.getElementById('modeBadge');
-                if (modeBadge) {
-                    modeBadge.textContent = paymentType === 'card' ? 'CARD' : 'CASH';
-                    modeBadge.className = 'mode-badge ' + (paymentType === 'card' ? 'card' : 'cash');
-                }
-            } catch (e) { }
+                const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ barcodeData: rawData })
+                });
+                const data = await response.json();
 
-            if (scanTitle && scanSubtitle) {
-                if (paymentType === 'card') {
-                    scanTitle.textContent = 'Scan Customer ID';
-                    scanSubtitle.textContent = 'ID check only — then tap Card in POS';
+                if (data.success && data.approved) {
+                    showSuccess(data);
                 } else {
-                    scanTitle.textContent = 'Scan Customer ID';
-                    scanSubtitle.textContent = cashUiEnabled ? 'Scan, then enter cash received' : 'Scan now (Netum scanner)';
-                }
-            }
-
-            sendDebugLog('info', `paymentType selected=${paymentType} cashUi=${cashUiEnabled}`);
-        }
-
-        function buildReturnUrl() {
-            const explicit = urlParams.get('return') || urlParams.get('returnUrl') || urlParams.get('return_url');
-            if (explicit) return explicit;
-
-            const pos = (urlParams.get('pos') || urlParams.get('platform') || '').toLowerCase();
-            if (pos.includes('merchantos') || pos.includes('rseries') || pos.includes('r-series')) {
-                return 'https://us.merchantos.com/?name=register';
-            }
-
-            if (saleId) {
-                return `https://retail.lightspeed.app/sales/${encodeURIComponent(saleId)}?platform=ios&action=view`;
-            }
-
-            return 'https://retail.lightspeed.app/sell';
-        }
-
-        function attemptIframeBreakout() {
-            if (!isEmbedded) return false;
-            if (['1', 'true', 'yes'].includes((urlParams.get('noBreakout') || '').toLowerCase())) return false;
-
-            try {
-                window.top.location.href = window.location.href;
-                return true;
-            } catch (e) { }
-
-            try {
-                window.parent.location.href = window.location.href;
-                return true;
-            } catch (e) { }
-
-            return false;
-        }
-
-        function returnToPOS() {
-            const targetUrl = buildReturnUrl();
-            try {
-                if (window.top && window.top !== window.self) {
-                    window.top.location.href = targetUrl;
-                } else {
-                    window.location.href = targetUrl;
+                    showError(data.reason || 'Verification Failed');
                 }
             } catch (e) {
-                window.location.href = targetUrl;
+                showError('Server Error');
             }
         }
 
-        function finishCashFlow() {
-            if (isEmbedded) {
-                try {
-                    window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
-                    window.parent.postMessage('ACCEPT', '*');
-                    window.parent.postMessage('CLOSE', '*');
-                } catch (e) { }
-                return;
-            }
+        function showSuccess(data) {
+            tenderBox.classList.add('hidden');
+            btnScanNow.classList.add('hidden');
+            document.getElementById('successOverlay').classList.add('active');
+            document.getElementById('successDetails').textContent = `${data.customerName || 'Customer'} verified • Age ${data.age || '??'}`;
 
-            returnToPOS();
-        }
-
-        function finishCardPrecheckFlow() {
-            // Pre-check only: close the overlay so staff can run card tender in POS (no /complete call).
-            if (isEmbedded) {
-                try {
-                    // DO NOT send ACCEPT here: card flow must not complete/close the sale.
-                    // After a successful ID check, we want to return to the POS sale screen so staff can tap the native Card tender.
-                    // Use DECLINE/CLOSE/EXIT signals to close the iframe without completing the sale.
-                    window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
-                    window.parent.postMessage('DECLINE', '*');
-                    window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
-                    window.parent.postMessage('CLOSE', '*');
-                    window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
-                    window.parent.postMessage('EXIT', '*');
-                    setTimeout(() => {
-                        try {
-                            window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
-                            window.parent.postMessage('DECLINE', '*');
-                            window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
-                            window.parent.postMessage('CLOSE', '*');
-                            window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
-                            window.parent.postMessage('EXIT', '*');
-                        } catch (e) { }
-                    }, 250);
-                } catch (e) { }
-                return;
-            }
-            returnToPOS();
-        }
-
-        // ========== CASH SCREEN ELEMENTS ==========
-        const cashScreenWrap = document.getElementById('cashScreenWrap');
-        const cashTotal = document.getElementById('cashTotal');
-        const quickAmountsDiv = document.getElementById('quickAmounts');
-        const customAmountDisplay = document.getElementById('customAmountDisplay');
-        const changeDisplay = document.getElementById('changeDisplay');
-        const changeAmount = document.getElementById('changeAmount');
-        const completeCashBtn = document.getElementById('completeCashBtn');
-
-        let selectedCashAmount = 0;
-        let customCashString = "";
-
-        function generateQuickAmounts(total) {
-            quickAmountsDiv.innerHTML = '';
-            const amounts = [total];
-            const nextDollar = Math.ceil(total);
-            if (nextDollar > total && !amounts.includes(nextDollar)) amounts.push(nextDollar);
-            const next5 = Math.ceil(total / 5) * 5;
-            if (next5 > total && !amounts.includes(next5)) amounts.push(next5);
-            const next10 = Math.ceil(total / 10) * 10;
-            if (next10 > total && !amounts.includes(next10)) amounts.push(next10);
-            if (amounts.length < 4) {
-                const next20 = Math.ceil(total / 20) * 20;
-                if (next20 > total && !amounts.includes(next20)) amounts.push(next20);
-            }
-            const finalAmounts = amounts.slice(0, 4).sort((a, b) => a - b);
-            finalAmounts.forEach((amt, idx) => {
-                const btn = document.createElement('button');
-                btn.className = 'quick-amount-btn' + (idx === 0 && amt === total ? ' exact' : '');
-                btn.textContent = '$' + amt.toFixed(2);
-                btn.setAttribute('onclick', `selectQuickAmount(${amt})`);
-                btn.setAttribute('ontouchstart', '');
-                quickAmountsDiv.appendChild(btn);
-            });
-        }
-
-        function selectQuickAmount(amount) {
-            customCashString = "";
-            updateCustomDisplay();
-            selectCashAmount(amount);
-        }
-
-        function selectCashAmount(amount) {
-            selectedCashAmount = amount;
-            const change = amount - saleAmount;
-            document.querySelectorAll('.quick-amount-btn').forEach(btn => btn.classList.remove('selected', 'exact'));
-            document.querySelectorAll('.quick-amount-btn').forEach(btn => {
-                if (btn.textContent === '$' + amount.toFixed(2)) btn.classList.add('selected');
-            });
-            if (change >= 0) {
-                changeDisplay.style.display = 'block';
-                changeAmount.textContent = '$' + change.toFixed(2);
-                changeAmount.style.color = 'var(--thc-green)';
-                completeCashBtn.disabled = false;
-            } else {
-                changeDisplay.style.display = 'block';
-                changeAmount.textContent = '-$' + Math.abs(change).toFixed(2) + ' (not enough)';
-                changeAmount.style.color = '#ef4444';
-                completeCashBtn.disabled = true;
-            }
-        }
-
-        function updateCustomDisplay() {
-            let displayVal = "$0.00";
-            if (customCashString.length > 0) {
-                if (customCashString.endsWith('.')) displayVal = '$' + customCashString;
-                else if (customCashString.includes('.')) displayVal = '$' + customCashString;
-                else displayVal = '$' + customCashString + '.00';
-            }
-            customAmountDisplay.textContent = displayVal;
-            const floatVal = parseFloat(customCashString || "0");
-            if (!isNaN(floatVal) && floatVal > 0) {
-                if (customCashString !== "." && parseFloat(customCashString) > 0) selectCashAmount(floatVal);
-            } else {
-                changeDisplay.style.display = 'none';
-                completeCashBtn.disabled = true;
-            }
-        }
-
-        function handleCashNumpad(value) {
-            if (value === 'clear') {
-                if (customCashString.length > 0) customCashString = customCashString.slice(0, -1);
-            } else if (value === 'decimal') {
-                if (!customCashString.includes('.')) {
-                    if (customCashString === "") customCashString = "0";
-                    customCashString += '.';
+            document.getElementById('btnContinue').onclick = () => {
+                if (selectedTender === 'cash') {
+                    showCashCalculator();
+                } else {
+                    finishCardFlow();
                 }
+            };
+        }
+
+        function showError(msg) {
+            tenderBox.classList.add('hidden');
+            btnScanNow.classList.add('hidden');
+            document.getElementById('errorOverlay').classList.add('active');
+            document.getElementById('errorMsg').textContent = msg;
+        }
+
+        // Cash Calculator Logic
+        function showCashCalculator() {
+            mainWrap.classList.add('hidden');
+            cashWrap.style.display = 'block';
+            document.getElementById('dispSaleTotal').textContent = `$${saleAmount.toFixed(2)}`;
+            clearMoney();
+        }
+
+        function addMoney(val) {
+            if (val === '.' && receivedAmountStr.includes('.')) return;
+            receivedAmountStr += val;
+            updateCashDisplay();
+        }
+
+        function clearMoney() {
+            receivedAmountStr = "";
+            updateCashDisplay();
+        }
+
+        function updateCashDisplay() {
+            const val = parseFloat(receivedAmountStr || "0");
+            document.getElementById('dispReceived').textContent = `$${val.toFixed(2)}`;
+
+            const change = val - saleAmount;
+            if (change >= 0 && val > 0) {
+                document.getElementById('changeBox').classList.remove('hidden');
+                document.getElementById('dispChange').textContent = `$${change.toFixed(2)}`;
             } else {
-                if (customCashString === "0" && value === "0") return;
-                if (customCashString === "0" && value !== ".") customCashString = value;
-                else {
-                    if (customCashString.length < 8) {
-                        if (customCashString.includes('.')) {
-                            const parts = customCashString.split('.');
-                            if (parts[1] && parts[1].length >= 2) return;
-                        }
-                        customCashString += value;
-                    }
-                }
+                document.getElementById('changeBox').classList.add('hidden');
             }
-            updateCustomDisplay();
         }
 
-        function showCashScreen() {
-            document.querySelector('.scanner-wrap:not(.cash-wrap)').style.display = 'none';
-            cashScreenWrap.style.display = 'block';
-            cashTotal.textContent = '$' + saleAmount.toFixed(2);
-            generateQuickAmounts(saleAmount);
-            selectedCashAmount = 0;
-            changeDisplay.style.display = 'none';
-            completeCashBtn.disabled = true;
-            completeCashBtn.textContent = 'Complete Sale';
-            customCashString = "";
-            updateCustomDisplay();
-        }
-
-        async function completeCashSale() {
-            if (selectedCashAmount < saleAmount) return;
-            completeCashBtn.disabled = true;
-            completeCashBtn.textContent = 'Processing...';
+        document.getElementById('btnCompleteSale').onclick = async () => {
+            const val = parseFloat(receivedAmountStr);
+            document.getElementById('btnCompleteSale').textContent = "Processing...";
             try {
                 await fetch(`/api/sales/${saleId}/complete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         approved: true,
-                        idVerified: true,
                         paymentType: 'cash',
-                        cashReceived: selectedCashAmount,
-                        changeGiven: selectedCashAmount - saleAmount
+                        cashReceived: val,
+                        changeGiven: val - saleAmount
                     })
                 });
-                window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
                 window.parent.postMessage('ACCEPT', '*');
-                completeCashBtn.textContent = '✓ Complete!';
             } catch (e) {
-                console.error('Cash sale error:', e);
-                completeCashBtn.textContent = 'Error - Try Again';
-                completeCashBtn.disabled = false;
+                alert("Error completing sale");
             }
-        }
+        };
 
-        // ========== POLLING & API ==========
-        let pollInterval;
-
-        function startPolling() {
-            if (saleAmount < 0) {
-                console.log('[Refund] auto-approving...');
-                document.querySelector('.scanner-wrap').style.display = 'none';
-                window.parent.postMessage(JSON.stringify({ step: 'ACCEPT' }), '*');
-                window.parent.postMessage('ACCEPT', '*');
-                return;
-            }
-            pollInterval = setInterval(checkStatus, 2000);
-        }
-
-        async function checkStatus() {
-            try {
-                const response = await fetch(`/api/sales/${saleId}/status`);
-                const data = await response.json();
-                if (data.status === 'approved' || data.status === 'approved_override') {
-                    clearInterval(pollInterval);
-                    showSuccess(data);
-                    setTimeout(showCashScreen, 1500);
-                } else if (data.status === 'rejected') {
-                    clearInterval(pollInterval);
-                    showError(data.reason || 'Verification Failed');
-                }
-            } catch (e) {
-                console.error('Polling error', e);
-            }
-        }
-
-        async function handleBluetoothScan(barcodeData) {
-            if (!paymentTypeChosen && inferredPaymentType === null && !isRefund) {
-                showModePicker();
-                statusText.textContent = 'Select Cash or Card';
-                return;
-            }
-            statusText.textContent = 'Processing...';
-            try {
-                if (notePollInterval) { clearInterval(notePollInterval); notePollInterval = null; }
-                if (statusPollInterval) { clearInterval(statusPollInterval); statusPollInterval = null; }
-            } catch (e) { }
-            let cleanData = barcodeData;
-            if (cleanData.startsWith(PDF417_PREFIX)) {
-                cleanData = cleanData.substring(PDF417_PREFIX.length);
-                if (cleanData.length > 0 && !isNaN(parseInt(cleanData[0]))) cleanData = cleanData.substring(1);
-            }
-            try {
-                sendDebugLog('info', `verify-bluetooth request saleId=${saleId || 'missing'} len=${cleanData?.length || 0}`);
-                const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ barcodeData: cleanData, registerId: registerId || 'NETUM-NT1200', clerkId: clerkId })
-                });
-                const data = await response.json().catch(() => ({}));
-                if (!response.ok) {
-                    sendDebugLog('error', `verify-bluetooth http=${response.status} body=${safeJson(data)}`);
-                    showError(data.reason || data.error || `Server error (${response.status})`);
-                    return;
-                }
-
-                sendDebugLog('info', `verify-bluetooth ok approved=${!!data.approved} dbSaved=${data.dbSaved === true} dob=${data.dob || 'null'}`);
-                if (data.success && data.approved) {
-                    clearInterval(pollInterval);
-                    showSuccess({ customerName: data.customerName || 'Customer', age: data.age ?? null, dob: data.dob ?? null });
-
-                    if (paymentType === 'card' && cardMode === 'precheck') {
-                        const details = document.getElementById('successDetails');
-                        if (details) details.textContent = 'Verified 21+ - tap Card in POS';
-                        if (successPrimaryBtn) successPrimaryBtn.textContent = 'Back to POS (Tap Card)';
-                        setTimeout(finishCardPrecheckFlow, 700);
-                    } else if (paymentType === 'cash' && cashUiEnabled) {
-                        setTimeout(showCashScreen, 1200);
-                    } else {
-                        setTimeout(finishCashFlow, 1200);
-                    }
-                } else {
-                    sendDebugLog('warn', `verify-bluetooth rejected reason=${data.reason || data.error || 'unknown'}`);
-                    showError(data.reason || 'Verification Failed');
-                }
-            } catch (e) {
-                console.error('Scan error', e);
-                sendDebugLog('error', `verify-bluetooth exception=${e?.message || 'unknown'}`);
-                showError('Processing failed');
-            }
-        }
-
-        function cancelVerification() {
-            clearInterval(pollInterval);
-            console.log('[Cancel] Signaling Lightspeed...');
-
-            if (!isEmbedded) {
-                returnToPOS();
-                return;
-            }
-
-            try {
-                window.parent.postMessage(JSON.stringify({ step: 'CLOSE' }), '*');
-                window.parent.postMessage(JSON.stringify({ step: 'EXIT' }), '*');
-                window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
-            } catch (e) { }
+        function finishCardFlow() {
+            // Signal for card tender: exit/close so POS can take over
             window.parent.postMessage('CLOSE', '*');
-            window.parent.postMessage('DECLINE', '*');
-            setTimeout(() => {
-                window.parent.postMessage(JSON.stringify({ step: 'DECLINE' }), '*');
-                window.parent.postMessage('DECLINE', '*');
-            }, 500);
+            window.parent.postMessage('EXIT', '*');
+            window.parent.postMessage('DECLINE', '*'); // Closes the payment-gateway iframe in Lightspeed
         }
 
-        // ========== STATE MANAGEMENT ==========
-        function showSuccess(data) {
-            scanCard.classList.add('hidden');
-            errorCard.classList.remove('active');
-            successCard.classList.add('active');
-            const ageText = (data && Number.isFinite(Number(data.age))) ? `Age ${data.age}` : null;
-            const dobYear = (data && typeof data.dob === 'string' && data.dob.length >= 4) ? data.dob.slice(0, 4) : null;
-            const dobText = dobYear ? `DOB ${dobYear}` : null;
-            const extras = [ageText, dobText].filter(Boolean).join(' • ');
-            document.getElementById('successDetails').textContent =
-                extras ? `${data.customerName || 'Customer'} verified (${extras})` : `${data.customerName || 'Customer'} verified`;
+        // Auto-detect refund
+        if (saleAmount < 0) {
+            window.parent.postMessage('ACCEPT', '*');
         }
-
-        function showError(message) {
-            scanCard.classList.add('hidden');
-            successCard.classList.remove('active');
-            errorCard.classList.add('active');
-            document.getElementById('errorDetails').textContent = message;
-        }
-
-        function retry() {
-            errorCard.classList.remove('active');
-            scanCard.classList.remove('hidden', 'scanning');
-            statusIndicator.classList.remove('scanning');
-            statusText.textContent = 'Ready';
-            gsap.to('.logo', { filter: 'drop-shadow(0 0 30px rgba(66, 180, 230, 0.4))', duration: 0.3 });
-            startPolling();
-            ensureFocus();
-        }
-
-        // ========== OVERRIDE ==========
-        let currentPin = '';
-        const pinDots = document.querySelectorAll('.pin-dot');
-        const pinError = document.getElementById('pinError');
-
-        function showOverrideModal() {
-            document.getElementById('overrideModal').classList.add('active');
-            currentPin = '';
-            updatePinDisplay();
-            pinError.textContent = '';
-        }
-
-        function closeOverrideModal() {
-            document.getElementById('overrideModal').classList.remove('active');
-            currentPin = '';
-            updatePinDisplay();
-            ensureFocus();
-        }
-
-        function updatePinDisplay() {
-            pinDots.forEach((dot, index) => {
-                if (index < currentPin.length) dot.classList.add('filled');
-                else dot.classList.remove('filled');
-            });
-        }
-
-        function handleNumpadInput(value) {
-            pinError.textContent = '';
-            if (value === 'clear') currentPin = currentPin.slice(0, -1);
-            else if (value === 'submit') {
-                if (currentPin.length === 4) submitOverride();
-                else pinError.textContent = 'Enter 4 digits';
-            } else if (currentPin.length < 4) currentPin += value;
-            updatePinDisplay();
-        }
-
-        async function submitOverride() {
-            try {
-                const response = await fetch(`/api/sales/${saleId}/override`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ verificationId: 'MANUAL-OVERRIDE', managerPin: currentPin, note: 'Manual Pad', clerkId: clerkId, registerId: registerId })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    closeOverrideModal();
-                    showSuccess({ customerName: 'Manual Override' });
-                    if (paymentType === 'cash' && cashUiEnabled) {
-                        setTimeout(showCashScreen, 1200);
-                    } else {
-                        setTimeout(finishCashFlow, 1200);
-                    }
-                } else {
-                    pinError.textContent = data.message || 'Invalid PIN';
-                    currentPin = '';
-                    updatePinDisplay();
-                }
-            } catch (e) {
-                pinError.textContent = 'Error';
-            }
-        }
-
-        // ========== INIT ==========
-        createParticles();
-        document.addEventListener('touchstart', () => { });
-        window.addEventListener('touchstart', () => { });
-
-        // Event Listeners for buttons
-        document.querySelectorAll('.cash-num-btn').forEach(btn => {
-            const handler = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                handleCashNumpad(btn.getAttribute('data-num') || btn.getAttribute('data-action'));
-            };
-            btn.addEventListener('touchend', handler);
-            btn.addEventListener('click', handler);
-        });
-
-        document.querySelectorAll('.numpad-btn').forEach(btn => {
-            const handler = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                handleNumpadInput(btn.getAttribute('data-num') || btn.getAttribute('data-action'));
-            };
-            btn.addEventListener('touchend', handler);
-            btn.addEventListener('click', handler);
-        });
-
-        // Other listeners
-        document.querySelector('#scanCard .btn-cancel')?.addEventListener('touchend', (e) => { e.preventDefault(); cancelVerification(); });
-        document.querySelector('#scanCard .btn-override')?.addEventListener('touchend', (e) => { e.preventDefault(); showOverrideModal(); });
-        document.querySelector('#errorCard .btn-retry')?.addEventListener('touchend', (e) => { e.preventDefault(); retry(); });
-        document.querySelector('#errorCard .btn-override')?.addEventListener('touchend', (e) => { e.preventDefault(); showOverrideModal(); });
-        document.querySelector('#overrideModal .btn-cancel')?.addEventListener('touchend', (e) => { e.preventDefault(); closeOverrideModal(); });
-        document.getElementById('completeCashBtn')?.addEventListener('click', completeCashSale);
-        document.getElementById('btnCloseCash')?.addEventListener('touchend', (e) => { e.preventDefault(); cancelVerification(); });
-
-        const pinInput = document.getElementById('managerPin');
-        if (pinInput) pinInput.addEventListener('touchend', (e) => { e.stopPropagation(); setTimeout(() => { pinInput.focus(); }, 100); });
-
-        gsap.from('.scan-card', { scale: 0.9, opacity: 0, duration: 0.6, ease: 'back.out(1.5)' });
-
-        const modePickerWrap = document.getElementById('modePickerWrap');
-        const modeButtons = document.getElementById('modeButtons');
-        const btnModeCash = document.getElementById('btnModeCash');
-        const btnModeCard = document.getElementById('btnModeCard');
-        let paymentTypeChosen = inferredPaymentType !== null || isRefund;
-
-        function showModePicker() {
-            if (!modePickerWrap) return;
-            modePickerWrap.classList.remove('hidden');
-            if (modeButtons) modeButtons.classList.remove('hidden');
-            const badge = document.getElementById('modeBadge');
-            if (badge) {
-                badge.textContent = paymentTypeChosen ? (paymentType === 'card' ? 'CARD' : 'CASH') : 'CHOOSE';
-                badge.className = 'mode-badge ' + (paymentType === 'card' ? 'card' : 'cash');
-            }
-        }
-
-        if (btnModeCash) {
-            const handler = (e) => {
-                e.preventDefault();
-                paymentTypeChosen = true;
-                applyPaymentType('cash');
-                if (modeButtons) modeButtons.classList.add('hidden');
-                statusText.textContent = 'Ready';
-                ensureFocus();
-            };
-            btnModeCash.addEventListener('touchend', handler);
-            btnModeCash.addEventListener('click', handler);
-        }
-
-        if (btnModeCard) {
-            const handler = (e) => {
-                e.preventDefault();
-                paymentTypeChosen = true;
-                applyPaymentType('card');
-                if (modeButtons) modeButtons.classList.add('hidden');
-                statusText.textContent = 'Ready';
-                ensureFocus();
-            };
-            btnModeCard.addEventListener('touchend', handler);
-            btnModeCard.addEventListener('click', handler);
-        }
-
-        if (scanTitle && scanSubtitle) {
-            if (remoteScanEnabled) {
-                scanTitle.textContent = 'Tap to Scan';
-                scanSubtitle.textContent = isEmbedded ? 'Opens fullscreen (or scanner tab if blocked)' : 'Opens scanner in a new tab';
-            } else {
-                if (!paymentTypeChosen && inferredPaymentType === null && !isRefund) {
-                    scanTitle.textContent = 'Select Tender Type';
-                    scanSubtitle.textContent = 'Choose Cash or Card, then scan the ID.';
-                    showModePicker();
-                } else {
-                    applyPaymentType(paymentType);
-                    if (modePickerWrap) modePickerWrap.classList.add('hidden');
-                }
-            }
-        }
-
-        if (successPrimaryBtn) {
-            if (paymentType === 'card' && cardMode === 'precheck') {
-                successPrimaryBtn.textContent = 'Back to POS (Tap Card)';
-            } else {
-                successPrimaryBtn.textContent = paymentType === 'cash' && cashUiEnabled ? 'Continue' : 'Return to POS';
-            }
-            successPrimaryBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (isRefund) {
-                    finishCashFlow();
-                    return;
-                }
-                if (paymentType === 'card' && cardMode === 'precheck') {
-                    finishCardPrecheckFlow();
-                    return;
-                }
-                if (paymentType === 'cash' && cashUiEnabled) {
-                    showCashScreen();
-                } else {
-                    finishCashFlow();
-                }
-            });
-        }
-
-        if (!saleId) {
-            showError('Missing Sale ID');
-        } else {
-            if (isRefund) {
-                sendDebugLog('info', `refund bypass: amount=${saleAmount}`);
-                showSuccess({ customerName: 'Refund' });
-                const details = document.getElementById('successDetails');
-                if (details) details.textContent = 'Refund: ID not required';
-                if (successPrimaryBtn) successPrimaryBtn.textContent = 'Return to POS';
-                setTimeout(() => finishCashFlow(), 400);
-            } else {
-                ensureFocus();
-
-                // Embedded iPad mode: show the scan box and wait for the scanner keystrokes.
-                if (isEmbedded) {
-                    if (scanInputSection) {
-                        scanInputSection.classList.remove('hidden');
-                    }
-                    scanCard.classList.add('scanning');
-                    statusIndicator.classList.add('scanning');
-                    statusText.textContent = 'Scan now';
-                    dbgApi.textContent = 'EMBEDDED MODE';
-                    if (scanSubtitle) {
-                        scanSubtitle.textContent = 'Tap the box below, then scan the ID.';
-                    }
-                    scanBoxPreferred = true;
-                }
-            }
-        }
-        function openRemoteScanner() {
-            if (!saleId) {
-                showError('Missing Sale ID');
-                return false;
-            }
-            const scannerUrl = `/scanner.html?sale_id=${encodeURIComponent(saleId)}`;
-            let openedWindow = null;
-            try {
-                openedWindow = window.open(scannerUrl, '_blank', 'noopener');
-            } catch (e) {
-                return false;
-            }
-            if (!openedWindow) {
-                return false;
-            }
-            try {
-                // Some iOS in-app iframes return a WindowProxy but block access; treat that as popup blocked.
-                void openedWindow.location.href;
-            } catch (e) {
-                return false;
-            }
-            try { openedWindow.focus(); } catch (e) { }
-            return true;
-        }
-
-        // ========== POLLING FOR REMOTE SCANS ==========
-        let statusPollInterval = null;
-        function startStatusPolling() {
-            if (statusPollInterval) return;
-            console.log('[Poll] Starting remote scan monitor...');
-            statusPollInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`/api/sales/${saleId}/status`);
-                    const data = await response.json();
-
-                    if (data.status === 'approved' || data.status === 'approved_override') {
-                        console.log('[Poll] REMOTE SCAN APPROVED!');
-                        clearInterval(statusPollInterval);
-                        statusText.textContent = 'VERIFIED ✓';
-                        statusIndicator.classList.remove('scanning');
-                        statusIndicator.style.background = 'rgba(46, 167, 80, 0.2)';
-                        statusIndicator.style.color = '#2ea750';
-                        showSuccess({ customerName: data.customerName });
-                        if (paymentType === 'cash' && cashUiEnabled) {
-                            setTimeout(showCashScreen, 1200);
-                        } else {
-                            setTimeout(finishCashFlow, 1200);
-                        }
-                    } else if (data.status === 'rejected') {
-                        console.log('[Poll] REMOTE SCAN REJECTED:', data.reason);
-                        clearInterval(statusPollInterval);
-                        showError(data.reason);
-                    }
-                } catch (e) {
-                    console.error('[Poll] Error checking status', e);
-                }
-            }, 500);
-        }
-
-        // ========== NOTE SCAN FALLBACK (for embedded iPad iframe) ==========
-        let notePollInterval = null;
-        function startNoteScanPolling() {
-            if (notePollInterval) return;
-            let attempts = 0;
-            statusText.textContent = isScanBoxVisible() ? 'Waiting for scan...' : 'Waiting for note scan...';
-            dbgApi.textContent = 'NOTE POLL...';
-            notePollInterval = setInterval(async () => {
-                attempts++;
-                if (attempts > 60) { // ~60s
-                    clearInterval(notePollInterval);
-                    notePollInterval = null;
-                    statusText.textContent = 'Timed out';
-                    dbgApi.textContent = 'NOTE POLL TIMEOUT';
-                    if (scanSubtitle) {
-                        scanSubtitle.textContent = 'No scan found. Try scanning in the box, or scan into Notes and tap out to save.';
-                    }
-                    return;
-                }
-
-                try {
-                    const response = await fetch(`/api/sales/${saleId}/verify-from-note`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ clerkId: clerkId || null, registerId: registerId || null })
-                    });
-
-                    const data = await response.json().catch(() => ({}));
-
-                    if (response.status === 409) {
-                        if (data && data.error === 'SCAN_NOT_PARSEABLE') {
-                            statusText.textContent = 'Scan incomplete';
-                            dbgApi.textContent = 'NOTE PARSE FAILED';
-                            if (scanSubtitle) {
-                                scanSubtitle.textContent = 'Scan the full ID. If using Notes, it should start with @ANSI.';
-                            }
-                        } else if (data && data.error === 'NO_SCAN_IN_NOTE') {
-                            statusText.textContent = isScanBoxVisible() ? 'Waiting for scan...' : 'Waiting for note scan...';
-                            dbgApi.textContent = `NOTE POLL ${attempts}/60`;
-                            if (scanSubtitle) {
-                                scanSubtitle.textContent = 'Tap the box and scan. If it stays empty, scan into Notes and tap out to save.';
-                            }
-                        }
-                        // NO_SCAN_IN_NOTE or parse issues: keep waiting.
-                        return;
-                    }
-
-                    if (response.ok && data.success) {
-                        clearInterval(notePollInterval);
-                        notePollInterval = null;
-                    } else if (!response.ok) {
-                        if (response.status === 503) {
-                            statusText.textContent = 'System unavailable';
-                            dbgApi.textContent = 'LIGHTSPEED DOWN';
-                            if (scanSubtitle) {
-                                scanSubtitle.textContent = 'Lightspeed API unavailable. Try again or switch to New Tab.';
-                            }
-                        }
-                        console.warn('[NoteScan] verify-from-note failed', data);
-                    }
-                } catch (e) {
-                    console.warn('[NoteScan] network error', e);
-                }
-            }, 1200);
-        }
-
-        // ========== STABILITY OVERRIDES (retry without auto-fail loops) ==========
-        function stopAllPolling() {
-            try { clearInterval(pollInterval); } catch (e) { }
-            try { if (statusPollInterval) clearInterval(statusPollInterval); } catch (e) { }
-            try { if (notePollInterval) clearInterval(notePollInterval); } catch (e) { }
-            statusPollInterval = null;
-            notePollInterval = null;
-        }
-
-        function resetScanUi() {
-            stopAllPolling();
-            try { if (scanTimer) clearTimeout(scanTimer); } catch (e) { }
-            scanTimer = null;
-            barcodeBuffer = '';
-            try { hiddenInput.value = ''; } catch (e) { }
-            try { if (scanInput) scanInput.value = ''; } catch (e) { }
-
-            if (scanInputSection) scanInputSection.classList.remove('hidden');
-            scanBoxPreferred = true;
-            scanCard.classList.remove('hidden');
-            scanCard.classList.add('scanning');
-            statusIndicator.classList.add('scanning');
-            successCard.classList.remove('active');
-            errorCard.classList.remove('active');
-            statusText.textContent = 'Scan now';
-            if (scanSubtitle) scanSubtitle.textContent = 'Tap the box below, then scan the ID.';
-            dbgApi.textContent = 'READY';
-            focusScannerTarget();
-        }
-
-        // Override the inline onclick handler target.
-        window.retry = function retry() {
-            resetScanUi();
-        };
-
-        const originalShowError = window.showError || showError;
-        window.showError = function showErrorPatched(message) {
-            stopAllPolling();
-            sendDebugLog('warn', `ui error: ${message}`);
-            return originalShowError(message);
-        };
-        showError = window.showError;
-
-        const originalShowSuccess = window.showSuccess || showSuccess;
-        window.showSuccess = function showSuccessPatched(data) {
-            stopAllPolling();
-            return originalShowSuccess(data);
-        };
-        showSuccess = window.showSuccess;
-
     </script>
-
 </body>
 
 </html>
