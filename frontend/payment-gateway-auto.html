@@ -554,9 +554,10 @@
                 });
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    reportRemoteError('HTTP_ERROR', { status: response.status, statusText: response.statusText, response: errorText });
-                    showError(`Server Error (${response.status}) - Please Try Again`);
+                    const errorJson = await response.json().catch(() => ({}));
+                    const errorMsg = errorJson.message || response.statusText;
+                    reportRemoteError('HTTP_ERROR', { status: response.status, statusText: response.statusText, response: errorJson });
+                    showError(`Server Error (${response.status}): ${errorMsg}`);
                     return;
                 }
 
@@ -570,7 +571,7 @@
                 }
             } catch (e) {
                 reportRemoteError('FETCH_EXCEPTION', { message: e.message, stack: e.stack });
-                showError('Network or Server Error - Please Try Again');
+                showError(`Network Error: ${e.message}`);
             } finally {
                 btnScanNow.style.opacity = "1";
                 btnScanNow.style.pointerEvents = "auto";

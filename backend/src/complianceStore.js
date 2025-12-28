@@ -659,10 +659,18 @@ async function countRecentOverrides({ locationId, minutes = 10 }) {
 
 async function logDiagnostic({ type, saleId, userAgent, error, details }) {
   try {
+    // Ensure params are not undefined for PG driver
+    const params = [
+      type || null,
+      saleId || null,
+      userAgent || null,
+      error || null,
+      details ? JSON.stringify(details) : null
+    ];
     await query(`
       INSERT INTO diagnostics (type, sale_id, user_agent, error, details)
       VALUES ($1, $2, $3, $4, $5)
-    `, [type, saleId, userAgent, error, details]);
+    `, params);
   } catch (err) {
     logger.error({ err }, 'Failed to log diagnostic to DB');
   }
