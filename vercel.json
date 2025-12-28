@@ -39,6 +39,10 @@
       "destination": "/frontend/scanner-test.html"
     },
     {
+      "source": "/payment-gateway-smart.html",
+      "destination": "/frontend/payment-gateway-smart.html"
+    },
+    {
       "source": "/admin/pending.html",
       "destination": "/frontend/admin-pending.html"
     },
