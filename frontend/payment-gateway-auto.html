@@ -359,342 +359,393 @@
         .hidden {
             display: none !important;
         }
+
+        #debugPanel {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 5px;
+            border-radius: 5px;
+            z-index: 9999;
+            pointer-events: none;
+            max-width: 200px;
+        }
+
+        .debug-btn {
+            pointer-events: auto;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 2px 5px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
     </style>
 </head>
 
-<body class="embedded">
-    <div class="grid-bg"></div>
-    <input type="text" id="ghostInput" autocomplete="off" inputmode="none">
+<body>
+    <div id="debugPanel">
+        <div>URL: <span id="debugUrl">loading...</span></div>
+        <div>Sale: <span id="debugSale">loading...</span></div>
+        <button class="debug-btn" onclick="testConnectivity()">Test Ping</button>
+    </div>
 
-    <div class="scanner-wrap" id="mainWrap">
-        <!-- Logo Area -->
-        <div class="logo-container" id="visualRoot">
-            <div class="scan-ring"></div>
-            <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="logo">
-        </div>
+    <body class="embedded">
+        <div class="grid-bg"></div>
+        <input type="text" id="ghostInput" autocomplete="off" inputmode="none">
 
-        <h1 class="main-title">Select Tender Type</h1>
-        <p class="subtitle">Tap the box below, then scan the ID.</p>
-
-        <!-- Tender Selection Box -->
-        <div class="tender-box" id="tenderBox">
-            <div class="tender-label">
-                Tender
-                <span class="choose-badge">CHOOSE</span>
+        <div class="scanner-wrap" id="mainWrap">
+            <!-- Logo Area -->
+            <div class="logo-container" id="visualRoot">
+                <div class="scan-ring"></div>
+                <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="logo">
             </div>
-            <div class="tender-buttons">
-                <button class="tender-btn" id="btnCash">Cash</button>
-                <button class="tender-btn" id="btnCard">Card</button>
+
+            <h1 class="main-title">Select Tender Type</h1>
+            <p class="subtitle">Tap the box below, then scan the ID.</p>
+
+            <!-- Tender Selection Box -->
+            <div class="tender-box" id="tenderBox">
+                <div class="tender-label">
+                    Tender
+                    <span class="choose-badge">CHOOSE</span>
+                </div>
+                <div class="tender-buttons">
+                    <button class="tender-btn" id="btnCash">Cash</button>
+                    <button class="tender-btn" id="btnCard">Card</button>
+                </div>
+                <div class="tender-hint">If you tapped the ID Card button, choose Card.</div>
             </div>
-            <div class="tender-hint">If you tapped the ID Card button, choose Card.</div>
-        </div>
 
-        <!-- Scan Trigger -->
-        <button class="scan-now-btn" id="btnScanNow">
-            <span class="scan-dot"></span>
-            Scan Now
-        </button>
+            <!-- Scan Trigger -->
+            <button class="scan-now-btn" id="btnScanNow">
+                <span class="scan-dot"></span>
+                Scan Now
+            </button>
 
-        <!-- Success overlay -->
-        <div id="successOverlay" class="overlay-card">
-            <div class="overlay-content">
-                <h2 style="color: var(--thc-green)">Verified</h2>
-                <p id="successMsg">Customer is 21+</p>
-                <div id="successDetails" style="font-size: 12px; margin-bottom: 20px; opacity: 0.6;"></div>
-                <button class="btn-action" id="btnContinue" style="width: 100%;">Continue</button>
+            <!-- Success overlay -->
+            <div id="successOverlay" class="overlay-card">
+                <div class="overlay-content">
+                    <h2 style="color: var(--thc-green)">Verified</h2>
+                    <p id="successMsg">Customer is 21+</p>
+                    <div id="successDetails" style="font-size: 12px; margin-bottom: 20px; opacity: 0.6;"></div>
+                    <button class="btn-action" id="btnContinue" style="width: 100%;">Continue</button>
+                </div>
             </div>
-        </div>
 
-        <!-- Error overlay -->
-        <div id="errorOverlay" class="overlay-card error">
-            <div class="overlay-content">
-                <h2 style="color: var(--error)">Error</h2>
-                <p id="errorMsg">Failed to verify ID</p>
-                <div style="display: flex; gap: 10px; flex-direction: column;">
-                    <button class="btn-action" style="background: var(--error)" onclick="resetUI()">Try Again</button>
-                    <button class="btn-action" style="background: rgba(255,255,255,0.1); color: white;"
-                        onclick="window.parent.postMessage('CLOSE', '*')">Cancel</button>
+            <!-- Error overlay -->
+            <div id="errorOverlay" class="overlay-card error">
+                <div class="overlay-content">
+                    <h2 style="color: var(--error)">Error</h2>
+                    <p id="errorMsg">Failed to verify ID</p>
+                    <div style="display: flex; gap: 10px; flex-direction: column;">
+                        <button class="btn-action" style="background: var(--error)" onclick="resetUI()">Try
+                            Again</button>
+                        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: white;"
+                            onclick="window.parent.postMessage('CLOSE', '*')">Cancel</button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Cash Calculator -->
-    <div class="cash-wrap" id="cashWrap">
-        <div class="cash-total-banner">
-            <div style="font-size: 12px; opacity: 0.6;">SALE TOTAL</div>
-            <div id="dispSaleTotal" style="font-size: 36px; font-weight: 800;">$0.00</div>
+        <!-- Cash Calculator -->
+        <div class="cash-wrap" id="cashWrap">
+            <div class="cash-total-banner">
+                <div style="font-size: 12px; opacity: 0.6;">SALE TOTAL</div>
+                <div id="dispSaleTotal" style="font-size: 36px; font-weight: 800;">$0.00</div>
+            </div>
+
+            <div style="font-size: 12px; opacity: 0.6; margin-bottom: 10px;">CASH RECEIVED</div>
+            <div id="dispReceived" style="font-size: 32px; font-weight: 700; margin-bottom: 20px;">$0.00</div>
+
+            <div class="cash-grid">
+                <button class="cash-btn" onclick="addMoney('7')">7</button>
+                <button class="cash-btn" onclick="addMoney('8')">8</button>
+                <button class="cash-btn" onclick="addMoney('9')">9</button>
+                <button class="cash-btn" onclick="addMoney('4')">4</button>
+                <button class="cash-btn" onclick="addMoney('5')">5</button>
+                <button class="cash-btn" onclick="addMoney('6')">6</button>
+                <button class="cash-btn" onclick="addMoney('1')">1</button>
+                <button class="cash-btn" onclick="addMoney('2')">2</button>
+                <button class="cash-btn" onclick="addMoney('3')">3</button>
+                <button class="cash-btn" onclick="addMoney('.')">.</button>
+                <button class="cash-btn" onclick="addMoney('0')">0</button>
+                <button class="cash-btn" onclick="clearMoney()" style="color: var(--error)">C</button>
+            </div>
+
+            <div id="changeBox" class="hidden">
+                <div style="font-size: 12px; opacity: 0.6;">GIVE CHANGE</div>
+                <div id="dispChange" class="change-display">$0.00</div>
+                <button class="btn-action" id="btnCompleteSale" style="width: 100%; padding: 20px;">Complete Cash
+                    Sale</button>
+            </div>
         </div>
 
-        <div style="font-size: 12px; opacity: 0.6; margin-bottom: 10px;">CASH RECEIVED</div>
-        <div id="dispReceived" style="font-size: 32px; font-weight: 700; margin-bottom: 20px;">$0.00</div>
+        <script>
+            // Data from URL (Added fallbacks for different Lightspeed triggers)
+            const urlParams = new URLSearchParams(window.location.search);
+            const saleId = urlParams.get('sale_id') ||
+                urlParams.get('saleId') ||
+                urlParams.get('transaction_id') ||
+                urlParams.get('reference') ||
+                urlParams.get('reference_id');
 
-        <div class="cash-grid">
-            <button class="cash-btn" onclick="addMoney('7')">7</button>
-            <button class="cash-btn" onclick="addMoney('8')">8</button>
-            <button class="cash-btn" onclick="addMoney('9')">9</button>
-            <button class="cash-btn" onclick="addMoney('4')">4</button>
-            <button class="cash-btn" onclick="addMoney('5')">5</button>
-            <button class="cash-btn" onclick="addMoney('6')">6</button>
-            <button class="cash-btn" onclick="addMoney('1')">1</button>
-            <button class="cash-btn" onclick="addMoney('2')">2</button>
-            <button class="cash-btn" onclick="addMoney('3')">3</button>
-            <button class="cash-btn" onclick="addMoney('.')">.</button>
-            <button class="cash-btn" onclick="addMoney('0')">0</button>
-            <button class="cash-btn" onclick="clearMoney()" style="color: var(--error)">C</button>
-        </div>
+            const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
+            const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
 
-        <div id="changeBox" class="hidden">
-            <div style="font-size: 12px; opacity: 0.6;">GIVE CHANGE</div>
-            <div id="dispChange" class="change-display">$0.00</div>
-            <button class="btn-action" id="btnCompleteSale" style="width: 100%; padding: 20px;">Complete Cash
-                Sale</button>
-        </div>
-    </div>
+            // State
+            let selectedTender = null;
+            let isScanning = false;
+            let barcodeBuffer = '';
+            let scanTimer = null;
+            let receivedAmountStr = "";
 
-    <script>
-        // Data from URL (Added fallbacks for different Lightspeed triggers)
-        const urlParams = new URLSearchParams(window.location.search);
-        const saleId = urlParams.get('sale_id') ||
-            urlParams.get('saleId') ||
-            urlParams.get('transaction_id') ||
-            urlParams.get('reference') ||
-            urlParams.get('reference_id');
+            // Elements
+            const mainWrap = document.getElementById('mainWrap');
+            const cashWrap = document.getElementById('cashWrap');
+            const tenderBox = document.getElementById('tenderBox');
+            const btnCash = document.getElementById('btnCash');
+            const btnCard = document.getElementById('btnCard');
+            const btnScanNow = document.getElementById('btnScanNow');
+            const visualRoot = document.getElementById('visualRoot');
+            const ghostInput = document.getElementById('ghostInput');
 
-        const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
-        const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
-
-        // State
-        let selectedTender = null;
-        let isScanning = false;
-        let barcodeBuffer = '';
-        let scanTimer = null;
-        let receivedAmountStr = "";
-
-        // Elements
-        const mainWrap = document.getElementById('mainWrap');
-        const cashWrap = document.getElementById('cashWrap');
-        const tenderBox = document.getElementById('tenderBox');
-        const btnCash = document.getElementById('btnCash');
-        const btnCard = document.getElementById('btnCard');
-        const btnScanNow = document.getElementById('btnScanNow');
-        const visualRoot = document.getElementById('visualRoot');
-        const ghostInput = document.getElementById('ghostInput');
-
-        // Tender Selection
-        function selectTender(type) {
-            selectedTender = type;
-            btnCash.classList.toggle('selected', type === 'cash');
-            btnCard.classList.toggle('selected', type === 'card');
-            btnScanNow.classList.add('ready');
-            gsap.fromTo(type === 'cash' ? btnCash : btnCard, { scale: 0.95 }, { scale: 1, duration: 0.4, ease: "elastic.out(1, 0.3)" });
-        }
-
-        btnCash.onclick = () => selectTender('cash');
-        btnCard.onclick = () => selectTender('card');
-
-        // Scan Activation
-        btnScanNow.onclick = () => {
-            if (!selectedTender) return;
-            isScanning = true;
-            visualRoot.classList.add('scanning');
-            btnScanNow.innerHTML = '<span class="scan-dot"></span> Waiting for ID...';
-            ghostInput.focus({ preventScroll: true });
-        };
-
-        // Ghost Focus Loop
-        setInterval(() => {
-            if (isScanning && document.activeElement !== ghostInput) {
-                ghostInput.focus({ preventScroll: true });
+            // Tender Selection
+            function selectTender(type) {
+                selectedTender = type;
+                btnCash.classList.toggle('selected', type === 'cash');
+                btnCard.classList.toggle('selected', type === 'card');
+                btnScanNow.classList.add('ready');
+                gsap.fromTo(type === 'cash' ? btnCash : btnCard, { scale: 0.95 }, { scale: 1, duration: 0.4, ease: "elastic.out(1, 0.3)" });
             }
-        }, 1000);
 
-        // Barcode Listener with 2-second auto-submit
-        ghostInput.onkeydown = (e) => {
-            if (!isScanning) return;
+            btnCash.onclick = () => selectTender('cash');
+            btnCard.onclick = () => selectTender('card');
 
-            if (e.key === 'Enter') {
-                if (barcodeBuffer.length > 10) {
-                    if (scanTimer) clearTimeout(scanTimer);
-                    processScan(barcodeBuffer);
+            // Scan Activation
+            btnScanNow.onclick = () => {
+                if (!selectedTender) return;
+                isScanning = true;
+                visualRoot.classList.add('scanning');
+                btnScanNow.innerHTML = '<span class="scan-dot"></span> Waiting for ID...';
+                ghostInput.focus({ preventScroll: true });
+            };
+
+            // Ghost Focus Loop
+            setInterval(() => {
+                if (isScanning && document.activeElement !== ghostInput) {
+                    ghostInput.focus({ preventScroll: true });
                 }
-                barcodeBuffer = '';
-            } else if (e.key.length === 1) {
-                barcodeBuffer += e.key;
+            }, 1000);
 
-                // If we get at least 10 chars, start a 2-second timer to auto-submit
-                // (in case the scanner doesn't send an "Enter" key)
-                if (scanTimer) clearTimeout(scanTimer);
-                scanTimer = setTimeout(() => {
+            // Barcode Listener with 2-second auto-submit
+            ghostInput.onkeydown = (e) => {
+                if (!isScanning) return;
+
+                if (e.key === 'Enter') {
                     if (barcodeBuffer.length > 10) {
+                        if (scanTimer) clearTimeout(scanTimer);
                         processScan(barcodeBuffer);
                     }
                     barcodeBuffer = '';
-                }, 2000);
+                } else if (e.key.length === 1) {
+                    barcodeBuffer += e.key;
+
+                    // If we get at least 10 chars, start a 2-second timer to auto-submit
+                    // (in case the scanner doesn't send an "Enter" key)
+                    if (scanTimer) clearTimeout(scanTimer);
+                    scanTimer = setTimeout(() => {
+                        if (barcodeBuffer.length > 10) {
+                            processScan(barcodeBuffer);
+                        }
+                        barcodeBuffer = '';
+                    }, 2000);
+                }
+            };
+
+            // Initialize debug info
+            document.getElementById('debugUrl').textContent = window.location.pathname;
+            document.getElementById('debugSale').textContent = saleId || 'MISSING';
+
+            async function testConnectivity() {
+                const btn = event.target;
+                btn.textContent = 'Testing...';
+                try {
+                    const res = await fetch('/api/debug/ping');
+                    const data = await res.json();
+                    alert(`Ping Success!\nTime: ${data.timestamp}\nDB: ${data.db}`);
+                } catch (err) {
+                    alert(`Ping Failed: ${err.message}`);
+                } finally {
+                    btn.textContent = 'Test Ping';
+                }
             }
-        };
 
-        async function processScan(rawData) {
-            if (!saleId) {
-                showError("Missing Sale ID (Reload from POS)");
-                return;
-            }
-
-            isScanning = false;
-            visualRoot.classList.remove('scanning');
-            btnScanNow.innerHTML = '<span class="scan-dot"></span> Processing...';
-            btnScanNow.style.opacity = "0.5";
-            btnScanNow.style.pointerEvents = "none";
-
-            try {
-                const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ barcodeData: rawData })
-                });
-
-                if (!response.ok) {
-                    const errorJson = await response.json().catch(() => ({}));
-                    const errorMsg = errorJson.message || response.statusText;
-                    reportRemoteError('HTTP_ERROR', { status: response.status, statusText: response.statusText, response: errorJson });
-                    showError(`Server Error (${response.status}): ${errorMsg}`);
+            async function processScan(rawData) {
+                if (!saleId) {
+                    showError("Missing Sale ID (Reload from POS)");
                     return;
                 }
 
-                const data = await response.json();
+                isScanning = false;
+                visualRoot.classList.remove('scanning');
+                btnScanNow.innerHTML = '<span class="scan-dot"></span> Processing...';
+                btnScanNow.style.opacity = "0.5";
+                btnScanNow.style.pointerEvents = "none";
 
-                if (data.success && data.approved) {
-                    showSuccess(data);
-                } else {
-                    reportRemoteError('VERIFICATION_FAILED', { reason: data.reason, details: data.details });
-                    showError(data.reason || 'Verification Failed');
+                try {
+                    const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ barcodeData: rawData })
+                    });
+
+                    if (!response.ok) {
+                        const errorJson = await response.json().catch(() => ({}));
+                        const errorMsg = errorJson.message || response.statusText;
+                        reportRemoteError('HTTP_ERROR', { status: response.status, statusText: response.statusText, response: errorJson });
+                        showError(`Server Error (${response.status}): ${errorMsg}`);
+                        return;
+                    }
+
+                    const data = await response.json();
+
+                    if (data.success && data.approved) {
+                        showSuccess(data);
+                    } else {
+                        reportRemoteError('VERIFICATION_FAILED', { reason: data.reason, details: data.details });
+                        showError(data.reason || 'Verification Failed');
+                    }
+                } catch (e) {
+                    reportRemoteError('FETCH_EXCEPTION', { message: e.message, stack: e.stack });
+                    showError(`Network Error: ${e.message}`);
+                } finally {
+                    btnScanNow.style.opacity = "1";
+                    btnScanNow.style.pointerEvents = "auto";
                 }
-            } catch (e) {
-                reportRemoteError('FETCH_EXCEPTION', { message: e.message, stack: e.stack });
-                showError(`Network Error: ${e.message}`);
-            } finally {
+            }
+
+            async function reportRemoteError(type, details) {
+                try {
+                    await fetch('/api/debug/client-errors', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            error: type,
+                            details: details,
+                            userAgent: navigator.userAgent,
+                            saleId: saleId
+                        })
+                    });
+                } catch (err) {
+                    console.error('Failed to report remote error:', err);
+                }
+            }
+
+            function showSuccess(data) {
+                document.getElementById('successOverlay').classList.add('active');
+                document.getElementById('successDetails').textContent = `${data.customerName || 'Customer'} verified • Age ${data.age || '??'}`;
+
+                document.getElementById('btnContinue').onclick = () => {
+                    if (selectedTender === 'cash') {
+                        document.getElementById('successOverlay').classList.remove('active');
+                        showCashCalculator();
+                    } else {
+                        finishCardFlow();
+                    }
+                };
+            }
+
+            function showError(msg) {
+                document.getElementById('errorOverlay').classList.add('active');
+                document.getElementById('errorMsg').textContent = msg;
+            }
+
+            function resetUI() {
+                // Hide overlays
+                document.getElementById('errorOverlay').classList.remove('active');
+                document.getElementById('successOverlay').classList.remove('active');
+
+                // Reset scan button
+                isScanning = false;
+                visualRoot.classList.remove('scanning');
+                btnScanNow.innerHTML = '<span class="scan-dot"></span> Scan Now';
                 btnScanNow.style.opacity = "1";
                 btnScanNow.style.pointerEvents = "auto";
+
+                // Re-show main controls
+                tenderBox.classList.remove('hidden');
+                btnScanNow.classList.remove('hidden');
+
+                // Ensure ghost input is ready
+                ghostInput.focus({ preventScroll: true });
             }
-        }
 
-        async function reportRemoteError(type, details) {
-            try {
-                await fetch('/api/debug/client-errors', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        error: type,
-                        details: details,
-                        userAgent: navigator.userAgent,
-                        saleId: saleId
-                    })
-                });
-            } catch (err) {
-                console.error('Failed to report remote error:', err);
+            // Cash Calculator Logic
+            function showCashCalculator() {
+                mainWrap.classList.add('hidden');
+                cashWrap.style.display = 'block';
+                document.getElementById('dispSaleTotal').textContent = `$${saleAmount.toFixed(2)}`;
+                clearMoney();
             }
-        }
 
-        function showSuccess(data) {
-            document.getElementById('successOverlay').classList.add('active');
-            document.getElementById('successDetails').textContent = `${data.customerName || 'Customer'} verified • Age ${data.age || '??'}`;
+            function addMoney(val) {
+                if (val === '.' && receivedAmountStr.includes('.')) return;
+                receivedAmountStr += val;
+                updateCashDisplay();
+            }
 
-            document.getElementById('btnContinue').onclick = () => {
-                if (selectedTender === 'cash') {
-                    document.getElementById('successOverlay').classList.remove('active');
-                    showCashCalculator();
+            function clearMoney() {
+                receivedAmountStr = "";
+                updateCashDisplay();
+            }
+
+            function updateCashDisplay() {
+                const val = parseFloat(receivedAmountStr || "0");
+                document.getElementById('dispReceived').textContent = `$${val.toFixed(2)}`;
+
+                const change = val - saleAmount;
+                if (change >= 0 && val > 0) {
+                    document.getElementById('changeBox').classList.remove('hidden');
+                    document.getElementById('dispChange').textContent = `$${change.toFixed(2)}`;
                 } else {
-                    finishCardFlow();
+                    document.getElementById('changeBox').classList.add('hidden');
+                }
+            }
+
+            document.getElementById('btnCompleteSale').onclick = async () => {
+                const val = parseFloat(receivedAmountStr);
+                document.getElementById('btnCompleteSale').textContent = "Processing...";
+                try {
+                    await fetch(`/api/sales/${saleId}/complete`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            approved: true,
+                            paymentType: 'cash',
+                            cashReceived: val,
+                            changeGiven: val - saleAmount
+                        })
+                    });
+                    window.parent.postMessage('ACCEPT', '*');
+                } catch (e) {
+                    alert("Error completing sale");
                 }
             };
-        }
 
-        function showError(msg) {
-            document.getElementById('errorOverlay').classList.add('active');
-            document.getElementById('errorMsg').textContent = msg;
-        }
-
-        function resetUI() {
-            // Hide overlays
-            document.getElementById('errorOverlay').classList.remove('active');
-            document.getElementById('successOverlay').classList.remove('active');
-
-            // Reset scan button
-            isScanning = false;
-            visualRoot.classList.remove('scanning');
-            btnScanNow.innerHTML = '<span class="scan-dot"></span> Scan Now';
-            btnScanNow.style.opacity = "1";
-            btnScanNow.style.pointerEvents = "auto";
-
-            // Re-show main controls
-            tenderBox.classList.remove('hidden');
-            btnScanNow.classList.remove('hidden');
-
-            // Ensure ghost input is ready
-            ghostInput.focus({ preventScroll: true });
-        }
-
-        // Cash Calculator Logic
-        function showCashCalculator() {
-            mainWrap.classList.add('hidden');
-            cashWrap.style.display = 'block';
-            document.getElementById('dispSaleTotal').textContent = `$${saleAmount.toFixed(2)}`;
-            clearMoney();
-        }
-
-        function addMoney(val) {
-            if (val === '.' && receivedAmountStr.includes('.')) return;
-            receivedAmountStr += val;
-            updateCashDisplay();
-        }
-
-        function clearMoney() {
-            receivedAmountStr = "";
-            updateCashDisplay();
-        }
-
-        function updateCashDisplay() {
-            const val = parseFloat(receivedAmountStr || "0");
-            document.getElementById('dispReceived').textContent = `$${val.toFixed(2)}`;
-
-            const change = val - saleAmount;
-            if (change >= 0 && val > 0) {
-                document.getElementById('changeBox').classList.remove('hidden');
-                document.getElementById('dispChange').textContent = `$${change.toFixed(2)}`;
-            } else {
-                document.getElementById('changeBox').classList.add('hidden');
+            function finishCardFlow() {
+                // Signal for card tender: exit/close so POS can take over
+                window.parent.postMessage('CLOSE', '*');
+                window.parent.postMessage('EXIT', '*');
+                window.parent.postMessage('DECLINE', '*'); // Closes the payment-gateway iframe in Lightspeed
             }
-        }
 
-        document.getElementById('btnCompleteSale').onclick = async () => {
-            const val = parseFloat(receivedAmountStr);
-            document.getElementById('btnCompleteSale').textContent = "Processing...";
-            try {
-                await fetch(`/api/sales/${saleId}/complete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        approved: true,
-                        paymentType: 'cash',
-                        cashReceived: val,
-                        changeGiven: val - saleAmount
-                    })
-                });
-                window.parent.postMessage('ACCEPT', '*');
-            } catch (e) {
-                alert("Error completing sale");
-            }
-        };
-
-        function finishCardFlow() {
-            // Signal for card tender: exit/close so POS can take over
-            window.parent.postMessage('CLOSE', '*');
-            window.parent.postMessage('EXIT', '*');
-            window.parent.postMessage('DECLINE', '*'); // Closes the payment-gateway iframe in Lightspeed
-        }
-
-        // Auto-detect refund
-        if (saleAmount < 0) { window.parent.postMessage('ACCEPT', '*'); } </script>
-</body>
+            // Auto-detect refund
+            if (saleAmount < 0) { window.parent.postMessage('ACCEPT', '*'); } </script>
+    </body>
 
 </html>

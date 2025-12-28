@@ -449,10 +449,40 @@
             font-weight: 700;
             margin: 10px 0;
         }
+
+        #debugPanel {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 5px;
+            border-radius: 5px;
+            z-index: 9999;
+            pointer-events: none;
+            max-width: 200px;
+        }
+
+        .debug-btn {
+            pointer-events: auto;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 2px 5px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
     </style>
 </head>
 
 <body class="embedded">
+    <div id="debugPanel">
+        <div>URL: <span id="debugUrl">loading...</span></div>
+        <div>Sale: <span id="debugSale">loading...</span></div>
+        <button class="debug-btn" onclick="testConnectivity()">Test Ping</button>
+    </div>
     <div class="grid-bg"></div>
     <div id="particles"></div>
 
@@ -586,6 +616,39 @@
         const overrideModal = document.getElementById('overrideModal');
         const pinDots = document.querySelectorAll('.pin-dot');
 
+        // Initialize debug info
+        document.getElementById('debugUrl').textContent = window.location.pathname;
+        document.getElementById('debugSale').textContent = saleId || 'MISSING';
+
+        async function testConnectivity() {
+            const btn = event.target;
+            btn.textContent = 'Testing...';
+            try {
+                const res = await fetch('/api/debug/ping');
+                const data = await res.json();
+                alert(`Ping Success!\nTime: ${data.timestamp}\nDB: ${data.db}`);
+            } catch (err) {
+                alert(`Ping Failed: ${err.message}`);
+            } finally {
+                btn.textContent = 'Test Ping';
+            }
+        }
+
+        async function reportRemoteError(type, details) {
+            try {
+                await fetch('/api/debug/client-errors', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        error: type,
+                        details: details,
+                        userAgent: navigator.userAgent,
+                        saleId: saleId
+                    })
+                });
+            } catch (err) { console.error('Failed to report remote error:', err); }
+        }
+
         // GSAP Initialization
         function initAnimations() {
             gsap.to('.logo', { y: -5, duration: 2, ease: 'power1.inOut', yoyo: true, repeat: -1 });
@@ -673,10 +736,25 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ barcodeData: cleanData, registerId, clerkId })
                 });
+
+                if (!res.ok) {
+                    const errorJson = await res.json().catch(() => ({}));
+                    const errorMsg = errorJson.message || res.statusText;
+                    reportRemoteError('HTTP_ERROR', { status: res.status, statusText: res.statusText, response: errorJson });
+                    showError(`Server Error (${res.status}): ${errorMsg}`);
+                    return;
+                }
+
                 const result = await res.json();
                 if (result.success && result.approved) showSuccess(result);
-                else showError(result.reason);
-            } catch (e) { showError('Processing Error'); }
+                else {
+                    reportRemoteError('VERIFICATION_FAILED', { reason: result.reason });
+                    showError(result.reason);
+                }
+            } catch (e) {
+                reportRemoteError('FETCH_EXCEPTION', { message: e.message, stack: e.stack });
+                showError(`Network Error: ${e.message}`);
+            }
         }
 
         // Status Polling

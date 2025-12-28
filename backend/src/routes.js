@@ -14,15 +14,30 @@ const lightspeedMode = process.env.LIGHTSPEED_USE_MOCK === 'true' ? 'mock' : 'li
 
 // Client Error Reporting Endpoint
 router.post('/debug/client-errors', async (req, res) => {
-  const { error, details, userAgent, saleId } = req.body;
-  await complianceStore.logDiagnostic({
-    type: 'CLIENT_ERROR',
-    saleId,
-    userAgent,
-    error,
-    details
+  try {
+    const { error, details, userAgent, saleId } = req.body;
+    await complianceStore.logDiagnostic({
+      type: 'CLIENT_ERROR',
+      saleId,
+      userAgent,
+      error,
+      details
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Diagnostic logging failed:', err);
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// Ping Endpoint for connectivity testing
+router.get('/debug/ping', (req, res) => {
+  res.json({
+    success: true,
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+    db: db.pool ? 'connected' : 'none'
   });
-  res.json({ success: true });
 });
 
 function isVerificationExpired(verification) {
@@ -506,7 +521,17 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
   const { barcodeData, registerId, clerkId } = req.body;
 
   // DEBUG LOGGING - Log every scan attempt
-  await complianceStore.logDiagnostic({ type: 'SCAN_ATTEMPT', saleId, registerId, clerkId, barcodeLength: barcodeData ? barcodeData.length : 0 });
+  try {
+    await complianceStore.logDiagnostic({
+      type: 'SCAN_ATTEMPT',
+      saleId,
+      registerId,
+      clerkId,
+      barcodeLength: barcodeData ? barcodeData.length : 0
+    });
+  } catch (logErr) {
+    console.error('Early diagnostic log failed:', logErr);
+  }
   console.log('===========================================');
   console.log('🔫 BLUETOOTH SCANNER SCAN RECEIVED');
   console.log('===========================================');
