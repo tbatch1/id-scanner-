@@ -362,36 +362,52 @@
 
         #debugPanel {
             position: fixed;
-            bottom: 10px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.8);
+            bottom: 15px;
+            left: 15px;
+            background: rgba(0, 0, 0, 0.9);
             color: #0f0;
             font-family: monospace;
-            font-size: 10px;
-            padding: 5px;
-            border-radius: 5px;
-            z-index: 9999;
-            pointer-events: none;
-            max-width: 200px;
+            font-size: 11px;
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 10000;
+            max-width: 250px;
+            border: 1px solid #0f0;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            pointer-events: auto;
         }
 
         .debug-btn {
-            pointer-events: auto;
-            background: #333;
-            color: white;
-            border: 1px solid #555;
-            padding: 2px 5px;
+            background: #222;
+            color: #0ff;
+            border: 1px solid #0ff;
+            padding: 6px 10px;
             cursor: pointer;
-            margin-top: 5px;
+            margin-top: 10px;
+            font-size: 11px;
+            border-radius: 4px;
+            width: 100%;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        #debugStatus {
+            margin: 8px 0;
+            color: #fff;
+            padding: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            word-break: break-all;
         }
     </style>
 </head>
 
 <body>
     <div id="debugPanel">
-        <div>URL: <span id="debugUrl">loading...</span></div>
-        <div>Sale: <span id="debugSale">loading...</span></div>
-        <button class="debug-btn" onclick="testConnectivity()">Test Ping</button>
+        <div style="font-weight: bold; border-bottom: 1px solid #0f0; margin-bottom: 5px;">REMOTE DIAGNOSTICS</div>
+        <div>URL: <span id="debugUrl">...</span></div>
+        <div>ID: <span id="debugSale">...</span></div>
+        <div id="debugStatus">SYSTEM READY</div>
+        <button class="debug-btn" onclick="testConnectivity(event)">TEST PING</button>
     </div>
 
     <body class="embedded">
@@ -426,6 +442,11 @@
                 <span class="scan-dot"></span>
                 Scan Now
             </button>
+
+            <!-- Scan Data Preview -->
+            <div id="scanPreview"
+                style="margin-top: 10px; font-family: monospace; font-size: 10px; opacity: 0.5; max-width: 300px; word-break: break-all; min-height: 12px; border: 1px solid rgba(255,255,255,0.1); padding: 5px; border-radius: 4px;">
+                ...</div>
 
             <!-- Success overlay -->
             <div id="successOverlay" class="overlay-card">
@@ -554,6 +575,7 @@
                     barcodeBuffer = '';
                 } else if (e.key.length === 1) {
                     barcodeBuffer += e.key;
+                    document.getElementById('scanPreview').textContent = barcodeBuffer;
 
                     // If we get at least 10 chars, start a 2-second timer to auto-submit
                     // (in case the scanner doesn't send an "Enter" key)
@@ -571,17 +593,19 @@
             document.getElementById('debugUrl').textContent = window.location.pathname;
             document.getElementById('debugSale').textContent = saleId || 'MISSING';
 
-            async function testConnectivity() {
-                const btn = event.target;
-                btn.textContent = 'Testing...';
+            async function testConnectivity(ev) {
+                const statusEl = document.getElementById('debugStatus');
+                statusEl.textContent = 'PINGING SERVER...';
+                statusEl.style.color = '#fff';
+
                 try {
                     const res = await fetch('/api/debug/ping');
                     const data = await res.json();
-                    alert(`Ping Success!\nTime: ${data.timestamp}\nDB: ${data.db}`);
+                    statusEl.textContent = `SUCCESS: DB=${data.db}`;
+                    statusEl.style.color = '#0f0';
                 } catch (err) {
-                    alert(`Ping Failed: ${err.message}`);
-                } finally {
-                    btn.textContent = 'Test Ping';
+                    statusEl.textContent = `ERROR: ${err.message}`;
+                    statusEl.style.color = '#f00';
                 }
             }
 
@@ -606,7 +630,7 @@
 
                     if (!response.ok) {
                         const errorJson = await response.json().catch(() => ({}));
-                        const errorMsg = errorJson.message || response.statusText;
+                        const errorMsg = errorJson.technical || errorJson.message || response.statusText;
                         reportRemoteError('HTTP_ERROR', { status: response.status, statusText: response.statusText, response: errorJson });
                         showError(`Server Error (${response.status}): ${errorMsg}`);
                         return;
@@ -663,6 +687,7 @@
             function showError(msg) {
                 document.getElementById('errorOverlay').classList.add('active');
                 document.getElementById('errorMsg').textContent = msg;
+                document.getElementById('debugStatus').textContent = 'ERROR: ' + msg;
             }
 
             function resetUI() {
