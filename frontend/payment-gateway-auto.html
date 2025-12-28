@@ -391,7 +391,12 @@
         <div id="errorOverlay" class="overlay-card error">
             <h2 style="color: var(--error)">Error</h2>
             <p id="errorMsg">Failed to verify ID</p>
-            <button class="btn-action" style="background: var(--error)" onclick="location.reload()">Try Again</button>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button class="btn-action" style="background: var(--error)" onclick="location.reload()">Try
+                    Again</button>
+                <button class="btn-action" style="background: rgba(255,255,255,0.1); color: white;"
+                    onclick="window.parent.postMessage('CLOSE', '*')">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -491,9 +496,16 @@
         };
 
         async function processScan(rawData) {
+            if (!saleId) {
+                showError("Missing Sale ID (Reload from POS)");
+                return;
+            }
+
             isScanning = false;
             visualRoot.classList.remove('scanning');
-            btnScanNow.innerHTML = 'Processing...';
+            btnScanNow.innerHTML = '<span class="scan-dot"></span> Processing...';
+            btnScanNow.style.opacity = "0.5";
+            btnScanNow.style.pointerEvents = "none";
 
             try {
                 const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
@@ -509,7 +521,10 @@
                     showError(data.reason || 'Verification Failed');
                 }
             } catch (e) {
-                showError('Server Error');
+                showError('Server Error - Please Try Again');
+            } finally {
+                btnScanNow.style.opacity = "1";
+                btnScanNow.style.pointerEvents = "auto";
             }
         }
 
