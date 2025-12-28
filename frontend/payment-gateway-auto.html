@@ -45,7 +45,14 @@
             background: #0f1419;
             overflow-y: auto;
             overflow-x: hidden;
+            display: block;
+            padding-top: 20px;
         }
+
+        body.embedded .scanner-wrap {
+            margin: 0 auto;
+        }
+
 
         body.embedded .grid-bg,
         body.embedded #particles {
@@ -1306,14 +1313,15 @@
         function focusScannerTarget() {
             const target = (isEmbedded && scanBoxPreferred && isScanBoxVisible()) ? scanInput : hiddenInput;
             if (!target) return;
-            try { target.focus(); } catch (e) { }
+            try { target.focus({ preventScroll: true }); } catch (e) { }
             try {
                 if (document.activeElement !== target) {
                     target.click();
-                    target.focus();
+                    target.focus({ preventScroll: true });
                 }
             } catch (e) { }
         }
+
 
         function ensureFocus() {
             // CRITICAL: Does not interrupt if a scan is currently coming in

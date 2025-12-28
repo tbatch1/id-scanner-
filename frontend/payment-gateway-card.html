@@ -45,7 +45,14 @@
             background: #0f1419;
             overflow-y: auto;
             overflow-x: hidden;
+            display: block;
+            padding-top: 20px;
         }
+
+        body.embedded .scanner-wrap {
+            margin: 0 auto;
+        }
+
 
         body.embedded .grid-bg,
         body.embedded #particles {
@@ -639,8 +646,14 @@
         gsap.to('.logo', { y: -5, duration: 2, ease: 'power1.inOut', yoyo: true, repeat: -1 });
 
         // Focus & Activation
-        function ensureFocus() { if (document.activeElement !== scanInput) hiddenInput.focus(); }
+        function ensureFocus() {
+            if (document.activeElement !== scanInput) {
+                hiddenInput.focus({ preventScroll: true });
+                if (isScanning && scanInput) scanInput.focus({ preventScroll: true });
+            }
+        }
         setInterval(ensureFocus, 2500);
+
 
         function activateScanner() {
             if (isScanning) return;
