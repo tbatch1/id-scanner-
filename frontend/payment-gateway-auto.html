@@ -43,7 +43,8 @@
         /* Embedded iframe mode: reduce visual noise in POS */
         body.embedded {
             background: #0f1419;
-            overflow: hidden;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         body.embedded .grid-bg,
@@ -1046,10 +1047,12 @@
             </div>
 
             <div class="scan-input-section hidden" id="scanInputSection">
-                <p class="scan-input-hint" id="scanInputHint">Tap the box, then scan. If nothing types here, scan into the
+                <p class="scan-input-hint" id="scanInputHint">Tap the box, then scan. If nothing types here, scan into
+                    the
                     sale Notes field instead.</p>
-                <textarea id="scanInput" class="scan-input" rows="5" placeholder="Tap here, then scan ID (the scan should appear here)…"
-                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="none"></textarea>
+                <textarea id="scanInput" class="scan-input" rows="5"
+                    placeholder="Tap here, then scan ID (the scan should appear here)…" autocomplete="off"
+                    autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="none"></textarea>
             </div>
 
             <div class="action-row">
@@ -2179,22 +2182,22 @@
                 if (successPrimaryBtn) successPrimaryBtn.textContent = 'Return to POS';
                 setTimeout(() => finishCashFlow(), 400);
             } else {
-            ensureFocus();
+                ensureFocus();
 
-            // Embedded iPad mode: show the scan box and wait for the scanner keystrokes.
-            if (isEmbedded) {
-                 if (scanInputSection) {
-                     scanInputSection.classList.remove('hidden');
-                 }
-                 scanCard.classList.add('scanning');
-                 statusIndicator.classList.add('scanning');
-                 statusText.textContent = 'Scan now';
-                 dbgApi.textContent = 'EMBEDDED MODE';
-                 if (scanSubtitle) {
-                     scanSubtitle.textContent = 'Tap the box below, then scan the ID.';
-                 }
-                 scanBoxPreferred = true;
-              }
+                // Embedded iPad mode: show the scan box and wait for the scanner keystrokes.
+                if (isEmbedded) {
+                    if (scanInputSection) {
+                        scanInputSection.classList.remove('hidden');
+                    }
+                    scanCard.classList.add('scanning');
+                    statusIndicator.classList.add('scanning');
+                    statusText.textContent = 'Scan now';
+                    dbgApi.textContent = 'EMBEDDED MODE';
+                    if (scanSubtitle) {
+                        scanSubtitle.textContent = 'Tap the box below, then scan the ID.';
+                    }
+                    scanBoxPreferred = true;
+                }
             }
         }
         function openRemoteScanner() {
@@ -2372,8 +2375,8 @@
         };
         showSuccess = window.showSuccess;
 
-</script>
+    </script>
 
-</body >
+</body>
 
-</html >
+</html>
