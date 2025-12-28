@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>THC Club - Smart Checkout</title>
+
+    <!-- GSAP Animation Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --thc-orange: #e55c2c;
+            --thc-blue: #42b4e6;
+            --thc-black: #1a1a1a;
+            --thc-green: #2ea750;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --bg-dark: #0f1419;
+            --card-bg: rgba(26, 26, 46, 0.95);
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            min-height: 100vh;
+            color: white;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+        }
+
+        /* Animated grid background */
+        .grid-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(66, 180, 230, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(66, 180, 230, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .scanner-wrap {
+            position: relative;
+            width: 100%;
+            max-width: 480px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* ========== LOGO & RING ========== */
+        .logo-container {
+            position: relative;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .logo {
+            width: 140px;
+            height: auto;
+            filter: drop-shadow(0 0 30px rgba(66, 180, 230, 0.3));
+            z-index: 2;
+        }
+
+        .scan-ring {
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border: 3px solid transparent;
+            border-top-color: var(--thc-orange);
+            border-right-color: var(--thc-blue);
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .scanning .scan-ring {
+            opacity: 1;
+            animation: spinRing 1.5s linear infinite;
+        }
+
+        @keyframes spinRing {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ========== HEADERS ========== */
+        .main-title {
+            font-size: 28px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+        }
+
+        /* ========== TENDER SELECTION BOX ========== */
+        .tender-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 30px;
+            position: relative;
+            text-align: left;
+        }
+
+        .tender-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .choose-badge {
+            background: var(--thc-orange);
+            color: black;
+            font-weight: 900;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 5px;
+        }
+
+        .tender-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .tender-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .tender-btn:active {
+            transform: scale(0.95);
+        }
+
+        .tender-btn.selected {
+            border-color: var(--thc-blue);
+            background: rgba(66, 180, 230, 0.1);
+            box-shadow: 0 0 20px rgba(66, 180, 230, 0.3);
+        }
+
+        .tender-hint {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        /* ========== SCAN BUTTON ========== */
+        .scan-now-btn {
+            background: rgba(229, 92, 44, 0.1);
+            border: 2px solid var(--thc-orange);
+            color: var(--thc-orange);
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 auto;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .scan-now-btn.ready {
+            opacity: 1;
+            pointer-events: auto;
+            background: rgba(229, 92, 44, 0.2);
+            box-shadow: 0 0 30px rgba(229, 92, 44, 0.2);
+        }
+
+        .scan-now-btn:active {
+            transform: scale(0.97);
+        }
+
+        .scan-dot {
+            width: 8px;
+            height: 8px;
+            background: currentColor;
+            border-radius: 50%;
+        }
+
+        .scanning .scan-dot {
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.4;
+                transform: scale(0.8);
+            }
+        }
+
+        /* ========== HIDDEN INPUT ========== */
+        #ghostInput {
+            position: fixed;
+            top: -100px;
+            left: -100px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* ========== CARDS & OVERLAYS ========== */
+        .overlay-card {
+            display: none;
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 30px;
+            border: 2px solid var(--thc-green);
+            margin-top: 20px;
+        }
+
+        .overlay-card.active {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="grid-bg"></div>
+    <input type="text" id="ghostInput" autocomplete="off" inputmode="none">
+
+    <div class="scanner-wrap">
+        <!-- Logo Area -->
+        <div class="logo-container" id="visualRoot">
+            <div class="scan-ring"></div>
+            <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="logo">
+        </div>
+
+        <h1 class="main-title">Select Tender Type</h1>
+        <p class="subtitle">Tap the box below, then scan the ID.</p>
+
+        <!-- Tender Selection Box -->
+        <div class="tender-box">
+            <div class="tender-label">
+                Tender
+                <span class="choose-badge">CHOOSE</span>
+            </div>
+            <div class="tender-buttons">
+                <button class="tender-btn" id="btnCash">Cash</button>
+                <button class="tender-btn" id="btnCard">Card</button>
+            </div>
+            <div class="tender-hint">If you tapped the ID Card button, choose Card.</div>
+        </div>
+
+        <!-- Scan Trigger -->
+        <button class="scan-now-btn" id="btnScanNow">
+            <span class="scan-dot"></span>
+            Scan Now
+        </button>
+
+        <!-- Dynamic Success/Error Overlays will come here -->
+        <div id="statusOverlay" class="overlay-card">
+            <h2 id="statusTitle">Verified</h2>
+            <p id="statusMsg">Loading...</p>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let selectedTender = null;
+        let isScanning = false;
+        let barcodeBuffer = '';
+        let scanTimer = null;
+
+        // Elements
+        const btnCash = document.getElementById('btnCash');
+        const btnCard = document.getElementById('btnCard');
+        const btnScanNow = document.getElementById('btnScanNow');
+        const visualRoot = document.getElementById('visualRoot');
+        const ghostInput = document.getElementById('ghostInput');
+
+        // Selection Logic
+        function selectTender(type) {
+            selectedTender = type;
+            btnCash.classList.toggle('selected', type === 'cash');
+            btnCard.classList.toggle('selected', type === 'card');
+            btnScanNow.classList.add('ready');
+
+            // Interaction feedback
+            gsap.fromTo(type === 'cash' ? btnCash : btnCard,
+                { scale: 0.95 },
+                { scale: 1, duration: 0.4, ease: "elastic.out(1, 0.3)" }
+            );
+        }
+
+        btnCash.onclick = () => selectTender('cash');
+        btnCard.onclick = () => selectTender('card');
+
+        // Scan Activation
+        btnScanNow.onclick = () => {
+            if (!selectedTender) return;
+            isScanning = true;
+            visualRoot.classList.add('scanning');
+            btnScanNow.innerHTML = '<span class="scan-dot"></span> Waiting for ID...';
+
+            // Focus ghost input
+            ghostInput.focus({ preventScroll: true });
+        };
+
+        // Ghost Focus Loop
+        setInterval(() => {
+            if (isScanning && document.activeElement !== ghostInput) {
+                ghostInput.focus({ preventScroll: true });
+            }
+        }, 1000);
+
+        // Barcode Interception
+        ghostInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                processScan(barcodeBuffer);
+                barcodeBuffer = '';
+            } else if (e.key.length === 1) {
+                barcodeBuffer += e.key;
+            }
+        };
+
+        function processScan(data) {
+            console.log("Captured Data:", data);
+            // Integration with backend /api/sales/:id/verify-bluetooth would go here
+            // For now, let's just mimic a success for the UI demo
+            visualRoot.classList.remove('scanning');
+            btnScanNow.textContent = "VERIFIED ✓";
+            btnScanNow.style.borderColor = "var(--thc-green)";
+            btnScanNow.style.color = "var(--thc-green)";
+        }
+
+        // Particle Background
+        function createParticles() {
+            const container = document.body;
+            for (let i = 0; i < 20; i++) {
+                const p = document.createElement('div');
+                p.style.cssText = `
+                    position: fixed;
+                    width: 4px;
+                    height: 4px;
+                    background: rgba(66, 180, 230, 0.2);
+                    border-radius: 50%;
+                    pointer-events: none;
+                    z-index: -1;
+                    left: ${Math.random() * 100}%;
+                    top: ${Math.random() * 100}%;
+                `;
+                container.appendChild(p);
+                gsap.to(p, {
+                    y: -100,
+                    opacity: 0,
+                    duration: 3 + Math.random() * 2,
+                    repeat: -1,
+                    delay: Math.random() * 5
+                });
+            }
+        }
+        createParticles();
+
+    </script>
+</body>
+
+</html>
