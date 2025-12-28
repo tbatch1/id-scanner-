@@ -268,6 +268,8 @@
 
         .overlay-card.active {
             display: block;
+            position: relative;
+            z-index: 1001;
         }
 
         .overlay-card.error {
@@ -434,10 +436,15 @@
     </div>
 
     <script>
-        // Data from URL
+        // Data from URL (Added fallbacks for different Lightspeed triggers)
         const urlParams = new URLSearchParams(window.location.search);
-        const saleId = urlParams.get('sale_id') || urlParams.get('saleId');
-        const rawAmount = urlParams.get('amount') || urlParams.get('total') || '0';
+        const saleId = urlParams.get('sale_id') ||
+            urlParams.get('saleId') ||
+            urlParams.get('transaction_id') ||
+            urlParams.get('reference') ||
+            urlParams.get('reference_id');
+
+        const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
         const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
 
         // State
@@ -485,13 +492,28 @@
             }
         }, 1000);
 
-        // Barcode Listener
+        // Barcode Listener with 2-second auto-submit
         ghostInput.onkeydown = (e) => {
+            if (!isScanning) return;
+
             if (e.key === 'Enter') {
-                if (barcodeBuffer.length > 20) processScan(barcodeBuffer);
+                if (barcodeBuffer.length > 10) {
+                    if (scanTimer) clearTimeout(scanTimer);
+                    processScan(barcodeBuffer);
+                }
                 barcodeBuffer = '';
             } else if (e.key.length === 1) {
                 barcodeBuffer += e.key;
+
+                // If we get at least 10 chars, start a 2-second timer to auto-submit
+                // (in case the scanner doesn't send an "Enter" key)
+                if (scanTimer) clearTimeout(scanTimer);
+                scanTimer = setTimeout(() => {
+                    if (barcodeBuffer.length > 10) {
+                        processScan(barcodeBuffer);
+                    }
+                    barcodeBuffer = '';
+                }, 2000);
             }
         };
 
@@ -532,7 +554,8 @@
             tenderBox.classList.add('hidden');
             btnScanNow.classList.add('hidden');
             document.getElementById('successOverlay').classList.add('active');
-            document.getElementById('successDetails').textContent = `${data.customerName || 'Customer'} verified • Age ${data.age || '??'}`;
+            document.getElementById('successDetails').textContent = `${data.customerName || 'Customer'} verified • Age
+    ${data.age || '??'}`;
 
             document.getElementById('btnContinue').onclick = () => {
                 if (selectedTender === 'cash') {
@@ -610,10 +633,7 @@
         }
 
         // Auto-detect refund
-        if (saleAmount < 0) {
-            window.parent.postMessage('ACCEPT', '*');
-        }
-    </script>
+        if (saleAmount < 0) { window.parent.postMessage('ACCEPT', '*'); } </script>
 </body>
 
 </html>
