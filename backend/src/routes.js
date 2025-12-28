@@ -12,6 +12,19 @@ const router = express.Router();
 const millisecondsPerMinute = 60 * 1000;
 const lightspeedMode = process.env.LIGHTSPEED_USE_MOCK === 'true' ? 'mock' : 'live';
 
+// Client Error Reporting Endpoint
+router.post('/debug/client-errors', async (req, res) => {
+  const { error, details, userAgent, saleId } = req.body;
+  await complianceStore.logDiagnostic({
+    type: 'CLIENT_ERROR',
+    saleId,
+    userAgent,
+    error,
+    details
+  });
+  res.json({ success: true });
+});
+
 function isVerificationExpired(verification) {
   if (!verification) {
     return true;
@@ -442,9 +455,13 @@ function parseAAMVA(data) {
   }
 
   if (dob && !isNaN(dob.getTime())) {
-    const diff = Date.now() - dob.getTime();
-    const ageDate = new Date(diff);
-    age = Math.abs(ageDate.getUTCFullYear() - 1970);
+    try {
+      const diff = Date.now() - dob.getTime();
+      const ageDate = new Date(diff);
+      age = Math.abs(ageDate.getUTCFullYear() - 1970);
+    } catch (e) {
+      age = null;
+    }
   }
 
   return {
@@ -484,608 +501,614 @@ router.post('/test-scan', (req, res) => {
   });
 });
 
-  router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
-    const { saleId } = req.params;
-    const { barcodeData, registerId, clerkId } = req.body;
+router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
+  const { saleId } = req.params;
+  const { barcodeData, registerId, clerkId } = req.body;
 
-    // DEBUG LOGGING - Log every scan attempt
-    console.log('===========================================');
-    console.log('🔫 BLUETOOTH SCANNER SCAN RECEIVED');
-    console.log('===========================================');
-    console.log('Sale ID:', saleId);
-    console.log('Register ID:', registerId);
-    console.log('Clerk ID:', clerkId);
-    console.log('Barcode Length:', barcodeData ? barcodeData.length : 0);
-    console.log('Barcode First 100 chars:', barcodeData ? barcodeData.substring(0, 100) : 'EMPTY');
-    console.log('Barcode Last 50 chars:', barcodeData && barcodeData.length > 50 ? barcodeData.substring(barcodeData.length - 50) : barcodeData);
-    console.log('Has ]L prefix:', barcodeData ? barcodeData.startsWith(']L') : false);
-    console.log('Has @ANSI prefix:', barcodeData ? barcodeData.startsWith('@ANSI') : false);
-    console.log('Line breaks (\\n):', barcodeData ? (barcodeData.match(/\n/g) || []).length : 0);
-    console.log('Carriage returns (\\r):', barcodeData ? (barcodeData.match(/\r/g) || []).length : 0);
-    console.log('===========================================');
+  // DEBUG LOGGING - Log every scan attempt
+  await complianceStore.logDiagnostic({ type: 'SCAN_ATTEMPT', saleId, registerId, clerkId, barcodeLength: barcodeData ? barcodeData.length : 0 });
+  console.log('===========================================');
+  console.log('🔫 BLUETOOTH SCANNER SCAN RECEIVED');
+  console.log('===========================================');
+  console.log('Sale ID:', saleId);
+  console.log('Register ID:', registerId);
+  console.log('Clerk ID:', clerkId);
+  console.log('Barcode Length:', barcodeData ? barcodeData.length : 0);
+  console.log('Barcode First 100 chars:', barcodeData ? barcodeData.substring(0, 100) : 'EMPTY');
+  console.log('Barcode Last 50 chars:', barcodeData && barcodeData.length > 50 ? barcodeData.substring(barcodeData.length - 50) : barcodeData);
+  console.log('Has ]L prefix:', barcodeData ? barcodeData.startsWith(']L') : false);
+  console.log('Has @ANSI prefix:', barcodeData ? barcodeData.startsWith('@ANSI') : false);
+  console.log('Line breaks (\\n):', barcodeData ? (barcodeData.match(/\n/g) || []).length : 0);
+  console.log('Carriage returns (\\r):', barcodeData ? (barcodeData.match(/\r/g) || []).length : 0);
+  console.log('===========================================');
 
-    if (!barcodeData) {
-      console.log('❌ ERROR: No barcode data provided');
-      return res.status(400).json({ success: false, error: 'Barcode data is required.' });
-    }
+  if (!barcodeData) {
+    console.log('❌ ERROR: No barcode data provided');
+    return res.status(400).json({ success: false, error: 'Barcode data is required.' });
+  }
 
-    try {
-      // Best-effort sale context (used for outlet/location resolution and note writing).
-      let sale = null;
-      let locationId = determineLocationId(req, null);
-      try {
-        sale = await lightspeed.getSaleById(saleId);
-        locationId = determineLocationId(req, sale);
-      } catch (e) { }
-
-      // 1. Parse the Barcode
-      let parsed = parseAAMVA(barcodeData);
-
-      // Log parse result
-      console.log('📊 PARSE RESULT:', JSON.stringify(parsed, null, 2));
-
-      // Fallback if parsing failed (or not AAMVA)
-      if (!parsed || !parsed.age) {
-        // If it's just a raw string and not AAMVA, we might fail or treat as manual entry
-        // For this specific "Gun" implementation, we really expect AAMVA.
-        // But let's be graceful.
-        parsed = {
-          firstName: 'Unknown',
-          lastName: 'Customer',
-          age: null, // Will trigger manual check if null
-          documentNumber: 'RAW-' + barcodeData.substring(0, 10),
-          issuingCountry: 'Unknown'
-        };
-      }
-
-      // 2. Determine Approval
-      let approved = false;
-      let reason = null;
-
-      if (parsed.age !== null) {
-        if (parsed.age >= 21) {
-          approved = true;
-        } else {
-          approved = false;
-          reason = `Underage (${parsed.age})`;
-        }
-      } else {
-        approved = false;
-        reason = 'Could not read DOB';
-      }
-
-      // 3. Check Banned List (Database)
-      let bannedRecord = null;
-      if (db.pool && parsed.documentNumber) {
-        try {
-          bannedRecord = await complianceStore.findBannedCustomer({
-            documentType: 'drivers_license',
-            documentNumber: parsed.documentNumber,
-            issuingCountry: parsed.issuingCountry
-          });
-
-          if (bannedRecord) {
-            approved = false;
-            reason = bannedRecord.notes || 'BANNED_CUSTOMER';
-            logger.logSecurity('banned_customer_attempt_bluetooth', {
-              saleId,
-              documentNumber: parsed.documentNumber,
-              bannedId: bannedRecord.id
-            });
-          }
-        } catch (e) {
-          logger.error('Banned check failed', e);
-        }
-      }
-
-      // 4. Prepare verification result
-      const verificationResult = {
-        approved,
-        customerId: parsed.documentNumber,
-        customerName: `${parsed.firstName || ''} ${parsed.lastName || ''}`.trim() || 'Customer',
-        age: parsed.age,
-        reason,
-        registerId: registerId || 'BLUETOOTH-SCANNER'
-      };
-
-      // 4.5 Write an audit note back to Lightspeed (best-effort, never blocks checkout)
-      let noteUpdated = false;
-      try {
-        await lightspeed.recordVerification({
-          saleId,
-          clerkId: clerkId || 'BLUETOOTH_DEVICE',
-          verificationData: {
-            approved,
-            reason,
-            firstName: parsed.firstName,
-            lastName: parsed.lastName,
-            dob: parsed.dob ? parsed.dob.toISOString().slice(0, 10) : null,
-            age: parsed.age,
-            documentType: 'drivers_license',
-            documentNumber: parsed.documentNumber,
-            issuingCountry: parsed.issuingCountry,
-            nationality: parsed.issuingCountry,
-            sex: parsed.sex,
-            source: 'bluetooth_gun',
-            documentExpiry: parsed.documentExpiry || null
-          },
-          sale,
-          locationId
-        });
-        noteUpdated = true;
-      } catch (e) {
-        logger.warn({ event: 'bluetooth_note_update_failed', saleId }, 'Failed to update Lightspeed note for bluetooth scan');
-      }
-
-      // 5. Persist to Database FIRST (Dashboard Integration - CRITICAL)
-      // Database save must succeed before in-memory update to ensure data integrity
-      let dbSaved = false;
-      if (db.pool) {
-        try {
-          // Construct verification object for DB
-          const dbVerification = {
-            verificationId: require('crypto').randomUUID(), // Node 14.17+
-            saleId,
-            clerkId: clerkId || 'BLUETOOTH_DEVICE',
-            status: approved ? 'approved' : 'rejected',
-            reason,
-            firstName: parsed.firstName,
-            lastName: parsed.lastName,
-            dob: parsed.dob ? parsed.dob.toISOString() : null,
-            age: parsed.age,
-            documentType: 'drivers_license',
-            documentNumber: parsed.documentNumber,
-            issuingCountry: parsed.issuingCountry,
-            nationality: parsed.issuingCountry,
-            sex: parsed.sex,
-            source: 'bluetooth_gun'
-          };
-
-          await complianceStore.saveVerification(dbVerification, {
-            ipAddress: req.ip,
-            userAgent: req.get('user-agent'),
-            locationId
-          });
-          dbSaved = true;
-        } catch (dbError) {
-          logger.error({ event: 'bluetooth_db_save_failed', saleId }, 'Failed to save bluetooth verification to DB');
-        }
-      }
-
-      // 6. Update In-Memory Store (for Polling) - ONLY after DB save succeeds
-      saleVerificationStore.updateVerification(saleId, verificationResult);
-
-      // Final success logging
-      console.log('===========================================');
-      console.log('✅ SCAN PROCESSED SUCCESSFULLY');
-      console.log('Approved:', approved);
-      console.log('Customer:', verificationResult.customerName);
-      console.log('Age:', parsed.age);
-      console.log('Reason:', reason || 'N/A');
-      console.log('===========================================\n');
-
-      res.json({
-        success: true,
-        approved,
-        customerName: verificationResult.customerName,
-        age: parsed.age,
-        dob: parsed.dob ? parsed.dob.toISOString().slice(0, 10) : null,
-        reason,
-        dbSaved,
-        noteUpdated
-      });
-
-    } catch (error) {
-      console.error('===========================================');
-      console.error('❌ ERROR PROCESSING BLUETOOTH SCAN');
-      console.error('Error:', error.message);
-      console.error('Stack:', error.stack);
-      console.error('===========================================\n');
-      res.status(500).json({ success: false, error: 'Internal server error during Bluetooth scan processing.' });
-    }
-  });
-
-  router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
-    const { clerkId, scan } = req.body || {};
-    const { saleId } = req.params;
-
-    if (!clerkId) {
-      logger.logSecurity('missing_clerk_id', { saleId });
-      return res.status(400).json({
-        error: 'INVALID_REQUEST',
-        message: 'clerkId is required.'
-      });
-    }
-
-    if (!scan || typeof scan.approved !== 'boolean') {
-      logger.logSecurity('invalid_scan_data', { saleId, clerkId });
-      return res.status(400).json({
-        error: 'INVALID_REQUEST',
-        message: 'scan.approved boolean flag is required.'
-      });
-    }
-
-    if (scan.documentNumber && typeof scan.documentNumber === 'string') {
-      scan.documentNumber = scan.documentNumber.trim();
-      if (!scan.documentNumber.length) {
-        scan.documentNumber = null;
-      }
-    }
-
-    let normalizedScan = normalizeScanInput({
-      ...scan,
-      documentType: scan?.documentType || 'drivers_license'
-    });
+  try {
+    // Best-effort sale context (used for outlet/location resolution and note writing).
     let sale = null;
+    let locationId = determineLocationId(req, null);
     try {
       sale = await lightspeed.getSaleById(saleId);
-      if (!sale) {
-        logger.warn({ event: 'sale_not_found', saleId }, `Sale ${saleId} not found`);
-        return res.status(404).json({
-          error: 'SALE_NOT_FOUND',
-          message: 'Sale not found.'
+      locationId = determineLocationId(req, sale);
+    } catch (e) { }
+
+    // 1. Parse the Barcode
+    let parsed = parseAAMVA(barcodeData);
+
+    // Log parse result
+    console.log('📊 PARSE RESULT:', JSON.stringify(parsed, null, 2));
+
+    // Fallback if parsing failed (or not AAMVA)
+    if (!parsed || !parsed.age) {
+      // If it's just a raw string and not AAMVA, we might fail or treat as manual entry
+      // For this specific "Gun" implementation, we really expect AAMVA.
+      // But let's be graceful.
+      parsed = {
+        firstName: 'Unknown',
+        lastName: 'Customer',
+        age: null, // Will trigger manual check if null
+        documentNumber: 'RAW-' + barcodeData.substring(0, 10),
+        issuingCountry: 'Unknown'
+      };
+    }
+
+    // 2. Determine Approval
+    let approved = false;
+    let reason = null;
+
+    if (parsed.age !== null) {
+      if (parsed.age >= 21) {
+        approved = true;
+      } else {
+        approved = false;
+        reason = `Underage (${parsed.age})`;
+      }
+    } else {
+      approved = false;
+      reason = 'Could not read DOB';
+    }
+
+    // 3. Check Banned List (Database)
+    let bannedRecord = null;
+    if (db.pool && parsed.documentNumber) {
+      try {
+        bannedRecord = await complianceStore.findBannedCustomer({
+          documentType: 'drivers_license',
+          documentNumber: parsed.documentNumber,
+          issuingCountry: parsed.issuingCountry
+        });
+
+        if (bannedRecord) {
+          approved = false;
+          reason = bannedRecord.notes || 'BANNED_CUSTOMER';
+          logger.logSecurity('banned_customer_attempt_bluetooth', {
+            saleId,
+            documentNumber: parsed.documentNumber,
+            bannedId: bannedRecord.id
+          });
+        }
+      } catch (e) {
+        logger.error('Banned check failed', e);
+      }
+    }
+
+    // 4. Prepare verification result
+    const verificationResult = {
+      approved,
+      customerId: parsed.documentNumber,
+      customerName: `${parsed.firstName || ''} ${parsed.lastName || ''}`.trim() || 'Customer',
+      age: parsed.age,
+      reason,
+      registerId: registerId || 'BLUETOOTH-SCANNER'
+    };
+
+    // 4.5 Write an audit note back to Lightspeed (best-effort, never blocks checkout)
+    let noteUpdated = false;
+    try {
+      await lightspeed.recordVerification({
+        saleId,
+        clerkId: clerkId || 'BLUETOOTH_DEVICE',
+        verificationData: {
+          approved,
+          reason,
+          firstName: parsed.firstName,
+          lastName: parsed.lastName,
+          dob: parsed.dob ? parsed.dob.toISOString().slice(0, 10) : null,
+          age: parsed.age,
+          documentType: 'drivers_license',
+          documentNumber: parsed.documentNumber,
+          issuingCountry: parsed.issuingCountry,
+          nationality: parsed.issuingCountry,
+          sex: parsed.sex,
+          source: 'bluetooth_gun',
+          documentExpiry: parsed.documentExpiry || null
+        },
+        sale,
+        locationId
+      });
+      noteUpdated = true;
+    } catch (e) {
+      logger.warn({ event: 'bluetooth_note_update_failed', saleId }, 'Failed to update Lightspeed note for bluetooth scan');
+    }
+
+    // 5. Persist to Database FIRST (Dashboard Integration - CRITICAL)
+    // Database save must succeed before in-memory update to ensure data integrity
+    let dbSaved = false;
+    if (db.pool) {
+      try {
+        // Construct verification object for DB
+        const dbVerification = {
+          verificationId: require('crypto').randomUUID(), // Node 14.17+
+          saleId,
+          clerkId: clerkId || 'BLUETOOTH_DEVICE',
+          status: approved ? 'approved' : 'rejected',
+          reason,
+          firstName: parsed.firstName,
+          lastName: parsed.lastName,
+          dob: parsed.dob ? parsed.dob.toISOString() : null,
+          age: parsed.age,
+          documentType: 'drivers_license',
+          documentNumber: parsed.documentNumber,
+          issuingCountry: parsed.issuingCountry,
+          nationality: parsed.issuingCountry,
+          sex: parsed.sex,
+          source: 'bluetooth_gun'
+        };
+
+        await complianceStore.saveVerification(dbVerification, {
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+          locationId
+        });
+        dbSaved = true;
+      } catch (dbError) {
+        logger.error({ event: 'bluetooth_db_save_failed', saleId }, 'Failed to save bluetooth verification to DB');
+      }
+    }
+
+    // 6. Update In-Memory Store (for Polling) - ONLY after DB save succeeds
+    saleVerificationStore.updateVerification(saleId, verificationResult);
+
+    // Final success logging
+    console.log('===========================================');
+    console.log('✅ SCAN PROCESSED SUCCESSFULLY');
+    console.log('Approved:', approved);
+    console.log('Customer:', verificationResult.customerName);
+    console.log('Age:', parsed.age);
+    console.log('Reason:', reason || 'N/A');
+    console.log('===========================================\n');
+
+    res.json({
+      success: true,
+      approved,
+      customerName: verificationResult.customerName,
+      age: parsed.age,
+      dob: parsed.dob && !isNaN(parsed.dob.getTime()) ? parsed.dob.toISOString().slice(0, 10) : null,
+      reason,
+      dbSaved,
+      noteUpdated
+    });
+
+  } catch (error) {
+    console.error('===========================================');
+    console.error('❌ ERROR PROCESSING BLUETOOTH SCAN');
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('===========================================\n');
+    res.status(500).json({
+      success: false,
+      error: 'SERVER_ERROR',
+      message: error.message,
+      details: 'Internal error during scan parsing or persistence.'
+    });
+  }
+});
+
+router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
+  const { clerkId, scan } = req.body || {};
+  const { saleId } = req.params;
+
+  if (!clerkId) {
+    logger.logSecurity('missing_clerk_id', { saleId });
+    return res.status(400).json({
+      error: 'INVALID_REQUEST',
+      message: 'clerkId is required.'
+    });
+  }
+
+  if (!scan || typeof scan.approved !== 'boolean') {
+    logger.logSecurity('invalid_scan_data', { saleId, clerkId });
+    return res.status(400).json({
+      error: 'INVALID_REQUEST',
+      message: 'scan.approved boolean flag is required.'
+    });
+  }
+
+  if (scan.documentNumber && typeof scan.documentNumber === 'string') {
+    scan.documentNumber = scan.documentNumber.trim();
+    if (!scan.documentNumber.length) {
+      scan.documentNumber = null;
+    }
+  }
+
+  let normalizedScan = normalizeScanInput({
+    ...scan,
+    documentType: scan?.documentType || 'drivers_license'
+  });
+  let sale = null;
+  try {
+    sale = await lightspeed.getSaleById(saleId);
+    if (!sale) {
+      logger.warn({ event: 'sale_not_found', saleId }, `Sale ${saleId} not found`);
+      return res.status(404).json({
+        error: 'SALE_NOT_FOUND',
+        message: 'Sale not found.'
+      });
+    }
+  } catch (saleError) {
+    logger.logAPIError('get_sale_for_verification', saleError, { saleId, clerkId });
+    const status = saleError.status === 404 ? 404 : 502;
+    return res.status(status).json({
+      error: status === 404 ? 'SALE_NOT_FOUND' : 'SALE_LOOKUP_FAILED',
+      message: status === 404 ? 'Sale not found.' : 'Unable to retrieve sale from Lightspeed.'
+    });
+  }
+
+  const locationId = determineLocationId(req, sale);
+  const outletDescriptor = getOutletDescriptor(locationId, sale?.outlet);
+
+  let bannedRecord = null;
+
+  if (db.pool && normalizedScan.documentNumber) {
+    try {
+      bannedRecord = await complianceStore.findBannedCustomer({
+        documentType: normalizedScan.documentType,
+        documentNumber: normalizedScan.documentNumber,
+        issuingCountry: normalizedScan.issuingCountry || null
+      });
+
+      if (bannedRecord) {
+        normalizedScan.approved = false;
+        normalizedScan.reason = sanitizeString(bannedRecord.notes) || 'BANNED_CUSTOMER';
+        logger.logSecurity('banned_customer_attempt', {
+          saleId,
+          clerkId,
+          documentType: normalizedScan.documentType,
+          documentNumber: normalizedScan.documentNumber,
+          issuingCountry: normalizedScan.issuingCountry || null,
+          locationId,
+          outletCode: outletDescriptor?.code || null,
+          bannedId: bannedRecord.id
         });
       }
-    } catch (saleError) {
-      logger.logAPIError('get_sale_for_verification', saleError, { saleId, clerkId });
-      const status = saleError.status === 404 ? 404 : 502;
-      return res.status(status).json({
-        error: status === 404 ? 'SALE_NOT_FOUND' : 'SALE_LOOKUP_FAILED',
-        message: status === 404 ? 'Sale not found.' : 'Unable to retrieve sale from Lightspeed.'
+    } catch (banError) {
+      logger.logAPIError('find_banned_customer', banError, {
+        saleId,
+        clerkId,
+        documentType: normalizedScan.documentType,
+        documentNumber: normalizedScan.documentNumber
+      });
+    }
+  }
+
+  try {
+    const startTime = Date.now();
+
+    const verification = await lightspeed.recordVerification({
+      saleId,
+      clerkId,
+      verificationData: normalizedScan,
+      sale,
+      locationId
+    });
+
+    if (db.pool) {
+      try {
+        await complianceStore.saveVerification({
+          verificationId: verification.verificationId || require('crypto').randomUUID(),
+          saleId,
+          clerkId,
+          status: normalizedScan.approved ? 'approved' : 'rejected',
+          reason: normalizedScan.reason,
+          firstName: normalizedScan.firstName,
+          lastName: normalizedScan.lastName,
+          dob: normalizedScan.dob,
+          age: normalizedScan.age,
+          documentType: normalizedScan.documentType,
+          documentNumber: normalizedScan.documentNumber,
+          issuingCountry: normalizedScan.issuingCountry,
+          nationality: normalizedScan.nationality,
+          sex: normalizedScan.sex,
+          source: normalizedScan.source || 'api_verify',
+          documentExpiry: normalizedScan.documentExpiry
+        }, {
+          locationId,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
+        });
+      } catch (dbError) {
+        logger.error('Failed to save api verification to DB', dbError);
+      }
+    }
+
+    logger.logVerification(saleId, clerkId, normalizedScan.approved, normalizedScan.age, {
+      documentType: normalizedScan.documentType,
+      issuingCountry: normalizedScan.issuingCountry,
+      source: normalizedScan.source,
+      locationId,
+      outletCode: outletDescriptor?.code || null,
+      registerId: sale?.registerId || null
+    });
+    logger.logPerformance('recordVerification', Date.now() - startTime, true);
+
+    let persisted = null;
+
+    if (db.pool) {
+      const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      const userAgent = req.get('user-agent');
+
+      try {
+        persisted = await complianceStore.saveVerification(verification, {
+          ipAddress,
+          userAgent,
+          locationId
+        });
+      } catch (dbError) {
+        logger.logAPIError('persist_verification', dbError, { saleId, clerkId });
+      }
+    }
+
+    const responsePayload = {
+      ...verification,
+      complianceRecordId: persisted?.id || null,
+      banned: Boolean(bannedRecord),
+      bannedReason: bannedRecord?.notes ? sanitizeString(bannedRecord.notes) : null,
+      locationId: locationId || null,
+      outlet: outletDescriptor,
+      registerId: sale?.registerId || null
+    };
+
+    res.status(201).json({
+      data: responsePayload
+    });
+  } catch (error) {
+    logger.logAPIError('recordVerification', error, { saleId, clerkId });
+    const status = error.message === 'SALE_NOT_FOUND' ? 404 : 500;
+    res.status(status).json({
+      error: error.message,
+      message: status === 404 ? 'Sale not found.' : 'Unable to record verification.'
+    });
+  }
+});
+
+router.post('/sales/:saleId/complete', validateCompletion, async (req, res) => {
+  const { verificationId, paymentType } = req.body || {};
+  const { saleId } = req.params;
+
+  if (!verificationId) {
+    logger.logSecurity('missing_verification_id', { saleId });
+    return res.status(400).json({
+      error: 'INVALID_REQUEST',
+      message: 'verificationId is required.'
+    });
+  }
+
+  if (!paymentType || !['cash', 'card'].includes(paymentType)) {
+    logger.logSecurity('invalid_payment_type', { saleId, paymentType });
+    return res.status(400).json({
+      error: 'INVALID_REQUEST',
+      message: 'paymentType is required and must be either "cash" or "card".'
+    });
+  }
+
+  try {
+    const startTime = Date.now();
+
+    const sale = await lightspeed.getSaleById(saleId);
+    if (!sale) {
+      logger.warn({ event: 'sale_not_found', saleId }, `Sale ${saleId} not found`);
+      return res.status(404).json({
+        error: 'SALE_NOT_FOUND',
+        message: 'Sale not found.'
       });
     }
 
     const locationId = determineLocationId(req, sale);
     const outletDescriptor = getOutletDescriptor(locationId, sale?.outlet);
 
-    let bannedRecord = null;
+    const latestVerification = await resolveLatestVerification(saleId, sale.verification);
 
-    if (db.pool && normalizedScan.documentNumber) {
-      try {
-        bannedRecord = await complianceStore.findBannedCustomer({
-          documentType: normalizedScan.documentType,
-          documentNumber: normalizedScan.documentNumber,
-          issuingCountry: normalizedScan.issuingCountry || null
-        });
-
-        if (bannedRecord) {
-          normalizedScan.approved = false;
-          normalizedScan.reason = sanitizeString(bannedRecord.notes) || 'BANNED_CUSTOMER';
-          logger.logSecurity('banned_customer_attempt', {
-            saleId,
-            clerkId,
-            documentType: normalizedScan.documentType,
-            documentNumber: normalizedScan.documentNumber,
-            issuingCountry: normalizedScan.issuingCountry || null,
-            locationId,
-            outletCode: outletDescriptor?.code || null,
-            bannedId: bannedRecord.id
-          });
-        }
-      } catch (banError) {
-        logger.logAPIError('find_banned_customer', banError, {
-          saleId,
-          clerkId,
-          documentType: normalizedScan.documentType,
-          documentNumber: normalizedScan.documentNumber
-        });
-      }
-    }
-
-    try {
-      const startTime = Date.now();
-
-      const verification = await lightspeed.recordVerification({
-        saleId,
-        clerkId,
-        verificationData: normalizedScan,
-        sale,
-        locationId
-      });
-
-      if (db.pool) {
-        try {
-          await complianceStore.saveVerification({
-            verificationId: verification.verificationId || require('crypto').randomUUID(),
-            saleId,
-            clerkId,
-            status: normalizedScan.approved ? 'approved' : 'rejected',
-            reason: normalizedScan.reason,
-            firstName: normalizedScan.firstName,
-            lastName: normalizedScan.lastName,
-            dob: normalizedScan.dob,
-            age: normalizedScan.age,
-            documentType: normalizedScan.documentType,
-            documentNumber: normalizedScan.documentNumber,
-            issuingCountry: normalizedScan.issuingCountry,
-            nationality: normalizedScan.nationality,
-            sex: normalizedScan.sex,
-            source: normalizedScan.source || 'api_verify',
-            documentExpiry: normalizedScan.documentExpiry
-          }, {
-            locationId,
-            ipAddress: req.ip,
-            userAgent: req.get('user-agent')
-          });
-        } catch (dbError) {
-          logger.error('Failed to save api verification to DB', dbError);
-        }
-      }
-
-      logger.logVerification(saleId, clerkId, normalizedScan.approved, normalizedScan.age, {
-        documentType: normalizedScan.documentType,
-        issuingCountry: normalizedScan.issuingCountry,
-        source: normalizedScan.source,
-        locationId,
-        outletCode: outletDescriptor?.code || null,
-        registerId: sale?.registerId || null
-      });
-      logger.logPerformance('recordVerification', Date.now() - startTime, true);
-
-      let persisted = null;
-
-      if (db.pool) {
-        const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
-        const userAgent = req.get('user-agent');
-
-        try {
-          persisted = await complianceStore.saveVerification(verification, {
-            ipAddress,
-            userAgent,
-            locationId
-          });
-        } catch (dbError) {
-          logger.logAPIError('persist_verification', dbError, { saleId, clerkId });
-        }
-      }
-
-      const responsePayload = {
-        ...verification,
-        complianceRecordId: persisted?.id || null,
-        banned: Boolean(bannedRecord),
-        bannedReason: bannedRecord?.notes ? sanitizeString(bannedRecord.notes) : null,
-        locationId: locationId || null,
-        outlet: outletDescriptor,
-        registerId: sale?.registerId || null
-      };
-
-      res.status(201).json({
-        data: responsePayload
-      });
-    } catch (error) {
-      logger.logAPIError('recordVerification', error, { saleId, clerkId });
-      const status = error.message === 'SALE_NOT_FOUND' ? 404 : 500;
-      res.status(status).json({
-        error: error.message,
-        message: status === 404 ? 'Sale not found.' : 'Unable to record verification.'
-      });
-    }
-  });
-
-  router.post('/sales/:saleId/complete', validateCompletion, async (req, res) => {
-    const { verificationId, paymentType } = req.body || {};
-    const { saleId } = req.params;
-
-    if (!verificationId) {
-      logger.logSecurity('missing_verification_id', { saleId });
-      return res.status(400).json({
-        error: 'INVALID_REQUEST',
-        message: 'verificationId is required.'
-      });
-    }
-
-    if (!paymentType || !['cash', 'card'].includes(paymentType)) {
-      logger.logSecurity('invalid_payment_type', { saleId, paymentType });
-      return res.status(400).json({
-        error: 'INVALID_REQUEST',
-        message: 'paymentType is required and must be either "cash" or "card".'
-      });
-    }
-
-    try {
-      const startTime = Date.now();
-
-      const sale = await lightspeed.getSaleById(saleId);
-      if (!sale) {
-        logger.warn({ event: 'sale_not_found', saleId }, `Sale ${saleId} not found`);
-        return res.status(404).json({
-          error: 'SALE_NOT_FOUND',
-          message: 'Sale not found.'
-        });
-      }
-
-      const locationId = determineLocationId(req, sale);
-      const outletDescriptor = getOutletDescriptor(locationId, sale?.outlet);
-
-      const latestVerification = await resolveLatestVerification(saleId, sale.verification);
-
-      if (!latestVerification || latestVerification.verificationId !== verificationId) {
-        logger.logSecurity('verification_mismatch', {
-          saleId,
-          verificationId,
-          actualId: latestVerification?.verificationId
-        });
-        return res.status(409).json({
-          error: 'VERIFICATION_MISMATCH',
-          message: 'Verification ID does not match the latest verification for this sale.'
-        });
-      }
-
-      if (isVerificationExpired(latestVerification)) {
-        logger.warn({ event: 'verification_expired', saleId, verificationId }, `Verification expired for sale ${saleId}`);
-        return res.status(409).json({
-          error: 'VERIFICATION_EXPIRED',
-          message: 'Verification expired. Please rescan the ID.'
-        });
-      }
-
-      if (!['approved', 'approved_override'].includes(latestVerification.status)) {
-        logger.logSecurity('verification_not_approved', {
-          saleId,
-          verificationId,
-          status: latestVerification.status
-        });
-        return res.status(409).json({
-          error: 'VERIFICATION_NOT_APPROVED',
-          message: 'Latest verification is not approved.'
-        });
-      }
-
-      const completion = await lightspeed.completeSale({
+    if (!latestVerification || latestVerification.verificationId !== verificationId) {
+      logger.logSecurity('verification_mismatch', {
         saleId,
         verificationId,
-        paymentType,
-        sale,
-        locationId
+        actualId: latestVerification?.verificationId
       });
-
-      if (db.pool) {
-        try {
-          await complianceStore.recordSaleCompletion({
-            saleId,
-            verificationId,
-            paymentType,
-            amount: completion.amount ?? sale.total ?? 0
-          });
-        } catch (dbError) {
-          logger.logAPIError('persist_sale_completion', dbError, { saleId, verificationId });
-        }
-      }
-
-      logger.logSaleComplete(saleId, paymentType, completion.amount ?? sale.total);
-      logger.logPerformance('completeSale', Date.now() - startTime, true);
-
-      res.status(200).json({
-        data: {
-          ...completion,
-          locationId: locationId || null,
-          outlet: outletDescriptor,
-          registerId: sale.registerId || null
-        }
-      });
-    } catch (error) {
-      logger.logAPIError('completeSale', error, { saleId, verificationId, paymentType });
-      let status = 500;
-      if (error.message === 'SALE_NOT_FOUND') {
-        status = 404;
-      }
-      if (error.message === 'VERIFICATION_NOT_APPROVED' || error.message === 'VERIFICATION_NOT_FOUND') {
-        status = 409;
-      }
-      if (error.message === 'SALE_ALREADY_COMPLETED') {
-        status = 409;
-      }
-
-      res.status(status).json({
-        error: error.message,
-        message: 'Unable to complete sale.'
-      });
-    }
-  });
-
-  router.get('/reports/compliance', async (req, res, next) => {
-    if (!db.pool) {
-      return res.status(503).json({
-        error: 'COMPLIANCE_STORAGE_DISABLED',
-        message: 'Compliance reporting requires DATABASE_URL to be configured.'
+      return res.status(409).json({
+        error: 'VERIFICATION_MISMATCH',
+        message: 'Verification ID does not match the latest verification for this sale.'
       });
     }
 
-    const days = parseInt(req.query.days || '30', 10);
-    const limit = parseInt(req.query.limit || '50', 10);
-
-    try {
-      const report = await complianceStore.summarizeCompliance({
-        days: Number.isNaN(days) ? 30 : days,
-        limit: Number.isNaN(limit) ? 50 : limit
-      });
-
-      res.json({ data: report });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.get('/reports/overrides', async (req, res) => {
-    if (!db.pool) {
-      return res.status(503).json({
-        error: 'OVERRIDE_HISTORY_UNAVAILABLE',
-        message: 'Override history reporting requires DATABASE_URL to be configured.'
+    if (isVerificationExpired(latestVerification)) {
+      logger.warn({ event: 'verification_expired', saleId, verificationId }, `Verification expired for sale ${saleId}`);
+      return res.status(409).json({
+        error: 'VERIFICATION_EXPIRED',
+        message: 'Verification expired. Please rescan the ID.'
       });
     }
 
-    const rawDays = parseInt(req.query.days || '30', 10);
-    const rawLimit = parseInt(req.query.limit || '200', 10);
-    const days = Number.isNaN(rawDays) ? 30 : Math.max(1, Math.min(rawDays, 3650));
-    const limit = Number.isNaN(rawLimit) ? 200 : Math.max(1, Math.min(rawLimit, 1000));
-
-    try {
-      const overrides = await complianceStore.listRecentOverrides({ days, limit });
-      res.json({ data: overrides });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  const emailService = require('./emailService');
-
-  router.post('/sales/:saleId/override', validateOverride, async (req, res) => {
-    const { saleId } = req.params;
-    const { verificationId, managerPin, note, clerkId, registerId } = req.body;
-
-    // 1. Validate PIN (Simple check for now, can be DB backed later)
-    // Hardcoded for demo/pilot. In production, check against a manager table.
-    const VALID_PINS = [process.env.OVERRIDE_PIN || '1417', '9999'];
-
-    if (!VALID_PINS.includes(managerPin)) {
-      logger.logSecurity('invalid_override_pin', { saleId, verificationId });
-      return res.status(401).json({
-        success: false,
-        error: 'INVALID_PIN',
-        message: 'Invalid Manager PIN.'
+    if (!['approved', 'approved_override'].includes(latestVerification.status)) {
+      logger.logSecurity('verification_not_approved', {
+        saleId,
+        verificationId,
+        status: latestVerification.status
+      });
+      return res.status(409).json({
+        error: 'VERIFICATION_NOT_APPROVED',
+        message: 'Latest verification is not approved.'
       });
     }
 
-    try {
-      // 2. Record Override (only if database is available)
-      let result = null;
-      if (db.pool) {
-        result = await complianceStore.markVerificationOverride({
-          verificationId,
+    const completion = await lightspeed.completeSale({
+      saleId,
+      verificationId,
+      paymentType,
+      sale,
+      locationId
+    });
+
+    if (db.pool) {
+      try {
+        await complianceStore.recordSaleCompletion({
           saleId,
-          managerId: 'Manager-' + managerPin.slice(-2),
-          note,
-          clerkId,
-          registerId
+          verificationId,
+          paymentType,
+          amount: completion.amount ?? sale.total ?? 0
         });
-      } else {
-        logger.info({ event: 'override_no_db', saleId }, 'Override processed without database');
-        result = { verification: null, override: { saleId, note: 'No database mode' } };
+      } catch (dbError) {
+        logger.logAPIError('persist_sale_completion', dbError, { saleId, verificationId });
       }
+    }
 
-      // 3. Update In-Memory Store (so polling picks it up) - ALWAYS do this
-      saleVerificationStore.updateVerification(saleId, {
-        approved: true,
-        reason: 'Manual ID Override: ' + (note || 'No reason provided'),
-        status: 'approved_override'
+    logger.logSaleComplete(saleId, paymentType, completion.amount ?? sale.total);
+    logger.logPerformance('completeSale', Date.now() - startTime, true);
+
+    res.status(200).json({
+      data: {
+        ...completion,
+        locationId: locationId || null,
+        outlet: outletDescriptor,
+        registerId: sale.registerId || null
+      }
+    });
+  } catch (error) {
+    logger.logAPIError('completeSale', error, { saleId, verificationId, paymentType });
+    let status = 500;
+    if (error.message === 'SALE_NOT_FOUND') {
+      status = 404;
+    }
+    if (error.message === 'VERIFICATION_NOT_APPROVED' || error.message === 'VERIFICATION_NOT_FOUND') {
+      status = 409;
+    }
+    if (error.message === 'SALE_ALREADY_COMPLETED') {
+      status = 409;
+    }
+
+    res.status(status).json({
+      error: error.message,
+      message: 'Unable to complete sale.'
+    });
+  }
+});
+
+router.get('/reports/compliance', async (req, res, next) => {
+  if (!db.pool) {
+    return res.status(503).json({
+      error: 'COMPLIANCE_STORAGE_DISABLED',
+      message: 'Compliance reporting requires DATABASE_URL to be configured.'
+    });
+  }
+
+  const days = parseInt(req.query.days || '30', 10);
+  const limit = parseInt(req.query.limit || '50', 10);
+
+  try {
+    const report = await complianceStore.summarizeCompliance({
+      days: Number.isNaN(days) ? 30 : days,
+      limit: Number.isNaN(limit) ? 50 : limit
+    });
+
+    res.json({ data: report });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/reports/overrides', async (req, res) => {
+  if (!db.pool) {
+    return res.status(503).json({
+      error: 'OVERRIDE_HISTORY_UNAVAILABLE',
+      message: 'Override history reporting requires DATABASE_URL to be configured.'
+    });
+  }
+
+  const rawDays = parseInt(req.query.days || '30', 10);
+  const rawLimit = parseInt(req.query.limit || '200', 10);
+  const days = Number.isNaN(rawDays) ? 30 : Math.max(1, Math.min(rawDays, 3650));
+  const limit = Number.isNaN(rawLimit) ? 200 : Math.max(1, Math.min(rawLimit, 1000));
+
+  try {
+    const overrides = await complianceStore.listRecentOverrides({ days, limit });
+    res.json({ data: overrides });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const emailService = require('./emailService');
+
+router.post('/sales/:saleId/override', validateOverride, async (req, res) => {
+  const { saleId } = req.params;
+  const { verificationId, managerPin, note, clerkId, registerId } = req.body;
+
+  // 1. Validate PIN (Simple check for now, can be DB backed later)
+  // Hardcoded for demo/pilot. In production, check against a manager table.
+  const VALID_PINS = [process.env.OVERRIDE_PIN || '1417', '9999'];
+
+  if (!VALID_PINS.includes(managerPin)) {
+    logger.logSecurity('invalid_override_pin', { saleId, verificationId });
+    return res.status(401).json({
+      success: false,
+      error: 'INVALID_PIN',
+      message: 'Invalid Manager PIN.'
+    });
+  }
+
+  try {
+    // 2. Record Override (only if database is available)
+    let result = null;
+    if (db.pool) {
+      result = await complianceStore.markVerificationOverride({
+        verificationId,
+        saleId,
+        managerId: 'Manager-' + managerPin.slice(-2),
+        note,
+        clerkId,
+        registerId
+      });
+    } else {
+      logger.info({ event: 'override_no_db', saleId }, 'Override processed without database');
+      result = { verification: null, override: { saleId, note: 'No database mode' } };
+    }
+
+    // 3. Update In-Memory Store (so polling picks it up) - ALWAYS do this
+    saleVerificationStore.updateVerification(saleId, {
+      approved: true,
+      reason: 'Manual ID Override: ' + (note || 'No reason provided'),
+      status: 'approved_override'
+    });
+
+    // 4. Abuse Detection (only if database is available)
+    if (db.pool) {
+      const verification = await complianceStore.getLatestVerificationForSale(saleId);
+      const locationId = verification?.location_id;
+
+      const recentCount = await complianceStore.countRecentOverrides({
+        locationId,
+        minutes: 10
       });
 
-      // 4. Abuse Detection (only if database is available)
-      if (db.pool) {
-        const verification = await complianceStore.getLatestVerificationForSale(saleId);
-        const locationId = verification?.location_id;
+      const ABUSE_THRESHOLD = 3;
 
-        const recentCount = await complianceStore.countRecentOverrides({
-          locationId,
-          minutes: 10
-        });
+      if (recentCount >= ABUSE_THRESHOLD) {
+        logger.warn({ event: 'override_abuse_detected', count: recentCount, locationId }, 'Override abuse threshold exceeded');
 
-        const ABUSE_THRESHOLD = 3;
-
-        if (recentCount >= ABUSE_THRESHOLD) {
-          logger.warn({ event: 'override_abuse_detected', count: recentCount, locationId }, 'Override abuse threshold exceeded');
-
-          const alertHtml = `
+        const alertHtml = `
           <h2>⚠️ High Override Volume Detected</h2>
           <p><strong>Location:</strong> ${locationId || 'Unknown'}</p>
           <p><strong>Count:</strong> ${recentCount} overrides in the last 10 minutes.</p>
@@ -1099,777 +1122,777 @@ router.post('/test-scan', (req, res) => {
           <p>Please investigate immediately.</p>
         `;
 
-          emailService.sendAlertEmail('High Override Volume Detected', alertHtml);
-        }
+        emailService.sendAlertEmail('High Override Volume Detected', alertHtml);
       }
-
-      // 5. Write an audit note back to Lightspeed (best-effort)
-      try {
-        await lightspeed.recordVerification({
-          saleId,
-          clerkId: clerkId || 'MANAGER_OVERRIDE',
-          verificationData: {
-            approved: true,
-            reason: note ? `MANUAL_OVERRIDE: ${note}` : 'MANUAL_OVERRIDE',
-            firstName: null,
-            lastName: null,
-            dob: null,
-            age: null,
-            documentType: 'manual',
-            documentNumber: 'no-scan',
-            issuingCountry: null,
-            nationality: null,
-            sex: null,
-            source: 'manual_override',
-            documentExpiry: null
-          }
-        });
-      } catch (noteError) {
-        logger.warn({ event: 'override_note_update_failed', saleId, error: noteError.message }, 'Failed to update Lightspeed note for override');
-      }
-
-      res.json({
-        success: true,
-        message: 'Override successful',
-        data: result
-      });
-
-    } catch (error) {
-      logger.error('Override failed', { error: error.message, stack: error.stack });
-
-      const isDbError = error.message && (error.message.includes('DATABASE_URL') || error.message.includes('pool'));
-
-      res.status(500).json({
-        success: false,
-        error: isDbError ? 'DATABASE_NOT_CONFIGURED' : 'OVERRIDE_FAILED',
-        message: isDbError
-          ? 'Database not configured. Contact administrator.'
-          : `Override failed: ${error.message}`,
-        debug: process.env.NODE_ENV !== 'production' ? error.stack : undefined
-      });
-    }
-  });
-
-  router.post('/banned', validateBannedCreate, async (req, res) => {
-    if (!db.pool) {
-      return res.status(503).json({
-        error: 'BANNED_LIST_UNAVAILABLE',
-        message: 'Banned customer management requires DATABASE_URL to be configured.'
-      });
     }
 
-    const payload = {
-      documentType: req.body.documentType.trim(),
-      documentNumber: req.body.documentNumber.trim(),
-      issuingCountry: req.body.issuingCountry ? req.body.issuingCountry.trim() : null,
-      dateOfBirth: req.body.dateOfBirth || null,
-      firstName: req.body.firstName ? req.body.firstName.trim() : null,
-      lastName: req.body.lastName ? req.body.lastName.trim() : null,
-      notes: req.body.notes ? sanitizeString(req.body.notes) : null
-    };
-
+    // 5. Write an audit note back to Lightspeed (best-effort)
     try {
-      const record = await complianceStore.addBannedCustomer(payload);
-      res.status(201).json({ data: record });
-    } catch (error) {
-      logger.logAPIError('add_banned_customer', error, { payload });
-      res.status(500).json({
-        error: 'INTERNAL_ERROR',
-        message: 'Unable to save banned customer.'
-      });
-    }
-  });
-
-  router.delete('/banned/:id', validateBannedId, async (req, res) => {
-    if (!db.pool) {
-      return res.status(503).json({
-        error: 'BANNED_LIST_UNAVAILABLE',
-        message: 'Banned customer management requires DATABASE_URL to be configured.'
-      });
-    }
-
-    try {
-      const removed = await complianceStore.removeBannedCustomer(req.params.id);
-      if (!removed) {
-        return res.status(404).json({
-          error: 'NOT_FOUND',
-          message: 'Banned customer not found.'
-        });
-      }
-
-      res.status(204).send();
-    } catch (error) {
-      logger.logAPIError('remove_banned_customer', error, { id: req.params.id });
-      res.status(500).json({
-        error: 'INTERNAL_ERROR',
-        message: 'Unable to remove banned customer.'
-      });
-    }
-  });
-  router.get('/sales/:saleId/overrides', validateSaleId, async (req, res) => {
-    if (!db.pool) {
-      return res.status(503).json({
-        error: 'OVERRIDE_UNAVAILABLE',
-        message: 'Override flow requires DATABASE_URL to be configured.'
-      });
-    }
-
-    try {
-      const overrides = await complianceStore.listOverridesForSale(req.params.saleId);
-      res.json({ data: overrides });
-    } catch (error) {
-      logger.logAPIError('list_overrides', error, { saleId: req.params.saleId });
-      res.status(500).json({
-        error: 'INTERNAL_ERROR',
-        message: 'Unable to fetch overrides for this sale.'
-      });
-    }
-  });
-
-
-
-
-  // Lightspeed Custom Button Webhook - Called when clerk clicks CASH/CARD button
-  router.post('/lightspeed/payment-action', async (req, res) => {
-    const { saleId, outletId, registerId, employeeId, paymentType } = req.body;
-
-    logger.info({
-      event: 'custom_button_clicked',
-      saleId,
-      outletId,
-      paymentType
-    }, 'Payment button clicked in Lightspeed POS');
-
-    if (!saleId) {
-      return res.status(400).json({
-        error: 'MISSING_SALE_ID',
-        message: 'saleId is required'
-      });
-    }
-
-    try {
-      // Check if already verified in database
-      if (db.pool) {
-        const verification = await complianceStore.getLatestVerificationForSale(saleId);
-
-        if (verification && !isVerificationExpired({ createdAt: verification.verified_at, status: verification.verification_status })) {
-          if (verification.verification_status === 'approved' || verification.verification_status === 'approved_override') {
-            logger.info({ event: 'already_verified', saleId }, 'Sale already verified - allowing payment');
-
-            return res.json({
-              action: 'proceed',
-              approved: true,
-              verificationId: verification.verification_id
-            });
-          }
-        }
-      }
-
-      // Need verification
-      logger.info({ event: 'verification_required', saleId }, 'ID scan required');
-
-      res.json({
-        action: 'require_scan',
-        approved: false,
-        message: 'ID verification required before payment'
-      });
-
-    } catch (error) {
-      logger.logAPIError('payment_action', error, { saleId });
-
-      res.json({
-        action: 'require_scan',
-        approved: false,
-        message: 'ID verification required'
-      });
-    }
-  });
-
-  // Dynamix Webhook - Receives scanned ID data
-  router.post('/dynamix/webhook', async (req, res) => {
-    const { saleId, scan, clerkId } = req.body || {};
-
-    logger.info({ event: 'dynamix_webhook_received', saleId }, 'Received scan from Dynamix');
-
-    if (!saleId || !scan) {
-      return res.status(400).json({
-        error: 'INVALID_WEBHOOK',
-        message: 'saleId and scan data required'
-      });
-    }
-
-    try {
-      // Auto-verify using the scan data
-      const normalizedScan = normalizeScanInput(scan);
-
-      const verification = await lightspeed.recordVerification({
+      await lightspeed.recordVerification({
         saleId,
-        clerkId: clerkId || 'dynamix-auto',
-        verificationData: normalizedScan,
-        sale: await lightspeed.getSaleById(saleId),
+        clerkId: clerkId || 'MANAGER_OVERRIDE',
+        verificationData: {
+          approved: true,
+          reason: note ? `MANUAL_OVERRIDE: ${note}` : 'MANUAL_OVERRIDE',
+          firstName: null,
+          lastName: null,
+          dob: null,
+          age: null,
+          documentType: 'manual',
+          documentNumber: 'no-scan',
+          issuingCountry: null,
+          nationality: null,
+          sex: null,
+          source: 'manual_override',
+          documentExpiry: null
+        }
+      });
+    } catch (noteError) {
+      logger.warn({ event: 'override_note_update_failed', saleId, error: noteError.message }, 'Failed to update Lightspeed note for override');
+    }
+
+    res.json({
+      success: true,
+      message: 'Override successful',
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Override failed', { error: error.message, stack: error.stack });
+
+    const isDbError = error.message && (error.message.includes('DATABASE_URL') || error.message.includes('pool'));
+
+    res.status(500).json({
+      success: false,
+      error: isDbError ? 'DATABASE_NOT_CONFIGURED' : 'OVERRIDE_FAILED',
+      message: isDbError
+        ? 'Database not configured. Contact administrator.'
+        : `Override failed: ${error.message}`,
+      debug: process.env.NODE_ENV !== 'production' ? error.stack : undefined
+    });
+  }
+});
+
+router.post('/banned', validateBannedCreate, async (req, res) => {
+  if (!db.pool) {
+    return res.status(503).json({
+      error: 'BANNED_LIST_UNAVAILABLE',
+      message: 'Banned customer management requires DATABASE_URL to be configured.'
+    });
+  }
+
+  const payload = {
+    documentType: req.body.documentType.trim(),
+    documentNumber: req.body.documentNumber.trim(),
+    issuingCountry: req.body.issuingCountry ? req.body.issuingCountry.trim() : null,
+    dateOfBirth: req.body.dateOfBirth || null,
+    firstName: req.body.firstName ? req.body.firstName.trim() : null,
+    lastName: req.body.lastName ? req.body.lastName.trim() : null,
+    notes: req.body.notes ? sanitizeString(req.body.notes) : null
+  };
+
+  try {
+    const record = await complianceStore.addBannedCustomer(payload);
+    res.status(201).json({ data: record });
+  } catch (error) {
+    logger.logAPIError('add_banned_customer', error, { payload });
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Unable to save banned customer.'
+    });
+  }
+});
+
+router.delete('/banned/:id', validateBannedId, async (req, res) => {
+  if (!db.pool) {
+    return res.status(503).json({
+      error: 'BANNED_LIST_UNAVAILABLE',
+      message: 'Banned customer management requires DATABASE_URL to be configured.'
+    });
+  }
+
+  try {
+    const removed = await complianceStore.removeBannedCustomer(req.params.id);
+    if (!removed) {
+      return res.status(404).json({
+        error: 'NOT_FOUND',
+        message: 'Banned customer not found.'
+      });
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    logger.logAPIError('remove_banned_customer', error, { id: req.params.id });
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Unable to remove banned customer.'
+    });
+  }
+});
+router.get('/sales/:saleId/overrides', validateSaleId, async (req, res) => {
+  if (!db.pool) {
+    return res.status(503).json({
+      error: 'OVERRIDE_UNAVAILABLE',
+      message: 'Override flow requires DATABASE_URL to be configured.'
+    });
+  }
+
+  try {
+    const overrides = await complianceStore.listOverridesForSale(req.params.saleId);
+    res.json({ data: overrides });
+  } catch (error) {
+    logger.logAPIError('list_overrides', error, { saleId: req.params.saleId });
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Unable to fetch overrides for this sale.'
+    });
+  }
+});
+
+
+
+
+// Lightspeed Custom Button Webhook - Called when clerk clicks CASH/CARD button
+router.post('/lightspeed/payment-action', async (req, res) => {
+  const { saleId, outletId, registerId, employeeId, paymentType } = req.body;
+
+  logger.info({
+    event: 'custom_button_clicked',
+    saleId,
+    outletId,
+    paymentType
+  }, 'Payment button clicked in Lightspeed POS');
+
+  if (!saleId) {
+    return res.status(400).json({
+      error: 'MISSING_SALE_ID',
+      message: 'saleId is required'
+    });
+  }
+
+  try {
+    // Check if already verified in database
+    if (db.pool) {
+      const verification = await complianceStore.getLatestVerificationForSale(saleId);
+
+      if (verification && !isVerificationExpired({ createdAt: verification.verified_at, status: verification.verification_status })) {
+        if (verification.verification_status === 'approved' || verification.verification_status === 'approved_override') {
+          logger.info({ event: 'already_verified', saleId }, 'Sale already verified - allowing payment');
+
+          return res.json({
+            action: 'proceed',
+            approved: true,
+            verificationId: verification.verification_id
+          });
+        }
+      }
+    }
+
+    // Need verification
+    logger.info({ event: 'verification_required', saleId }, 'ID scan required');
+
+    res.json({
+      action: 'require_scan',
+      approved: false,
+      message: 'ID verification required before payment'
+    });
+
+  } catch (error) {
+    logger.logAPIError('payment_action', error, { saleId });
+
+    res.json({
+      action: 'require_scan',
+      approved: false,
+      message: 'ID verification required'
+    });
+  }
+});
+
+// Dynamix Webhook - Receives scanned ID data
+router.post('/dynamix/webhook', async (req, res) => {
+  const { saleId, scan, clerkId } = req.body || {};
+
+  logger.info({ event: 'dynamix_webhook_received', saleId }, 'Received scan from Dynamix');
+
+  if (!saleId || !scan) {
+    return res.status(400).json({
+      error: 'INVALID_WEBHOOK',
+      message: 'saleId and scan data required'
+    });
+  }
+
+  try {
+    // Auto-verify using the scan data
+    const normalizedScan = normalizeScanInput(scan);
+
+    const verification = await lightspeed.recordVerification({
+      saleId,
+      clerkId: clerkId || 'dynamix-auto',
+      verificationData: normalizedScan,
+      sale: await lightspeed.getSaleById(saleId),
+      locationId: req.body.outletId || null
+    });
+
+    if (db.pool) {
+      const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      await complianceStore.saveVerification(verification, {
+        ipAddress,
+        userAgent: 'Dynamix Photo Scanner',
         locationId: req.body.outletId || null
       });
-
-      if (db.pool) {
-        const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
-        await complianceStore.saveVerification(verification, {
-          ipAddress,
-          userAgent: 'Dynamix Photo Scanner',
-          locationId: req.body.outletId || null
-        });
-      }
-
-      logger.logVerification(saleId, clerkId || 'dynamix-auto', normalizedScan.approved, normalizedScan.age, {
-        source: 'dynamix',
-        documentType: normalizedScan.documentType
-      });
-
-      res.status(200).json({
-        success: true,
-        verification
-      });
-    } catch (error) {
-      logger.logAPIError('dynamix_webhook', error, { saleId });
-      res.status(500).json({
-        error: 'WEBHOOK_FAILED',
-        message: 'Failed to process scan'
-      });
-    }
-  });
-
-  // Fallback for iPad embedded flows where HID keystrokes never reach the iframe:
-  // scan the PDF417 into the Lightspeed sale note field, then call this endpoint to verify.
-  router.post('/sales/:saleId/verify-from-note', validateSaleId, async (req, res) => {
-    const { saleId } = req.params;
-    const { clerkId, registerId } = req.body || {};
-
-    if (!process.env.LIGHTSPEED_API_KEY) {
-      return res.status(503).json({
-        error: 'LIGHTSPEED_UNAVAILABLE',
-        message: 'Lightspeed credentials are not configured.'
-      });
     }
 
-    let sale = null;
-    try {
-      sale = await lightspeed.getSaleById(saleId);
-      if (!sale) {
-        return res.status(404).json({
-          error: 'SALE_NOT_FOUND',
-          message: 'Sale not found.'
-        });
-      }
-    } catch (saleError) {
-      logger.logAPIError('get_sale_for_note_verification', saleError, { saleId });
-      return res.status(502).json({
-        error: 'SALE_LOOKUP_FAILED',
-        message: 'Unable to retrieve sale from Lightspeed.'
+    logger.logVerification(saleId, clerkId || 'dynamix-auto', normalizedScan.approved, normalizedScan.age, {
+      source: 'dynamix',
+      documentType: normalizedScan.documentType
+    });
+
+    res.status(200).json({
+      success: true,
+      verification
+    });
+  } catch (error) {
+    logger.logAPIError('dynamix_webhook', error, { saleId });
+    res.status(500).json({
+      error: 'WEBHOOK_FAILED',
+      message: 'Failed to process scan'
+    });
+  }
+});
+
+// Fallback for iPad embedded flows where HID keystrokes never reach the iframe:
+// scan the PDF417 into the Lightspeed sale note field, then call this endpoint to verify.
+router.post('/sales/:saleId/verify-from-note', validateSaleId, async (req, res) => {
+  const { saleId } = req.params;
+  const { clerkId, registerId } = req.body || {};
+
+  if (!process.env.LIGHTSPEED_API_KEY) {
+    return res.status(503).json({
+      error: 'LIGHTSPEED_UNAVAILABLE',
+      message: 'Lightspeed credentials are not configured.'
+    });
+  }
+
+  let sale = null;
+  try {
+    sale = await lightspeed.getSaleById(saleId);
+    if (!sale) {
+      return res.status(404).json({
+        error: 'SALE_NOT_FOUND',
+        message: 'Sale not found.'
       });
     }
+  } catch (saleError) {
+    logger.logAPIError('get_sale_for_note_verification', saleError, { saleId });
+    return res.status(502).json({
+      error: 'SALE_LOOKUP_FAILED',
+      message: 'Unable to retrieve sale from Lightspeed.'
+    });
+  }
 
-    const noteRaw = (sale.note || '').toString();
-    const note = noteRaw.replace(/\\r\\n/g, '\n').replace(/\\r/g, '\n');
-    const ansiIndex = note.indexOf('@ANSI');
-    const aimIndex = note.indexOf(']L');
-    const markerIndex =
-      ansiIndex >= 0 ? ansiIndex : (aimIndex >= 0 ? aimIndex : -1);
+  const noteRaw = (sale.note || '').toString();
+  const note = noteRaw.replace(/\\r\\n/g, '\n').replace(/\\r/g, '\n');
+  const ansiIndex = note.indexOf('@ANSI');
+  const aimIndex = note.indexOf(']L');
+  const markerIndex =
+    ansiIndex >= 0 ? ansiIndex : (aimIndex >= 0 ? aimIndex : -1);
 
-    if (markerIndex < 0 || note.length - markerIndex < 20) {
+  if (markerIndex < 0 || note.length - markerIndex < 20) {
+    return res.status(409).json({
+      error: 'NO_SCAN_IN_NOTE',
+      message: 'No scan data found in sale note. Scan the ID into the Notes field first.'
+    });
+  }
+
+  const payload = note.substring(markerIndex);
+
+  try {
+    const parsed = parseAAMVA(payload);
+
+    if (!parsed) {
       return res.status(409).json({
-        error: 'NO_SCAN_IN_NOTE',
-        message: 'No scan data found in sale note. Scan the ID into the Notes field first.'
+        error: 'SCAN_NOT_PARSEABLE',
+        message: 'Found note content but could not parse an AAMVA barcode.'
       });
     }
 
-    const payload = note.substring(markerIndex);
+    let approved = false;
+    let reason = null;
 
-    try {
-      const parsed = parseAAMVA(payload);
-
-      if (!parsed) {
-        return res.status(409).json({
-          error: 'SCAN_NOT_PARSEABLE',
-          message: 'Found note content but could not parse an AAMVA barcode.'
-        });
-      }
-
-      let approved = false;
-      let reason = null;
-
-      if (parsed.age !== null && parsed.age !== undefined) {
-        if (parsed.age >= 21) {
-          approved = true;
-        } else {
-          approved = false;
-          reason = `Underage (${parsed.age})`;
-        }
+    if (parsed.age !== null && parsed.age !== undefined) {
+      if (parsed.age >= 21) {
+        approved = true;
       } else {
         approved = false;
-        reason = 'Could not read DOB';
+        reason = `Underage (${parsed.age})`;
       }
+    } else {
+      approved = false;
+      reason = 'Could not read DOB';
+    }
 
-      // Check banned list if configured.
-      if (db.pool && parsed.documentNumber) {
-        try {
-          const bannedRecord = await complianceStore.findBannedCustomer({
-            documentType: 'drivers_license',
-            documentNumber: parsed.documentNumber,
-            issuingCountry: parsed.issuingCountry
-          });
-
-          if (bannedRecord) {
-            approved = false;
-            reason = bannedRecord.notes || 'BANNED_CUSTOMER';
-            logger.logSecurity('banned_customer_attempt_note', {
-              saleId,
-              documentNumber: parsed.documentNumber,
-              bannedId: bannedRecord.id
-            });
-          }
-        } catch (banError) {
-          logger.logAPIError('find_banned_customer_note', banError, { saleId });
-        }
-      }
-
-      // Ensure a pending in-memory verification exists so polling UIs can update.
-      if (!saleVerificationStore.getVerification(saleId)) {
-        saleVerificationStore.createVerification(saleId, { registerId: registerId || null });
-      }
-
-      const customerName =
-        `${parsed.firstName || ''} ${parsed.lastName || ''}`.trim() || 'Customer';
-
-      const verificationResult = {
-        approved,
-        customerId: parsed.documentNumber || null,
-        customerName,
-        age: parsed.age || null,
-        reason,
-        registerId: registerId || sale.registerId || null
-      };
-
-      if (db.pool) {
-        const locationId = determineLocationId(req, sale);
-        const dbVerification = {
-          verificationId: require('crypto').randomUUID(),
-          saleId,
-          clerkId: clerkId || 'POS_NOTE',
-          status: approved ? 'approved' : 'rejected',
-          reason,
-          firstName: parsed.firstName,
-          lastName: parsed.lastName,
-          dob: parsed.dob ? parsed.dob.toISOString() : null,
-          age: parsed.age,
+    // Check banned list if configured.
+    if (db.pool && parsed.documentNumber) {
+      try {
+        const bannedRecord = await complianceStore.findBannedCustomer({
           documentType: 'drivers_license',
           documentNumber: parsed.documentNumber,
-          issuingCountry: parsed.issuingCountry,
-          nationality: parsed.issuingCountry,
-          sex: parsed.sex,
-          source: 'pos_note'
-        };
-
-        await complianceStore.saveVerification(dbVerification, {
-          ipAddress: req.ip,
-          userAgent: req.get('user-agent'),
-          locationId
+          issuingCountry: parsed.issuingCountry
         });
+
+        if (bannedRecord) {
+          approved = false;
+          reason = bannedRecord.notes || 'BANNED_CUSTOMER';
+          logger.logSecurity('banned_customer_attempt_note', {
+            saleId,
+            documentNumber: parsed.documentNumber,
+            bannedId: bannedRecord.id
+          });
+        }
+      } catch (banError) {
+        logger.logAPIError('find_banned_customer_note', banError, { saleId });
       }
-
-      // Overwrite the sale note with a clean audit message (removes the raw AAMVA blob).
-      try {
-        await lightspeed.recordVerification({
-          saleId,
-          clerkId: clerkId || 'POS_NOTE',
-          verificationData: {
-            approved,
-            firstName: parsed.firstName || null,
-            lastName: parsed.lastName || null,
-            age: parsed.age || null,
-            dob: parsed.dob ? parsed.dob.toISOString().split('T')[0] : null,
-            documentNumber: parsed.documentNumber || null,
-            documentType: 'drivers_license',
-            issuingCountry: parsed.issuingCountry || null,
-            source: 'pos_note',
-            reason
-          }
-        });
-      } catch (noteError) {
-        logger.warn({ event: 'lightspeed_note_update_failed', saleId, error: noteError.message });
-      }
-
-      saleVerificationStore.updateVerification(saleId, verificationResult);
-
-      return res.status(200).json({
-        success: true,
-        approved,
-        customerName,
-        age: parsed.age,
-        dob: parsed.dob ? parsed.dob.toISOString().slice(0, 10) : null,
-        reason
-      });
-    } catch (error) {
-      logger.logAPIError('verify_from_note', error, { saleId });
-      return res.status(500).json({
-        error: 'INTERNAL_ERROR',
-        message: 'Failed to verify scan from sale note.'
-      });
-    }
-  });
-
-  /**
-   * Cron job endpoint for data retention enforcement
-   * Called daily by Vercel Cron to delete old records per TABC compliance
-   *
-   * TABC requires 2-year retention (730 days)
-   * This endpoint is protected by Vercel's internal cron authentication
-   */
-  router.post('/cron/retention', async (req, res) => {
-    // Verify this is a Vercel Cron request
-    const authHeader = req.headers.authorization;
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      logger.logSecurity('unauthorized_cron_attempt', {
-        ip: req.ip,
-        path: req.path
-      });
-      return res.status(401).json({
-        error: 'UNAUTHORIZED',
-        message: 'Invalid cron secret'
-      });
     }
 
-    if (!db.pool) {
-      logger.warn({
-        event: 'retention_skipped',
-        reason: 'no_database'
-      }, 'Retention enforcement skipped - no database configured');
-      return res.status(200).json({
-        success: true,
-        message: 'Retention skipped - no database configured'
-      });
+    // Ensure a pending in-memory verification exists so polling UIs can update.
+    if (!saleVerificationStore.getVerification(saleId)) {
+      saleVerificationStore.createVerification(saleId, { registerId: registerId || null });
     }
 
-    try {
-      logger.info({ event: 'retention_started' }, 'Starting scheduled data retention enforcement');
+    const customerName =
+      `${parsed.firstName || ''} ${parsed.lastName || ''}`.trim() || 'Customer';
 
-      const result = await complianceStore.enforceRetention({
-        verificationDays: 730 // TABC 2-year requirement
-      });
+    const verificationResult = {
+      approved,
+      customerId: parsed.documentNumber || null,
+      customerName,
+      age: parsed.age || null,
+      reason,
+      registerId: registerId || sale.registerId || null
+    };
 
-      logger.info({
-        event: 'retention_completed',
-        ...result
-      }, `Data retention completed: ${result.verificationsDeleted} verifications, ${result.completionsDeleted} completions, ${result.overridesDeleted} overrides deleted`);
-
-      res.status(200).json({
-        success: true,
-        ...result
-      });
-    } catch (error) {
-      logger.logAPIError('retention_enforcement', error);
-      res.status(500).json({
-        error: 'RETENTION_FAILED',
-        message: 'Failed to enforce data retention'
-      });
-    }
-  });
-
-  // Cron job endpoint for retention enforcement
-  router.get('/cron/retention', async (req, res) => {
-    // Verify that the request is authorized (Vercel cron jobs can be secured, or we rely on API key)
-    // For now, we'll rely on the global authenticateRequest middleware if it's applied to /api
-
-    if (!db.pool) {
-      return res.status(503).json({ error: 'DB_UNAVAILABLE' });
-    }
-
-    try {
-      const results = await complianceStore.enforceRetention();
-      res.json({ data: results });
-    } catch (error) {
-      logger.logAPIError('cron_retention', error);
-      res.status(500).json({ error: 'INTERNAL_ERROR' });
-    }
-  });
-
-  /**
-   * POST /api/sales/:saleId/verify
-   *
-   * Submit ID verification result from scanner.html
-   * Called by scanner PWA app after successful ID scan
-   *
-   * Request body:
-   * {
-   *   approved: boolean,
-   *   customerId: string (optional),
-   *   customerName: string (optional),
-   *   age: number (optional),
-   *   reason: string (optional - rejection reason),
-   *   registerId: string (optional)
-   * }
-   */
-  router.post('/sales/:saleId/verify', async (req, res) => {
-    const { saleId } = req.params;
-    const { approved, customerId, customerName, age, reason, registerId } = req.body;
-
-    // Validate required fields
-    if (typeof approved !== 'boolean') {
-      logger.warn({
-        event: 'sale_verify_invalid',
+    if (db.pool) {
+      const locationId = determineLocationId(req, sale);
+      const dbVerification = {
+        verificationId: require('crypto').randomUUID(),
         saleId,
-        error: 'approved field required'
-      }, 'Sale verification missing approved field');
-
-      return res.status(400).json({
-        error: 'INVALID_REQUEST',
-        message: 'approved field is required and must be a boolean'
-      });
-    }
-
-    try {
-      // Update verification in store
-      const verification = saleVerificationStore.updateVerification(saleId, {
-        approved,
-        customerId,
-        customerName,
-        age,
+        clerkId: clerkId || 'POS_NOTE',
+        status: approved ? 'approved' : 'rejected',
         reason,
-        registerId
-      });
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
+        dob: parsed.dob ? parsed.dob.toISOString() : null,
+        age: parsed.age,
+        documentType: 'drivers_license',
+        documentNumber: parsed.documentNumber,
+        issuingCountry: parsed.issuingCountry,
+        nationality: parsed.issuingCountry,
+        sex: parsed.sex,
+        source: 'pos_note'
+      };
 
-      if (!verification) {
-        logger.warn({
-          event: 'sale_verify_not_found',
-          saleId
-        }, `Sale verification not found or expired: ${saleId}`);
-
-        return res.status(404).json({
-          error: 'VERIFICATION_NOT_FOUND',
-          message: 'Sale verification not found or has expired'
-        });
-      }
-
-      logger.info({
-        event: 'sale_verified',
-        saleId,
-        approved,
-        age,
-        registerId
-      }, `Sale ${saleId} verified: ${approved ? 'approved' : 'rejected'}`);
-
-      res.json({
-        success: true,
-        saleId,
-        status: verification.status
-      });
-    } catch (error) {
-      logger.logAPIError('sale_verify', error, { saleId });
-      res.status(500).json({
-        error: 'INTERNAL_ERROR',
-        message: 'Failed to process verification'
+      await complianceStore.saveVerification(dbVerification, {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        locationId
       });
     }
-  });
 
-  /**
-   * GET /api/sales/:saleId/status
-   *
-   * Get current verification status for a sale
-   * Called by payment-gateway.html (polling every 2 seconds)
-   *
-   * Response:
-   * {
-   *   saleId: string,
-   *   status: 'pending' | 'approved' | 'rejected',
-   *   age: number (optional),
-   *   reason: string (optional),
-   *   customerName: string (optional)
-   * }
-   */
-  router.get('/sales/:saleId/status', async (req, res) => {
-    const { saleId } = req.params;
-
+    // Overwrite the sale note with a clean audit message (removes the raw AAMVA blob).
     try {
-      let verification = saleVerificationStore.getVerification(saleId);
-
-      // If not in memory, check database as fallback
-      if (!verification && db.pool) {
-        try {
-          const result = await db.pool.query(
-            'SELECT * FROM verifications WHERE sale_id = $1 ORDER BY created_at DESC LIMIT 1',
-            [saleId]
-          );
-
-          if (result.rows.length > 0) {
-            const row = result.rows[0];
-            // Map database row to verification format
-            verification = {
-              saleId: row.sale_id,
-              status: row.status,
-              age: row.age,
-              reason: row.reason,
-              customerName: `${row.first_name || ''} ${row.last_name || ''}`.trim() || null
-            };
-            logger.info('Retrieved verification from database fallback', { saleId });
-          }
-        } catch (dbError) {
-          logger.error('Failed to query database for verification', dbError);
-          // Continue to create pending verification
-        }
-      }
-
-      if (!verification) {
-        // Create a new pending verification if it doesn't exist
-        // This handles the case where payment-gateway.html loads before verification is created
-        const newVerification = saleVerificationStore.createVerification(saleId);
-
-        return res.json({
-          saleId,
-          status: newVerification.status,
-          age: null,
-          reason: null,
-          customerName: null
-        });
-      }
-
-      res.json({
-        saleId: verification.saleId,
-        status: verification.status,
-        age: verification.age,
-        reason: verification.reason,
-        customerName: verification.customerName
-      });
-    } catch (error) {
-      logger.logAPIError('sale_status', error, { saleId });
-      res.status(500).json({
-        error: 'INTERNAL_ERROR',
-        message: 'Failed to get verification status'
-      });
-    }
-  });
-
-  /**
-   * POST /api/sales/:saleId/complete
-   *
-   * Complete the verification flow and send unlock to Lightspeed
-   * Called by payment-gateway.html after displaying result
-   *
-   * Request body:
-   * {
-   *   approved: boolean,
-   *   paymentAmount: number (optional)
-   * }
-   *
-   * Response:
-   * {
-   *   success: boolean,
-   *   lightspeedResponse: object (optional)
-   * }
-   */
-  router.post('/sales/:saleId/complete', async (req, res) => {
-    const { saleId } = req.params;
-    const { approved, paymentAmount } = req.body;
-
-    try {
-      const verification = saleVerificationStore.getVerification(saleId);
-
-      if (!verification) {
-        logger.warn({
-          event: 'sale_complete_not_found',
-          saleId
-        }, `Attempted to complete non-existent verification: ${saleId}`);
-
-        return res.status(404).json({
-          error: 'VERIFICATION_NOT_FOUND',
-          message: 'Sale verification not found'
-        });
-      }
-
-      // Send unlock/complete to Lightspeed Payments API
-      let lightspeedResponse = null;
-
-      if (lightspeedMode === 'live' && process.env.LIGHTSPEED_API_KEY) {
-        try {
-          // TODO: Implement actual Lightspeed Payments API call
-          // This will depend on Lightspeed's custom payment integration documentation
-          //
-          // Example structure:
-          // lightspeedResponse = await lightspeed.completePayment({
-          //   saleId,
-          //   approved,
-          //   amount: paymentAmount,
-          //   paymentMethod: 'ID_VERIFICATION'
-          // });
-
-          logger.info({
-            event: 'lightspeed_complete',
-            saleId,
-            approved
-          }, `Lightspeed payment completion called for sale ${saleId}`);
-        } catch (lightspeedError) {
-          logger.error({
-            event: 'lightspeed_complete_error',
-            saleId,
-            error: lightspeedError.message
-          }, `Failed to complete Lightspeed payment: ${lightspeedError.message}`);
-
-          // Continue anyway - don't block on Lightspeed API failure
-        }
-      } else {
-        logger.info({
-          event: 'lightspeed_complete_mock',
-          saleId,
-          approved
-        }, `Mock: Would complete Lightspeed payment for sale ${saleId}`);
-      }
-
-      // Mark verification as complete and remove from store
-      saleVerificationStore.completeVerification(saleId);
-
-      logger.info({
-        event: 'sale_complete',
+      await lightspeed.recordVerification({
         saleId,
-        approved,
-        hasLightspeedResponse: !!lightspeedResponse
-      }, `Sale ${saleId} completed successfully`);
-
-      res.json({
-        success: true,
-        lightspeedResponse
+        clerkId: clerkId || 'POS_NOTE',
+        verificationData: {
+          approved,
+          firstName: parsed.firstName || null,
+          lastName: parsed.lastName || null,
+          age: parsed.age || null,
+          dob: parsed.dob ? parsed.dob.toISOString().split('T')[0] : null,
+          documentNumber: parsed.documentNumber || null,
+          documentType: 'drivers_license',
+          issuingCountry: parsed.issuingCountry || null,
+          source: 'pos_note',
+          reason
+        }
       });
-    } catch (error) {
-      logger.logAPIError('sale_complete', error, { saleId });
-      res.status(500).json({
-        error: 'INTERNAL_ERROR',
-        message: 'Failed to complete verification'
-      });
+    } catch (noteError) {
+      logger.warn({ event: 'lightspeed_note_update_failed', saleId, error: noteError.message });
     }
-  });
 
-  router.get('/sales/:saleId/status', async (req, res) => {
-    const { saleId } = req.params;
-    const verification = saleVerificationStore.getVerification(saleId);
+    saleVerificationStore.updateVerification(saleId, verificationResult);
+
+    return res.status(200).json({
+      success: true,
+      approved,
+      customerName,
+      age: parsed.age,
+      dob: parsed.dob ? parsed.dob.toISOString().slice(0, 10) : null,
+      reason
+    });
+  } catch (error) {
+    logger.logAPIError('verify_from_note', error, { saleId });
+    return res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to verify scan from sale note.'
+    });
+  }
+});
+
+/**
+ * Cron job endpoint for data retention enforcement
+ * Called daily by Vercel Cron to delete old records per TABC compliance
+ *
+ * TABC requires 2-year retention (730 days)
+ * This endpoint is protected by Vercel's internal cron authentication
+ */
+router.post('/cron/retention', async (req, res) => {
+  // Verify this is a Vercel Cron request
+  const authHeader = req.headers.authorization;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    logger.logSecurity('unauthorized_cron_attempt', {
+      ip: req.ip,
+      path: req.path
+    });
+    return res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid cron secret'
+    });
+  }
+
+  if (!db.pool) {
+    logger.warn({
+      event: 'retention_skipped',
+      reason: 'no_database'
+    }, 'Retention enforcement skipped - no database configured');
+    return res.status(200).json({
+      success: true,
+      message: 'Retention skipped - no database configured'
+    });
+  }
+
+  try {
+    logger.info({ event: 'retention_started' }, 'Starting scheduled data retention enforcement');
+
+    const result = await complianceStore.enforceRetention({
+      verificationDays: 730 // TABC 2-year requirement
+    });
+
+    logger.info({
+      event: 'retention_completed',
+      ...result
+    }, `Data retention completed: ${result.verificationsDeleted} verifications, ${result.completionsDeleted} completions, ${result.overridesDeleted} overrides deleted`);
+
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    logger.logAPIError('retention_enforcement', error);
+    res.status(500).json({
+      error: 'RETENTION_FAILED',
+      message: 'Failed to enforce data retention'
+    });
+  }
+});
+
+// Cron job endpoint for retention enforcement
+router.get('/cron/retention', async (req, res) => {
+  // Verify that the request is authorized (Vercel cron jobs can be secured, or we rely on API key)
+  // For now, we'll rely on the global authenticateRequest middleware if it's applied to /api
+
+  if (!db.pool) {
+    return res.status(503).json({ error: 'DB_UNAVAILABLE' });
+  }
+
+  try {
+    const results = await complianceStore.enforceRetention();
+    res.json({ data: results });
+  } catch (error) {
+    logger.logAPIError('cron_retention', error);
+    res.status(500).json({ error: 'INTERNAL_ERROR' });
+  }
+});
+
+/**
+ * POST /api/sales/:saleId/verify
+ *
+ * Submit ID verification result from scanner.html
+ * Called by scanner PWA app after successful ID scan
+ *
+ * Request body:
+ * {
+ *   approved: boolean,
+ *   customerId: string (optional),
+ *   customerName: string (optional),
+ *   age: number (optional),
+ *   reason: string (optional - rejection reason),
+ *   registerId: string (optional)
+ * }
+ */
+router.post('/sales/:saleId/verify', async (req, res) => {
+  const { saleId } = req.params;
+  const { approved, customerId, customerName, age, reason, registerId } = req.body;
+
+  // Validate required fields
+  if (typeof approved !== 'boolean') {
+    logger.warn({
+      event: 'sale_verify_invalid',
+      saleId,
+      error: 'approved field required'
+    }, 'Sale verification missing approved field');
+
+    return res.status(400).json({
+      error: 'INVALID_REQUEST',
+      message: 'approved field is required and must be a boolean'
+    });
+  }
+
+  try {
+    // Update verification in store
+    const verification = saleVerificationStore.updateVerification(saleId, {
+      approved,
+      customerId,
+      customerName,
+      age,
+      reason,
+      registerId
+    });
 
     if (!verification) {
+      logger.warn({
+        event: 'sale_verify_not_found',
+        saleId
+      }, `Sale verification not found or expired: ${saleId}`);
+
       return res.status(404).json({
-        status: 'not_found',
-        message: 'Verification session not found or expired'
+        error: 'VERIFICATION_NOT_FOUND',
+        message: 'Sale verification not found or has expired'
       });
     }
 
-    // Add Friendship metadata for frontend troubleshooting
+    logger.info({
+      event: 'sale_verified',
+      saleId,
+      approved,
+      age,
+      registerId
+    }, `Sale ${saleId} verified: ${approved ? 'approved' : 'rejected'}`);
+
+    res.json({
+      success: true,
+      saleId,
+      status: verification.status
+    });
+  } catch (error) {
+    logger.logAPIError('sale_verify', error, { saleId });
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to process verification'
+    });
+  }
+});
+
+/**
+ * GET /api/sales/:saleId/status
+ *
+ * Get current verification status for a sale
+ * Called by payment-gateway.html (polling every 2 seconds)
+ *
+ * Response:
+ * {
+ *   saleId: string,
+ *   status: 'pending' | 'approved' | 'rejected',
+ *   age: number (optional),
+ *   reason: string (optional),
+ *   customerName: string (optional)
+ * }
+ */
+router.get('/sales/:saleId/status', async (req, res) => {
+  const { saleId } = req.params;
+
+  try {
+    let verification = saleVerificationStore.getVerification(saleId);
+
+    // If not in memory, check database as fallback
+    if (!verification && db.pool) {
+      try {
+        const result = await db.pool.query(
+          'SELECT * FROM verifications WHERE sale_id = $1 ORDER BY created_at DESC LIMIT 1',
+          [saleId]
+        );
+
+        if (result.rows.length > 0) {
+          const row = result.rows[0];
+          // Map database row to verification format
+          verification = {
+            saleId: row.sale_id,
+            status: row.status,
+            age: row.age,
+            reason: row.reason,
+            customerName: `${row.first_name || ''} ${row.last_name || ''}`.trim() || null
+          };
+          logger.info('Retrieved verification from database fallback', { saleId });
+        }
+      } catch (dbError) {
+        logger.error('Failed to query database for verification', dbError);
+        // Continue to create pending verification
+      }
+    }
+
+    if (!verification) {
+      // Create a new pending verification if it doesn't exist
+      // This handles the case where payment-gateway.html loads before verification is created
+      const newVerification = saleVerificationStore.createVerification(saleId);
+
+      return res.json({
+        saleId,
+        status: newVerification.status,
+        age: null,
+        reason: null,
+        customerName: null
+      });
+    }
+
     res.json({
       saleId: verification.saleId,
       status: verification.status,
-      customerName: verification.customerName,
+      age: verification.age,
       reason: verification.reason,
-      // Friendship Data
-      remoteScannerActive: verification.remoteScannerActive,
-      lastHeartbeat: verification.lastHeartbeat,
-      logs: verification.logs, // Full trace for "dev testing"
-      expiresAt: verification.expiresAt
+      customerName: verification.customerName
     });
-  });
+  } catch (error) {
+    logger.logAPIError('sale_status', error, { saleId });
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to get verification status'
+    });
+  }
+});
 
-  module.exports = router;
+/**
+ * POST /api/sales/:saleId/complete
+ *
+ * Complete the verification flow and send unlock to Lightspeed
+ * Called by payment-gateway.html after displaying result
+ *
+ * Request body:
+ * {
+ *   approved: boolean,
+ *   paymentAmount: number (optional)
+ * }
+ *
+ * Response:
+ * {
+ *   success: boolean,
+ *   lightspeedResponse: object (optional)
+ * }
+ */
+router.post('/sales/:saleId/complete', async (req, res) => {
+  const { saleId } = req.params;
+  const { approved, paymentAmount } = req.body;
+
+  try {
+    const verification = saleVerificationStore.getVerification(saleId);
+
+    if (!verification) {
+      logger.warn({
+        event: 'sale_complete_not_found',
+        saleId
+      }, `Attempted to complete non-existent verification: ${saleId}`);
+
+      return res.status(404).json({
+        error: 'VERIFICATION_NOT_FOUND',
+        message: 'Sale verification not found'
+      });
+    }
+
+    // Send unlock/complete to Lightspeed Payments API
+    let lightspeedResponse = null;
+
+    if (lightspeedMode === 'live' && process.env.LIGHTSPEED_API_KEY) {
+      try {
+        // TODO: Implement actual Lightspeed Payments API call
+        // This will depend on Lightspeed's custom payment integration documentation
+        //
+        // Example structure:
+        // lightspeedResponse = await lightspeed.completePayment({
+        //   saleId,
+        //   approved,
+        //   amount: paymentAmount,
+        //   paymentMethod: 'ID_VERIFICATION'
+        // });
+
+        logger.info({
+          event: 'lightspeed_complete',
+          saleId,
+          approved
+        }, `Lightspeed payment completion called for sale ${saleId}`);
+      } catch (lightspeedError) {
+        logger.error({
+          event: 'lightspeed_complete_error',
+          saleId,
+          error: lightspeedError.message
+        }, `Failed to complete Lightspeed payment: ${lightspeedError.message}`);
+
+        // Continue anyway - don't block on Lightspeed API failure
+      }
+    } else {
+      logger.info({
+        event: 'lightspeed_complete_mock',
+        saleId,
+        approved
+      }, `Mock: Would complete Lightspeed payment for sale ${saleId}`);
+    }
+
+    // Mark verification as complete and remove from store
+    saleVerificationStore.completeVerification(saleId);
+
+    logger.info({
+      event: 'sale_complete',
+      saleId,
+      approved,
+      hasLightspeedResponse: !!lightspeedResponse
+    }, `Sale ${saleId} completed successfully`);
+
+    res.json({
+      success: true,
+      lightspeedResponse
+    });
+  } catch (error) {
+    logger.logAPIError('sale_complete', error, { saleId });
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to complete verification'
+    });
+  }
+});
+
+router.get('/sales/:saleId/status', async (req, res) => {
+  const { saleId } = req.params;
+  const verification = saleVerificationStore.getVerification(saleId);
+
+  if (!verification) {
+    return res.status(404).json({
+      status: 'not_found',
+      message: 'Verification session not found or expired'
+    });
+  }
+
+  // Add Friendship metadata for frontend troubleshooting
+  res.json({
+    saleId: verification.saleId,
+    status: verification.status,
+    customerName: verification.customerName,
+    reason: verification.reason,
+    // Friendship Data
+    remoteScannerActive: verification.remoteScannerActive,
+    lastHeartbeat: verification.lastHeartbeat,
+    logs: verification.logs, // Full trace for "dev testing"
+    expiresAt: verification.expiresAt
+  });
+});
+
+module.exports = router;

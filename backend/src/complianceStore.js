@@ -657,6 +657,38 @@ async function countRecentOverrides({ locationId, minutes = 10 }) {
   return parseInt(rows[0]?.count || 0, 10);
 }
 
+async function logDiagnostic({ type, saleId, userAgent, error, details }) {
+  try {
+    await query(`
+      INSERT INTO diagnostics (type, sale_id, user_agent, error, details)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [type, saleId, userAgent, error, details]);
+  } catch (err) {
+    logger.error({ err }, 'Failed to log diagnostic to DB');
+  }
+}
+
+// Ensure diagnostics table exists
+async function initDiagnostics() {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS diagnostics (
+        id SERIAL PRIMARY KEY,
+        timestamp TIMESTAMPTZ DEFAULT NOW(),
+        type TEXT,
+        sale_id TEXT,
+        user_agent TEXT,
+        error TEXT,
+        details JSONB
+      )
+    `);
+  } catch (err) {
+    logger.error({ err }, 'Failed to init diagnostics table');
+  }
+}
+
+initDiagnostics();
+
 module.exports = {
   saveVerification,
   getLatestVerificationForSale,
@@ -670,5 +702,6 @@ module.exports = {
   listOverridesForSale,
   listRecentOverrides,
   enforceRetention,
-  countRecentOverrides
+  countRecentOverrides,
+  logDiagnostic
 };
