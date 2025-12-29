@@ -517,51 +517,42 @@ router.post('/test-scan', (req, res) => {
 });
 
 router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
-  const { saleId } = req.params;
-  const { barcodeData, registerId, clerkId } = req.body;
+  const saleId = (req.params.saleId || '').trim();
+  const barcodeData = (req.body.barcodeData || '').trim();
+  const registerId = (req.body.registerId || '').trim();
+  const clerkId = (req.body.clerkId || '').trim();
 
-  // DEBUG LOGGING - Log every scan attempt
-  try {
-    await complianceStore.logDiagnostic({
-      type: 'SCAN_ATTEMPT',
-      saleId,
-      registerId,
-      clerkId,
-      barcodeLength: barcodeData ? barcodeData.length : 0
-    });
-  } catch (logErr) {
-    console.error('Early diagnostic log failed:', logErr);
-  }
+  // 0. Kick off parallel diagnostic and sale retrieval
+  // Fire-and-forget diagnostic so it never blocks or crashes the main flow
+  complianceStore.logDiagnostic({
+    type: 'SCAN_ATTEMPT',
+    saleId,
+    details: { registerId, clerkId, barcodeLength: barcodeData.length }
+  }).catch(err => logger.error({ err }, 'Fire-and-forget logDiagnostic failed'));
+
   console.log('===========================================');
   console.log('🔫 BLUETOOTH SCANNER SCAN RECEIVED');
   console.log('===========================================');
   console.log('Sale ID:', saleId);
-  console.log('Register ID:', registerId);
-  console.log('Clerk ID:', clerkId);
-  console.log('Barcode Length:', barcodeData ? barcodeData.length : 0);
-  console.log('Barcode First 100 chars:', barcodeData ? barcodeData.substring(0, 100) : 'EMPTY');
-  console.log('Barcode Last 50 chars:', barcodeData && barcodeData.length > 50 ? barcodeData.substring(barcodeData.length - 50) : barcodeData);
-  console.log('Has ]L prefix:', barcodeData ? barcodeData.startsWith(']L') : false);
-  console.log('Has @ANSI prefix:', barcodeData ? barcodeData.startsWith('@ANSI') : false);
-  console.log('Line breaks (\\n):', barcodeData ? (barcodeData.match(/\n/g) || []).length : 0);
-  console.log('Carriage returns (\\r):', barcodeData ? (barcodeData.match(/\r/g) || []).length : 0);
+  console.log('Barcode Length:', barcodeData.length);
   console.log('===========================================');
 
   if (!barcodeData) {
-    console.log('❌ ERROR: No barcode data provided');
     return res.status(400).json({ success: false, error: 'Barcode data is required.' });
   }
 
   try {
-    // Best-effort sale context (used for outlet/location resolution and note writing).
+    // 1. Get Sale Context
     let sale = null;
     let locationId = determineLocationId(req, null);
     try {
       sale = await lightspeed.getSaleById(saleId);
       locationId = determineLocationId(req, sale);
-    } catch (e) { }
+    } catch (e) {
+      console.warn('Sale lookup failed during bluetooth scan, proceeding with defaults');
+    }
 
-    // 1. Parse the Barcode
+    // 2. Parse the Barcode
     let parsed = parseAAMVA(barcodeData);
 
     // Log parse result
