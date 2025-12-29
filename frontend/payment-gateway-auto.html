@@ -438,15 +438,16 @@
             </div>
 
             <!-- Scan Trigger -->
-            <button class="scan-now-btn" id="btnScanNow">
-                <span class="scan-dot"></span>
+            <!-- Scan Data Preview (Visible Keystrokes) -->
+            <div id="scanPreview"
+                style="margin-bottom: 20px; font-family: monospace; font-size: 14px; color: #0f0; background: rgba(0,0,0,0.3); padding: 10px; border: 1px solid #0f0; border-radius: 8px; word-break: break-all; min-height: 40px; text-align: left; display: flex; align-items: center;">
+                <span style="opacity: 0.5; margin-right: 10px;">SCAN:</span>
+                <span id="scanPreviewText">...</span>
+            </div>
+
+            <button id="btnScanNow" class="scan-now-btn">
                 Scan Now
             </button>
-
-            <!-- Scan Data Preview -->
-            <div id="scanPreview"
-                style="margin-top: 10px; font-family: monospace; font-size: 10px; opacity: 0.5; max-width: 300px; word-break: break-all; min-height: 12px; border: 1px solid rgba(255,255,255,0.1); padding: 5px; border-radius: 4px;">
-                ...</div>
 
             <!-- Success overlay -->
             <div id="successOverlay" class="overlay-card">
@@ -575,7 +576,7 @@
                     barcodeBuffer = '';
                 } else if (e.key.length === 1) {
                     barcodeBuffer += e.key;
-                    document.getElementById('scanPreview').textContent = barcodeBuffer;
+                    document.getElementById('scanPreviewText').textContent = barcodeBuffer;
 
                     // If we get at least 10 chars, start a 2-second timer to auto-submit
                     // (in case the scanner doesn't send an "Enter" key)
@@ -599,7 +600,7 @@
                 statusEl.style.color = '#fff';
 
                 try {
-                    const res = await fetch('/api/debug/ping');
+                    const res = await fetch(`/api/debug/ping?t=${Date.now()}`);
                     const data = await res.json();
                     statusEl.textContent = `SUCCESS: DB=${data.db}`;
                     statusEl.style.color = '#0f0';
@@ -622,7 +623,7 @@
                 btnScanNow.style.pointerEvents = "none";
 
                 try {
-                    const response = await fetch(`/api/sales/${saleId}/verify-bluetooth`, {
+                    const response = await fetch(`/api/sales/${encodeURIComponent(saleId)}/verify-bluetooth`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ barcodeData: rawData })

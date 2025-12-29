@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const pinoHttp = require('pino-http');
+const complianceStore = require('./complianceStore');
 const config = require('./config');
 const logger = require('./logger');
 const { authenticateRequest, optionalAuth, adminAuth } = require('./auth');
@@ -33,19 +34,30 @@ app.use(
         return callback(null, true);
       }
 
-      const isAllowed = corsWhitelist.some((pattern) => {
-        if (pattern.includes('*')) {
-          const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\./g, '\\.') + '$');
-          return regex.test(origin);
-        }
-        return pattern === origin;
-      });
+      try {
+        const isAllowed = corsWhitelist.some((pattern) => {
+          if (pattern.includes('*')) {
+            try {
+              const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\./g, '\\.') + '$');
+              return regex.test(origin);
+            } catch (reErr) {
+              console.error('Invalid CORS pattern:', pattern);
+              return false;
+            }
+          }
+          return pattern === origin;
+        });
 
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        logger.logSecurity('cors_blocked', { origin, whitelist: corsWhitelist });
-        callback(new Error('Not allowed by CORS'));
+        if (isAllowed) {
+          callback(null, true);
+        } else {
+          logger.logSecurity('cors_blocked', { origin, whitelist: corsWhitelist });
+          // Don't send a full Error object, just fail.
+          callback(null, false);
+        }
+      } catch (err) {
+        console.error('CORS check error:', err);
+        callback(null, false);
       }
     },
     credentials: true,
@@ -150,11 +162,28 @@ app.use((req, res) => {
   });
 });
 
-app.use((err, req, res, next) => {
+app.use(async (err, req, res, next) => {
   logger.error({ err }, 'Unhandled error');
+
+  // Try to log to DB for remote visibility
+  try {
+    await complianceStore.logDiagnostic({
+      type: 'UNHANDLED_ERROR',
+      error: err.message,
+      details: {
+        stack: err.stack,
+        path: req.path,
+        method: req.method
+      }
+    });
+  } catch (logErr) {
+    logger.error({ logErr }, 'Failed to log unhandled error to DB');
+  }
+
   res.status(500).json({
     error: 'INTERNAL_ERROR',
-    message: 'An unexpected error occurred.'
+    message: 'An unexpected error occurred.',
+    technical: err.message
   });
 });
 

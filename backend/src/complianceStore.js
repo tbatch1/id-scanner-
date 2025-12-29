@@ -706,10 +706,10 @@ module.exports = {
   addBannedCustomer,
   listBannedCustomers,
   removeBannedCustomer,
+  logDiagnostic,
+  initDiagnostics,
   markVerificationOverride,
   listOverridesForSale,
   listRecentOverrides,
   enforceRetention,
-  countRecentOverrides,
-  logDiagnostic
 };
