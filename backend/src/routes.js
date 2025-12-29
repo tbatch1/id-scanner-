@@ -634,6 +634,8 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     // 4.5 Write an audit note back to Lightspeed (best-effort, never blocks checkout)
     let noteUpdated = false;
     try {
+      const safeDate = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString().slice(0, 10) : null;
+
       await lightspeed.recordVerification({
         saleId,
         clerkId: clerkId || 'BLUETOOTH_DEVICE',
@@ -642,7 +644,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
           reason,
           firstName: parsed.firstName,
           lastName: parsed.lastName,
-          dob: parsed.dob ? parsed.dob.toISOString().slice(0, 10) : null,
+          dob: safeDate(parsed.dob),
           age: parsed.age,
           documentType: 'drivers_license',
           documentNumber: parsed.documentNumber,
@@ -666,15 +668,18 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     if (db.pool) {
       try {
         // Construct verification object for DB
+        const safeIso = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString() : null;
+        const vId = `V-${saleId || 'SCAN'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
         const dbVerification = {
-          verificationId: require('crypto').randomUUID(), // Node 14.17+
+          verificationId: vId,
           saleId,
           clerkId: clerkId || 'BLUETOOTH_DEVICE',
           status: approved ? 'approved' : 'rejected',
           reason,
           firstName: parsed.firstName,
           lastName: parsed.lastName,
-          dob: parsed.dob ? parsed.dob.toISOString() : null,
+          dob: safeIso(parsed.dob),
           age: parsed.age,
           documentType: 'drivers_license',
           documentNumber: parsed.documentNumber,
@@ -728,6 +733,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       success: false,
       error: 'SERVER_ERROR',
       message: error.message,
+      technical: error.message,
       details: 'Internal error during scan parsing or persistence.'
     });
   }
