@@ -723,6 +723,7 @@
         // HID Input Handling
         const SCAN_TIMEOUT = 1000;
         function handleKey(key) {
+            if (!isScanning) return;
             barcodeBuffer += key;
             document.getElementById('scanPreviewText').textContent = barcodeBuffer;
             if (scanTimer) clearTimeout(scanTimer);
@@ -751,7 +752,19 @@
             });
         }
 
+        let isProcessing = false;
         async function handleBluetoothScan(data) {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            const btn = document.getElementById('btnScanNow');
+            if (btn) {
+                btn.innerHTML = '<span class="scan-dot" style="background: #f0ad4e"></span> Processing...';
+                btn.style.opacity = "0.5";
+                btn.style.pointerEvents = "none";
+            }
+            document.getElementById('scanPreviewText').textContent = "(PROCESSING...)";
+
             statusText.textContent = 'Processing...';
             const cleanData = data.startsWith(']L') ? data.substring(2) : data;
             try {

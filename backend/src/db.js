@@ -64,11 +64,18 @@ pool.on('error', (err, client) => {
  * @param {Array} params - Query parameters
  * @returns {Promise} Query result
  */
-async function query(text, params) {
+async function query(text, params, timeoutMs = 5000) {
   const start = Date.now();
 
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('DATABASE_QUERY_TIMEOUT')), timeoutMs);
+  });
+
   try {
-    const result = await pool.query(text, params);
+    const result = await Promise.race([
+      pool.query(text, params),
+      timeoutPromise
+    ]);
     const duration = Date.now() - start;
 
     logger.logPerformance('db_query', duration, true);
@@ -77,7 +84,7 @@ async function query(text, params) {
       logger.warn({
         event: 'slow_query',
         duration_ms: duration,
-        query: text.substring(0, 100) // Log first 100 chars
+        query: text.substring(0, 100)
       }, `Slow database query: ${duration}ms`);
     }
 

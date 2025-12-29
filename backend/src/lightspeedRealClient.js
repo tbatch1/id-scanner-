@@ -11,7 +11,7 @@ const api = axios.create({
     'Authorization': `Bearer ${PERSONAL_TOKEN}`,
     'Content-Type': 'application/json'
   },
-  timeout: 15000
+  timeout: 7000 // Reduced from 15s to fit Vercel 10s Hobby limit
 });
 
 async function getUserById(userId) {
@@ -54,19 +54,17 @@ async function getSaleById(saleId) {
     const response = await api.get(`/sales/${saleId}`);
     const sale = response.data.data;
 
-    // Fetch employee/clerk name if user_id exists
+    // Parallelize employee and outlet fetches
     let employeeName = null;
-    if (sale.user_id) {
-      const user = await getUserById(sale.user_id);
-      employeeName = user?.name || null;
-    }
-
-    // Fetch outlet/location name if outlet_id exists
     let outletName = null;
-    if (sale.outlet_id) {
-      const outlet = await getOutletById(sale.outlet_id);
-      outletName = outlet?.label || null;
-    }
+
+    const [user, outlet] = await Promise.all([
+      sale.user_id ? getUserById(sale.user_id) : Promise.resolve(null),
+      sale.outlet_id ? getOutletById(sale.outlet_id) : Promise.resolve(null)
+    ]);
+
+    employeeName = user?.name || null;
+    outletName = outlet?.label || null;
 
     return {
       saleId: sale.id,
@@ -139,9 +137,9 @@ async function recordVerification({ saleId, clerkId, verificationData }) {
 async function completeSale({ saleId, verificationId, paymentType }) {
   try {
     const sale = await getSaleById(saleId);
-    
+
     await api.put(`/sales/${saleId}`, { status: 'CLOSED' });
-    
+
     logger.info({ event: 'sale_completed', saleId, paymentType });
 
     return {

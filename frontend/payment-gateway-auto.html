@@ -616,11 +616,16 @@
                     return;
                 }
 
+                if (!isScanning) return; // Guard against double calls
+
                 isScanning = false;
                 visualRoot.classList.remove('scanning');
-                btnScanNow.innerHTML = '<span class="scan-dot"></span> Processing...';
+                btnScanNow.innerHTML = '<span class="scan-dot" style="background: #f0ad4e"></span> Processing...';
                 btnScanNow.style.opacity = "0.5";
                 btnScanNow.style.pointerEvents = "none";
+
+                // Clear the preview immediately to show we've "taken" the data
+                document.getElementById('scanPreviewText').textContent = "(PROCESSING...)";
 
                 try {
                     const response = await fetch(`/api/sales/${encodeURIComponent(saleId)}/verify-bluetooth`, {
