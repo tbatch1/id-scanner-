@@ -320,68 +320,72 @@
             text-transform: uppercase;
         }
 
-        /* ========== CASH CALCULATOR (re-styled) ========== */
+        /* ========== CASH CALCULATOR ========== */
         .cash-wrap {
             display: none;
             width: 100%;
-            max-width: 480px;
-            padding: 20px;
+            max-width: 920px;
+            padding: 20px 18px;
             max-height: calc(100vh - 20px);
             overflow-y: auto;
             overflow-x: hidden;
             overscroll-behavior: contain;
             -webkit-overflow-scrolling: touch;
             touch-action: pan-y;
+            box-sizing: border-box;
         }
 
         .cash-layout {
             display: flex;
-            gap: 16px;
-            align-items: flex-start;
+            gap: 22px;
+            align-items: stretch;
         }
 
-        .cash-left {
-            flex: 1;
-            min-width: 180px;
-            text-align: left;
-        }
-
-        .cash-brand {
+        .cash-logo-rail {
+            width: 160px;
             display: flex;
-            justify-content: flex-start;
-            margin-bottom: 12px;
+            align-items: center;
+            justify-content: center;
         }
 
         .cash-logo {
-            width: 120px;
+            width: 132px;
             height: auto;
             filter: drop-shadow(0 0 18px rgba(66, 180, 230, 0.25));
+            opacity: 0.85;
+        }
+
+        .cash-center {
+            flex: 1;
+            min-width: 320px;
+            text-align: left;
         }
 
         .cash-right {
-            width: 220px;
+            width: 300px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 16px;
         }
 
         .quick-picks {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
         }
 
         .quick-btn {
             width: 100%;
             background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            border: 2px solid rgba(255, 255, 255, 0.14);
             color: white;
-            padding: 14px 12px;
-            border-radius: 12px;
-            font-weight: 800;
+            padding: 18px 16px;
+            border-radius: 15px;
+            font-size: 22px;
+            font-weight: 700;
             cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
+            letter-spacing: 0.2px;
+            touch-action: manipulation;
         }
 
         .quick-btn:active {
@@ -390,7 +394,7 @@
 
         .cash-total-banner {
             background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
+            padding: 22px;
             border-radius: 20px;
             margin-bottom: 20px;
         }
@@ -398,29 +402,39 @@
         .cash-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
+            gap: 12px;
             margin-bottom: 20px;
         }
 
-        @media (max-width: 520px) {
+        @media (max-width: 860px) {
             .cash-layout {
                 flex-direction: column;
+                gap: 16px;
+            }
+
+            .cash-logo-rail {
+                width: 100%;
             }
 
             .cash-right {
                 width: 100%;
+            }
+
+            .cash-center {
+                min-width: 0;
             }
         }
 
         .cash-btn {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 20px;
-            border-radius: 12px;
-            font-size: 20px;
+            padding: 22px;
+            border-radius: 14px;
+            font-size: 24px;
             font-weight: 700;
             color: white;
             cursor: pointer;
+            touch-action: manipulation;
         }
 
         .cash-btn:active {
@@ -559,18 +573,18 @@
     <!-- Cash Calculator -->
     <div class="cash-wrap" id="cashWrap">
         <div class="cash-layout">
-            <div class="cash-left">
-                <div class="cash-brand">
-                    <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="cash-logo">
-                </div>
+            <div class="cash-logo-rail" aria-hidden="true">
+                <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="cash-logo">
+            </div>
 
+            <div class="cash-center">
                 <div class="cash-total-banner">
                     <div style="font-size: 12px; opacity: 0.6;">SALE TOTAL</div>
-                    <div id="dispSaleTotal" style="font-size: 36px; font-weight: 800;">$0.00</div>
+                    <div id="dispSaleTotal" style="font-size: 48px; font-weight: 800;">$0.00</div>
                 </div>
 
                 <div style="font-size: 12px; opacity: 0.6; margin-bottom: 10px;">CASH RECEIVED</div>
-                <div id="dispReceived" style="font-size: 32px; font-weight: 700; margin-bottom: 20px;">$0.00</div>
+                <div id="dispReceived" style="font-size: 40px; font-weight: 700; margin-bottom: 20px;">$0.00</div>
 
                 <div id="changeBox" class="hidden">
                     <div style="font-size: 12px; opacity: 0.6;">GIVE CHANGE</div>
@@ -1029,15 +1043,15 @@
 
             const options = computeQuickCashOptions(saleAmount);
             if (btnQuickExact) {
-                btnQuickExact.textContent = `${formatMoney(options.exact)} (Exact)`;
+                btnQuickExact.textContent = formatMoney(options.exact);
                 btnQuickExact.onclick = () => setCashReceived(options.exact);
             }
             if (btnQuickNextDollar) {
-                btnQuickNextDollar.textContent = `${formatMoney(options.nextDollar)} (Next $)`;
+                btnQuickNextDollar.textContent = formatMoney(options.nextDollar);
                 btnQuickNextDollar.onclick = () => setCashReceived(options.nextDollar);
             }
             if (btnQuickNextFive) {
-                btnQuickNextFive.textContent = `${formatMoney(options.nextFive)} (Next 5)`;
+                btnQuickNextFive.textContent = formatMoney(options.nextFive);
                 btnQuickNextFive.onclick = () => setCashReceived(options.nextFive);
             }
         }
