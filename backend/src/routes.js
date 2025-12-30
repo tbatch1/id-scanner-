@@ -950,19 +950,29 @@ router.post('/sales/:saleId/complete', validateCompletion, async (req, res) => {
   try {
     const startTime = Date.now();
 
-    const sale = await lightspeed.getSaleById(saleId);
-    if (!sale) {
-      logger.warn({ event: 'sale_not_found', saleId }, `Sale ${saleId} not found`);
-      return res.status(404).json({
-        error: 'SALE_NOT_FOUND',
-        message: 'Sale not found.'
-      });
+    const shouldWriteLightspeed = Boolean(config.lightspeed?.enableWrites);
+    const requestAmount = Number.parseFloat(req.body?.saleTotal ?? req.body?.amount ?? req.body?.paymentAmount);
+
+    let sale = null;
+    try {
+      sale = await lightspeed.getSaleById(saleId);
+      if (!sale) {
+        throw new Error('SALE_NOT_FOUND');
+      }
+    } catch (saleLookupError) {
+      logger.logAPIError('getSaleForCompletion', saleLookupError, { saleId, paymentType, shouldWriteLightspeed });
+      if (shouldWriteLightspeed) {
+        return res.status(502).json({
+          error: 'SALE_LOOKUP_FAILED',
+          message: 'Unable to retrieve sale from Lightspeed.'
+        });
+      }
     }
 
     const locationId = determineLocationId(req, sale);
     const outletDescriptor = getOutletDescriptor(locationId, sale?.outlet);
 
-    const latestVerification = await resolveLatestVerification(saleId, sale.verification);
+    const latestVerification = await resolveLatestVerification(saleId, sale?.verification);
 
     if (!latestVerification || latestVerification.verificationId !== verificationId) {
       logger.logSecurity('verification_mismatch', {
@@ -996,13 +1006,31 @@ router.post('/sales/:saleId/complete', validateCompletion, async (req, res) => {
       });
     }
 
-    const completion = await lightspeed.completeSale({
-      saleId,
-      verificationId,
-      paymentType,
-      sale,
-      locationId
-    });
+    const amountToRecord =
+      Number.isFinite(requestAmount)
+        ? requestAmount
+        : (Number.isFinite(sale?.total) ? sale.total : 0);
+
+    let completion = null;
+    if (!shouldWriteLightspeed) {
+      completion = {
+        saleId,
+        completedAt: new Date().toISOString(),
+        paymentType,
+        amount: Number.isFinite(amountToRecord) ? Math.round(amountToRecord * 100) / 100 : 0,
+        verificationId,
+        skippedLightspeed: true
+      };
+      logger.info({ event: 'sale_complete_skipped_lightspeed', saleId, paymentType }, 'Skipping Lightspeed completion (writes disabled)');
+    } else {
+      completion = await lightspeed.completeSale({
+        saleId,
+        verificationId,
+        paymentType,
+        sale,
+        locationId
+      });
+    }
 
     if (db.pool) {
       try {
@@ -1010,22 +1038,22 @@ router.post('/sales/:saleId/complete', validateCompletion, async (req, res) => {
           saleId,
           verificationId,
           paymentType,
-          amount: completion.amount ?? sale.total ?? 0
+          amount: completion?.amount ?? sale?.total ?? amountToRecord ?? 0
         });
       } catch (dbError) {
         logger.logAPIError('persist_sale_completion', dbError, { saleId, verificationId });
       }
     }
 
-    logger.logSaleComplete(saleId, paymentType, completion.amount ?? sale.total);
+    logger.logSaleComplete(saleId, paymentType, completion?.amount ?? sale?.total ?? amountToRecord ?? 0);
     logger.logPerformance('completeSale', Date.now() - startTime, true);
 
     res.status(200).json({
       data: {
-        ...completion,
+        ...(completion || {}),
         locationId: locationId || null,
         outlet: outletDescriptor,
-        registerId: sale.registerId || null
+        registerId: sale?.registerId || null
       }
     });
   } catch (error) {

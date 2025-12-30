@@ -1,4 +1,5 @@
 const axios = require('axios');
+const config = require('./config');
 const logger = require('./logger');
 
 const PERSONAL_TOKEN = (process.env.LIGHTSPEED_API_KEY || '').trim();
@@ -134,9 +135,28 @@ async function recordVerification({ saleId, clerkId, verificationData }) {
   return verification;
 }
 
-async function completeSale({ saleId, verificationId, paymentType }) {
+async function completeSale({ saleId, verificationId, paymentType, sale: saleContext }) {
   try {
-    const sale = await getSaleById(saleId);
+    const writesEnabled = Boolean(config.lightspeed?.enableWrites);
+    const paymentTypeId = config.lightspeed?.paymentTypes?.[paymentType] || null;
+
+    const sale = saleContext || (await getSaleById(saleId));
+    const saleTotal = Number.isFinite(sale?.total) ? sale.total : 0;
+    const normalizedTotal = Math.round(saleTotal * 100) / 100;
+
+    if (writesEnabled && paymentTypeId) {
+      await api.post(`/sales/${saleId}/payments`, {
+        payment_type_id: paymentTypeId,
+        amount: normalizedTotal,
+        reference: verificationId
+      });
+      logger.info({ event: 'sale_payment_recorded', saleId, paymentType }, 'Recorded Lightspeed payment before closing sale');
+    } else if (writesEnabled && !paymentTypeId) {
+      logger.warn(
+        { event: 'payment_type_not_configured', saleId, paymentType },
+        'Writes enabled but payment type ID is missing; skipping payment creation'
+      );
+    }
 
     await api.put(`/sales/${saleId}`, { status: 'CLOSED' });
 
@@ -146,7 +166,7 @@ async function completeSale({ saleId, verificationId, paymentType }) {
       saleId,
       completedAt: new Date().toISOString(),
       paymentType,
-      amount: sale.total,
+      amount: normalizedTotal,
       verificationId
     };
   } catch (error) {

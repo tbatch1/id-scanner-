@@ -437,6 +437,11 @@
             touch-action: manipulation;
         }
 
+        .cash-btn-spacer {
+            visibility: hidden;
+            pointer-events: none;
+        }
+
         .cash-btn:active {
             background: var(--thc-orange);
             color: black;
@@ -613,7 +618,9 @@
                     <button class="cash-btn" onclick="addMoney('3')">3</button>
                     <button class="cash-btn" onclick="addMoney('.')">.</button>
                     <button class="cash-btn" onclick="addMoney('0')">0</button>
-                    <button class="cash-btn" onclick="clearMoney()" style="color: var(--error)">C</button>
+                    <button class="cash-btn cash-btn-spacer" type="button" tabindex="-1" aria-hidden="true"></button>
+                    <button class="cash-btn" type="button" onclick="backspaceMoney()">X</button>
+                    <button class="cash-btn" type="button" onclick="clearMoney()" style="color: var(--error); grid-column: span 2;">C</button>
                 </div>
             </div>
         </div>
@@ -1062,6 +1069,12 @@
             updateCashDisplay();
         }
 
+        function backspaceMoney() {
+            if (!receivedAmountStr) return;
+            receivedAmountStr = receivedAmountStr.slice(0, -1);
+            updateCashDisplay();
+        }
+
         function clearMoney() {
             receivedAmountStr = "";
             updateCashDisplay();
@@ -1071,7 +1084,7 @@
             const val = parseFloat(receivedAmountStr || "0");
             document.getElementById('dispReceived').textContent = `$${val.toFixed(2)}`;
 
-            const change = val - saleAmount;
+            const change = Math.round((val - saleAmount) * 100) / 100;
             if (change >= 0 && val > 0) {
                 document.getElementById('changeBox').classList.remove('hidden');
                 document.getElementById('dispChange').textContent = `$${change.toFixed(2)}`;
@@ -1098,6 +1111,10 @@
                     return;
                 }
 
+                const total = Math.round(saleAmount * 100) / 100;
+                const received = Math.round(val * 100) / 100;
+                const change = Math.round((received - total) * 100) / 100;
+
                 const originalLabel = btnCompleteSale.textContent;
                 btnCompleteSale.textContent = 'Processing...';
                 btnCompleteSale.disabled = true;
@@ -1113,8 +1130,9 @@
                         body: JSON.stringify({
                             verificationId: latestVerificationId,
                             paymentType: 'cash',
-                            cashReceived: val,
-                            changeGiven: val - saleAmount
+                            saleTotal: total,
+                            cashReceived: received,
+                            changeGiven: change
                         })
                     });
 
