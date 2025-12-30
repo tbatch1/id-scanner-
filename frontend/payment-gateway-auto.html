@@ -414,7 +414,8 @@
         </div>
     </div>
     <div class="grid-bg"></div>
-    <input type="text" id="ghostInput" autocomplete="off" inputmode="none">
+    <textarea id="ghostInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        inputmode="none"></textarea>
 
     <div class="scanner-wrap" id="mainWrap">
         <!-- Logo Area -->
@@ -525,7 +526,9 @@
         let selectedTender = null;
         let isScanning = false;
         let barcodeBuffer = '';
-        let scanTimer = null;
+        let scanIdleTimer = null;
+        let scanHardTimer = null;
+        let scanLocked = false;
         let receivedAmountStr = "";
 
         // Elements
@@ -537,6 +540,7 @@
         const btnScanNow = document.getElementById('btnScanNow');
         const visualRoot = document.getElementById('visualRoot');
         const ghostInput = document.getElementById('ghostInput');
+        const debugStatus = document.getElementById('debugStatus');
 
         // Tender Selection
         function selectTender(type) {
@@ -550,12 +554,100 @@
         btnCash.onclick = () => selectTender('cash');
         btnCard.onclick = () => selectTender('card');
 
+        function normalizeScanText(text) {
+            return String(text || '')
+                .replace(/\r\n/g, '\n')
+                .replace(/[\r\n]/g, '\n')
+                .replace(/[\x1c-\x1f]/g, '\n');
+        }
+
+        function hasAamvaField(text, field) {
+            const normalized = normalizeScanText(text);
+            const re = new RegExp(`${field}([^\\n]{1,64})`, 'i');
+            return re.test(normalized);
+        }
+
+        function extractLikelyScanSegment(text) {
+            const raw = String(text || '');
+            const idxAnsi = raw.lastIndexOf('@ANSI');
+            if (idxAnsi >= 0) return raw.slice(idxAnsi);
+            const idxAt = raw.lastIndexOf('@');
+            if (idxAt >= 0) return raw.slice(idxAt);
+            return raw;
+        }
+
+        function isScanSatisfied(text) {
+            const normalized = normalizeScanText(text);
+            const hasDob = /DBB[^0-9]*([0-9]{8}|[0-9]{2}\/[0-9]{2}\/[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})/i.test(normalized);
+            const hasId = hasAamvaField(normalized, 'DAQ');
+            return hasDob && hasId && normalized.length >= 60;
+        }
+
+        const SCAN_HARD_TIMEOUT_MS = 12000;
+        const SCAN_IDLE_TIMEOUT_MS = 900;
+
+        function clearScanTimers() {
+            if (scanIdleTimer) clearTimeout(scanIdleTimer);
+            if (scanHardTimer) clearTimeout(scanHardTimer);
+            scanIdleTimer = null;
+            scanHardTimer = null;
+        }
+
+        function resetScanCaptureState({ keepPreview = false } = {}) {
+            barcodeBuffer = '';
+            scanLocked = false;
+            clearScanTimers();
+            if (ghostInput) ghostInput.value = '';
+            if (!keepPreview) {
+                const preview = document.getElementById('scanPreviewText');
+                if (preview) preview.textContent = '...';
+            }
+        }
+
+        function scheduleIdleCheck() {
+            if (scanIdleTimer) clearTimeout(scanIdleTimer);
+            scanIdleTimer = setTimeout(() => {
+                if (!isScanning || scanLocked) return;
+                const candidate = extractLikelyScanSegment(barcodeBuffer);
+                if (isScanSatisfied(candidate)) {
+                    finalizeScan(candidate);
+                    return;
+                }
+                if (debugStatus) debugStatus.textContent = 'WAITING: Incomplete scan (need DBB + DAQ)';
+            }, SCAN_IDLE_TIMEOUT_MS);
+        }
+
+        function startHardTimeout() {
+            if (scanHardTimer) return;
+            scanHardTimer = setTimeout(() => {
+                if (!isScanning || scanLocked) return;
+                showError('Scan timed out. Tap Scan Now and try again.');
+                isScanning = false;
+                visualRoot.classList.remove('scanning');
+                btnScanNow.innerHTML = '<span class="scan-dot"></span> Scan Now';
+                resetScanCaptureState();
+            }, SCAN_HARD_TIMEOUT_MS);
+        }
+
+        function finalizeScan(rawText) {
+            if (scanLocked) return;
+            scanLocked = true;
+            clearScanTimers();
+
+            const payload = extractLikelyScanSegment(rawText);
+            processScan(payload);
+            barcodeBuffer = '';
+            if (ghostInput) ghostInput.value = '';
+        }
+
         // Scan Activation
         btnScanNow.onclick = () => {
             if (!selectedTender) return;
             isScanning = true;
             visualRoot.classList.add('scanning');
             btnScanNow.innerHTML = '<span class="scan-dot"></span> Waiting for ID...';
+            if (debugStatus) debugStatus.textContent = 'LISTENING: Waiting for DBB + DAQ...';
+            resetScanCaptureState();
             ghostInput.focus({ preventScroll: true });
         };
 
@@ -564,33 +656,40 @@
             if (isScanning && document.activeElement !== ghostInput) {
                 ghostInput.focus({ preventScroll: true });
             }
-        }, 1000);
+        }, 500);
 
-        // Barcode Listener with 2-second auto-submit
-        ghostInput.onkeydown = (e) => {
-            if (!isScanning) return;
+        // Barcode listener: wait until required AAMVA fields are present (DBB + DAQ).
+        ghostInput.addEventListener('keydown', (e) => {
+            if (!isScanning || scanLocked) return;
 
-            if (e.key === 'Enter') {
-                if (barcodeBuffer.length > 10) {
-                    if (scanTimer) clearTimeout(scanTimer);
-                    processScan(barcodeBuffer);
-                }
-                barcodeBuffer = '';
-            } else if (e.key.length === 1) {
-                barcodeBuffer += e.key;
-                document.getElementById('scanPreviewText').textContent = barcodeBuffer;
+            const key = e.key;
+            const isPrintable = key && key.length === 1;
+            const isDelimiter = key === 'Enter' || key === 'Tab';
+            if (!isPrintable && !isDelimiter) return;
 
-                // If we get at least 10 chars, start a 2-second timer to auto-submit
-                // (in case the scanner doesn't send an "Enter" key)
-                if (scanTimer) clearTimeout(scanTimer);
-                scanTimer = setTimeout(() => {
-                    if (barcodeBuffer.length > 10) {
-                        processScan(barcodeBuffer);
-                    }
-                    barcodeBuffer = '';
-                }, 2000);
+            startHardTimeout();
+            e.preventDefault();
+
+            if (isDelimiter) {
+                barcodeBuffer += '\n';
+            } else {
+                barcodeBuffer += key;
             }
-        };
+
+            const preview = document.getElementById('scanPreviewText');
+            if (preview) {
+                const display = barcodeBuffer.length > 240 ? '...' + barcodeBuffer.slice(-240) : barcodeBuffer;
+                preview.textContent = display;
+            }
+
+            const candidate = extractLikelyScanSegment(barcodeBuffer);
+            if (isScanSatisfied(candidate)) {
+                finalizeScan(candidate);
+                return;
+            }
+
+            scheduleIdleCheck();
+        });
 
         // Initialize debug info
         document.getElementById('debugUrl').textContent = window.location.pathname;
@@ -742,6 +841,8 @@
             btnScanNow.innerHTML = '<span class="scan-dot"></span> Scan Now';
             btnScanNow.style.opacity = "1";
             btnScanNow.style.pointerEvents = "auto";
+            resetScanCaptureState();
+            document.getElementById('debugStatus').textContent = 'SYSTEM READY';
 
             // Re-show main controls
             tenderBox.classList.remove('hidden');
