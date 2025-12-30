@@ -543,17 +543,27 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
 
   try {
     // 1. Get Sale Context
+    saleVerificationStore.addSessionLog(saleId, `Starting Bluetooth scan (register: ${registerId})`, 'info');
+
     let sale = null;
     let locationId = determineLocationId(req, null);
     try {
+      saleVerificationStore.addSessionLog(saleId, 'Checking Lightspeed sale context...', 'info');
       sale = await lightspeed.getSaleById(saleId);
       locationId = determineLocationId(req, sale);
+      saleVerificationStore.addSessionLog(saleId, `Sale context OK (${sale.items.length} items)`, 'info');
     } catch (e) {
+      saleVerificationStore.addSessionLog(saleId, `Sale context failed: ${e.message}`, 'warn');
       console.warn('Sale lookup failed during bluetooth scan, proceeding with defaults');
     }
 
     // 2. Parse the Barcode
+    saleVerificationStore.addSessionLog(saleId, `Parsing barcode (${barcodeData.length} chars)...`, 'info');
     let parsed = parseAAMVA(barcodeData);
+
+    if (parsed) {
+      saleVerificationStore.addSessionLog(saleId, `Parsed ID: ${parsed.firstName} ${parsed.lastName}`, 'info');
+    }
 
     // Log parse result
     console.log('📊 PARSE RESULT:', JSON.stringify(parsed, null, 2));
@@ -592,11 +602,13 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     let bannedRecord = null;
     if (db.pool && parsed.documentNumber) {
       try {
+        saleVerificationStore.addSessionLog(saleId, 'Checking banned customers...', 'info');
         bannedRecord = await complianceStore.findBannedCustomer({
           documentType: 'drivers_license',
           documentNumber: parsed.documentNumber,
           issuingCountry: parsed.issuingCountry
         });
+        saleVerificationStore.addSessionLog(saleId, `Banned list check finished (banned: ${!!bannedRecord})`, 'info');
 
         if (bannedRecord) {
           approved = false;
@@ -625,6 +637,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     // 4.5 Write an audit note back to Lightspeed (best-effort, never blocks checkout)
     let noteUpdated = false;
     try {
+      saleVerificationStore.addSessionLog(saleId, 'Updating Lightspeed sale note...', 'info');
       const safeDate = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString().slice(0, 10) : null;
 
       await lightspeed.recordVerification({
@@ -649,7 +662,9 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
         locationId
       });
       noteUpdated = true;
+      saleVerificationStore.addSessionLog(saleId, 'Lightspeed note recorded', 'info');
     } catch (e) {
+      saleVerificationStore.addSessionLog(saleId, `Lightspeed note failed: ${e.message}`, 'warn');
       logger.warn({ event: 'bluetooth_note_update_failed', saleId }, 'Failed to update Lightspeed note for bluetooth scan');
     }
 
@@ -658,6 +673,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     let dbSaved = false;
     if (db.pool) {
       try {
+        saleVerificationStore.addSessionLog(saleId, 'Saving to compliance database...', 'info');
         // Construct verification object for DB
         const safeIso = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString() : null;
         const vId = `V-${saleId || 'SCAN'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -686,7 +702,9 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
           locationId
         });
         dbSaved = true;
+        saleVerificationStore.addSessionLog(saleId, 'Compliance database OK', 'info');
       } catch (dbError) {
+        saleVerificationStore.addSessionLog(saleId, `DB save failed: ${dbError.message}`, 'warn');
         logger.error({ event: 'bluetooth_db_save_failed', saleId }, 'Failed to save bluetooth verification to DB');
       }
     }
@@ -715,6 +733,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     });
 
   } catch (error) {
+    saleVerificationStore.addSessionLog(saleId, `FATAL BACKEND ERROR: ${error.message}`, 'error');
     console.error('===========================================');
     console.error('❌ ERROR PROCESSING BLUETOOTH SCAN');
     console.error('Error:', error.message);
