@@ -569,7 +569,7 @@
                     <button class="btn-action" style="background: var(--error)" onclick="resetUI()">Try
                         Again</button>
                     <button class="btn-action" style="background: rgba(255,255,255,0.1); color: white;"
-                        onclick="window.parent.postMessage('CLOSE', '*')">Cancel</button>
+                        onclick="closeGateway()">Cancel</button>
                 </div>
             </div>
         </div>
@@ -633,6 +633,62 @@
         if (debugKeysEnabled) {
             document.body.classList.add('show-keys');
         }
+
+        // Lightspeed Retail X-Series Payments API (gateway-in-iframe) uses postMessage JSON strings.
+        // Key steps: SETUP (toggle close button), ACCEPT (complete sale), DECLINE (back to pay screen), EXIT (close dialogs/unbind).
+        // Docs: https://x-series-api.lightspeedhq.com/docs/payments_api_reference
+        const lightspeedOriginParam =
+            (urlParams.get('origin') || urlParams.get('ls_origin') || urlParams.get('parent_origin') || '').trim();
+
+        function normalizeLightspeedOrigin(origin) {
+            const value = String(origin || '').trim();
+            if (!value) return null;
+            if (value.startsWith('http://') || value.startsWith('https://')) return value;
+            return `https://${value}`;
+        }
+
+        const lightspeedTargetOrigin = normalizeLightspeedOrigin(lightspeedOriginParam);
+        const lsCloseMode = String(urlParams.get('lsCloseMode') || 'exit').trim().toLowerCase();
+        const lsCashMode = String(urlParams.get('lsCashMode') || 'accept').trim().toLowerCase();
+
+        function postToLightspeed(payload) {
+            if (!lightspeedTargetOrigin) return false;
+            try {
+                const receiver = window.opener && window.opener !== window ? window.opener : window.parent;
+                receiver.postMessage(JSON.stringify(payload), lightspeedTargetOrigin);
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function lsSetup(enableClose) {
+            return postToLightspeed({
+                step: 'SETUP',
+                setup: { enable_close: Boolean(enableClose) }
+            });
+        }
+
+        function lsExit() {
+            return postToLightspeed({ step: 'EXIT' });
+        }
+
+        function lsDecline({ receiptHtmlExtra = null, print = false } = {}) {
+            const payload = { step: 'DECLINE', print: Boolean(print) };
+            if (typeof receiptHtmlExtra === 'string') payload.receipt_html_extra = receiptHtmlExtra;
+            return postToLightspeed(payload);
+        }
+
+        function lsAccept({ receiptHtmlExtra = null, print = false, amount = null } = {}) {
+            const payload = { step: 'ACCEPT', print: Boolean(print) };
+            if (typeof receiptHtmlExtra === 'string') payload.receipt_html_extra = receiptHtmlExtra;
+            if (Number.isFinite(Number(amount))) {
+                const normalized = Math.round(Number(amount) * 100) / 100;
+                payload.amount = normalized;
+                payload.approved_amount = normalized;
+            }
+            return postToLightspeed(payload);
+        }
         const saleId = urlParams.get('sale_id') ||
             urlParams.get('saleId') ||
             urlParams.get('transaction_id') ||
@@ -667,6 +723,11 @@
         const btnQuickNextDollar = document.getElementById('btnQuickNextDollar');
         const btnQuickNextFive = document.getElementById('btnQuickNextFive');
         const btnCompleteSale = document.getElementById('btnCompleteSale');
+
+        // When loaded as a Lightspeed gateway, remove the close button to prevent premature exits.
+        if (lightspeedTargetOrigin) {
+            lsSetup(false);
+        }
 
         // Tender Selection
         function selectTender(type) {
@@ -1142,7 +1203,23 @@
                         throw new Error(msg);
                     }
 
-                    window.parent.postMessage('ACCEPT', '*');
+                    // Prefer the documented Lightspeed Payments API exit step (closes modal/dialog in X-Series).
+                    const didClose = (() => {
+                        if (!lightspeedTargetOrigin) return false;
+                        if (selectedTender === 'cash' && lsCashMode === 'accept') {
+                            return lsAccept({ amount: saleAmount, print: false });
+                        }
+                        if (lsCloseMode === 'decline') {
+                            return lsDecline({ print: false });
+                        }
+                        return lsExit();
+                    })();
+
+                    if (!didClose) {
+                        window.parent.postMessage('ACCEPT', '*');
+                        window.parent.postMessage('CLOSE', '*');
+                        window.parent.postMessage('EXIT', '*');
+                    }
                 } catch (e) {
                     reportRemoteError('CASH_COMPLETE_FAILED', { message: e.message, verificationId: latestVerificationId });
                     showError(`Cash completion failed: ${e.message}`);
@@ -1157,13 +1234,36 @@
 
         function finishCardFlow() {
             // Signal for card tender: exit/close so POS can take over
-            window.parent.postMessage('CLOSE', '*');
-            window.parent.postMessage('EXIT', '*');
-            window.parent.postMessage('DECLINE', '*'); // Closes the payment-gateway iframe in Lightspeed
+            // For Lightspeed Payments API, prefer EXIT (closes modal) over DECLINE (returns to pay screen with a decline state).
+            const didClose = lsCloseMode === 'decline'
+                ? lsDecline({ print: false })
+                : lsExit();
+
+            if (!didClose) {
+                window.parent.postMessage('CLOSE', '*');
+                window.parent.postMessage('EXIT', '*');
+                window.parent.postMessage('DECLINE', '*');
+            }
+        }
+
+        function closeGateway() {
+            const didClose = lsCloseMode === 'decline'
+                ? lsDecline({ print: false })
+                : lsExit();
+
+            if (!didClose) {
+                window.parent.postMessage('CLOSE', '*');
+                window.parent.postMessage('EXIT', '*');
+                window.parent.postMessage('DECLINE', '*');
+            }
         }
 
         // Auto-detect refund
-        if (saleAmount < 0) { window.parent.postMessage('ACCEPT', '*'); } </script>
+        if (saleAmount < 0) {
+            if (!lsExit()) {
+                window.parent.postMessage('ACCEPT', '*');
+            }
+        } </script>
 </body>
 
 </html>
