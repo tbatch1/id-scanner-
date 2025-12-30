@@ -1,7 +1,20 @@
 // Chat Service - Claude API integration with tool use for business intelligence
-const Anthropic = require('@anthropic-ai/sdk');
-const { toolDefinitions, executeTool } = require('./chatTools');
 const logger = require('./logger');
+const { toolDefinitions, executeTool } = require('./chatTools');
+
+let Anthropic = null;
+try {
+  Anthropic = require('@anthropic-ai/sdk');
+} catch (error) {
+  logger.warn(
+    {
+      event: 'chat_sdk_missing',
+      dependency: '@anthropic-ai/sdk',
+      error: error?.message
+    },
+    'Chat dependencies missing; AI assistant endpoints will be disabled until installed'
+  );
+}
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
@@ -25,7 +38,7 @@ Current date: ${new Date().toLocaleDateString()}`;
 
 class ChatService {
   constructor() {
-    this.client = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
+    this.client = (Anthropic && ANTHROPIC_API_KEY) ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
   }
 
   isConfigured() {
@@ -33,6 +46,14 @@ class ChatService {
   }
 
   async chat(userMessage, conversationHistory = []) {
+    if (!Anthropic) {
+      return {
+        success: false,
+        error: 'DEPENDENCY_MISSING',
+        message: 'AI assistant dependencies are missing on the server. Install @anthropic-ai/sdk to enable chat.'
+      };
+    }
+
     if (!this.client) {
       return {
         success: false,
