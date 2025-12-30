@@ -648,14 +648,27 @@
         }
 
         const lightspeedTargetOrigin = normalizeLightspeedOrigin(lightspeedOriginParam);
+        let resolvedLightspeedOrigin = null;
         const lsCloseMode = String(urlParams.get('lsCloseMode') || 'exit').trim().toLowerCase();
         const lsCashMode = String(urlParams.get('lsCashMode') || 'accept').trim().toLowerCase();
 
         function postToLightspeed(payload) {
             if (!lightspeedTargetOrigin) return false;
             try {
-                const receiver = window.opener && window.opener !== window ? window.opener : window.parent;
-                receiver.postMessage(JSON.stringify(payload), lightspeedTargetOrigin);
+                const message = JSON.stringify(payload);
+                const target = resolvedLightspeedOrigin || '*';
+                const candidates = [];
+                if (window.opener && window.opener !== window) candidates.push(window.opener);
+                candidates.push(window.parent);
+                if (window.top && window.top !== window.parent) candidates.push(window.top);
+
+                for (const receiver of candidates) {
+                    try {
+                        receiver.postMessage(message, target);
+                    } catch (e) {
+                        // ignore and keep trying other candidates
+                    }
+                }
                 return true;
             } catch (e) {
                 return false;
@@ -671,6 +684,10 @@
 
         function lsExit() {
             return postToLightspeed({ step: 'EXIT' });
+        }
+
+        function lsData() {
+            return postToLightspeed({ step: 'DATA' });
         }
 
         function lsDecline({ receiptHtmlExtra = null, print = false } = {}) {
@@ -689,7 +706,7 @@
             }
             return postToLightspeed(payload);
         }
-        const saleId = urlParams.get('sale_id') ||
+        let saleId = urlParams.get('sale_id') ||
             urlParams.get('saleId') ||
             urlParams.get('transaction_id') ||
             urlParams.get('reference') ||
@@ -727,7 +744,32 @@
         // When loaded as a Lightspeed gateway, remove the close button to prevent premature exits.
         if (lightspeedTargetOrigin) {
             lsSetup(false);
+            // Request DATA to (1) resolve the correct event.origin on iOS/webview variants and
+            // (2) capture register_sale/payment ids if present.
+            lsData();
         }
+
+        window.addEventListener('message', (event) => {
+            if (!event || typeof event.data !== 'string') return;
+            let data = null;
+            try {
+                data = JSON.parse(event.data);
+            } catch (e) {
+                return;
+            }
+
+            if (!resolvedLightspeedOrigin && event.origin && event.origin !== 'null') {
+                resolvedLightspeedOrigin = event.origin;
+            }
+
+            if (data && data.step === 'DATA') {
+                const maybeSaleId = data?.register_sale?.id || data?.register_sale?.client_sale_id || null;
+                const maybeRefId = data?.payment?.reference_id || null;
+                if (!saleId && (maybeSaleId || maybeRefId)) {
+                    saleId = maybeSaleId || maybeRefId;
+                }
+            }
+        }, false);
 
         // Tender Selection
         function selectTender(type) {
@@ -1207,7 +1249,10 @@
                     const didClose = (() => {
                         if (!lightspeedTargetOrigin) return false;
                         if (selectedTender === 'cash' && lsCashMode === 'accept') {
-                            return lsAccept({ amount: saleAmount, print: false });
+                            const ok = lsAccept({ amount: saleAmount, print: false });
+                            // Some embedded environments don't auto-close on ACCEPT; follow with EXIT to force close.
+                            setTimeout(() => { try { lsExit(); } catch (e) { } }, 400);
+                            return ok;
                         }
                         if (lsCloseMode === 'decline') {
                             return lsDecline({ print: false });
