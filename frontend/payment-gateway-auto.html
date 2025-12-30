@@ -573,6 +573,15 @@
                 </div>
             </div>
         </div>
+
+        <!-- Close helper overlay (shown only if Lightspeed doesn't close the modal) -->
+        <div id="closeOverlay" class="overlay-card">
+            <div class="overlay-content">
+                <h2>Return to POS</h2>
+                <p>If this screen doesn’t close automatically, tap Return.</p>
+                <button class="btn-action" type="button" onclick="closeGateway()">Return</button>
+            </div>
+        </div>
     </div>
 
     <!-- Cash Calculator -->
@@ -650,7 +659,16 @@
         const lightspeedTargetOrigin = normalizeLightspeedOrigin(lightspeedOriginParam);
         let resolvedLightspeedOrigin = null;
         const lsCloseMode = String(urlParams.get('lsCloseMode') || 'exit').trim().toLowerCase();
-        const lsCashMode = String(urlParams.get('lsCashMode') || 'accept').trim().toLowerCase();
+        // Default is verification-only: close/return to POS without marking a payment as accepted.
+        // If you intentionally want Lightspeed to record a payment for this gateway payment type, set `lsCashMode=accept`.
+        const lsCashMode = String(urlParams.get('lsCashMode') || 'exit').trim().toLowerCase();
+        const apiKeyParam = String(urlParams.get('apiKey') || '').trim();
+
+        function getApiHeaders(extra = {}) {
+            const headers = { ...extra };
+            if (apiKeyParam) headers['X-API-Key'] = apiKeyParam;
+            return headers;
+        }
 
         function postToLightspeed(payload) {
             if (!lightspeedTargetOrigin) return false;
@@ -705,6 +723,15 @@
                 payload.approved_amount = normalized;
             }
             return postToLightspeed(payload);
+        }
+
+        function tryCloseWindow() {
+            try {
+                window.close();
+                return true;
+            } catch (e) {
+                return false;
+            }
         }
         let saleId = urlParams.get('sale_id') ||
             urlParams.get('saleId') ||
@@ -936,7 +963,9 @@
             pollInterval = setInterval(async () => {
                 if (!saleId) return;
                 try {
-                    const res = await fetch(`/api/sales/${encodeURIComponent(saleId)}/status?t=${Date.now()}`);
+                    const res = await fetch(`/api/sales/${encodeURIComponent(saleId)}/status?t=${Date.now()}`, {
+                        headers: getApiHeaders()
+                    });
                     if (!res.ok) return;
                     const data = await res.json();
 
@@ -968,7 +997,9 @@
             statusEl.style.color = '#fff';
 
             try {
-                const res = await fetch(`/api/debug/ping?t=${Date.now()}`);
+                const res = await fetch(`/api/debug/ping?t=${Date.now()}`, {
+                    headers: getApiHeaders()
+                });
                 const data = await res.json();
                 statusEl.textContent = `SUCCESS: DB=${data.db}`;
                 statusEl.style.color = '#0f0';
@@ -1000,7 +1031,7 @@
             try {
                 const response = await fetch(`/api/sales/${encodeURIComponent(saleId)}/verify-bluetooth`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getApiHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ barcodeData: rawData })
                 });
 
@@ -1061,7 +1092,7 @@
             try {
                 await fetch('/api/debug/client-errors', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getApiHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({
                         error: type,
                         details: details,
@@ -1228,7 +1259,7 @@
                 try {
                     const res = await fetch(`/api/sales/${encodeURIComponent(saleId)}/complete`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: getApiHeaders({ 'Content-Type': 'application/json' }),
                         signal: controller.signal,
                         body: JSON.stringify({
                             verificationId: latestVerificationId,
@@ -1265,6 +1296,12 @@
                         window.parent.postMessage('CLOSE', '*');
                         window.parent.postMessage('EXIT', '*');
                     }
+
+                    // If the container doesn't respond, show the Return-to-POS helper overlay.
+                    setTimeout(() => {
+                        const overlay = document.getElementById('closeOverlay');
+                        if (overlay) overlay.classList.add('active');
+                    }, 900);
                 } catch (e) {
                     reportRemoteError('CASH_COMPLETE_FAILED', { message: e.message, verificationId: latestVerificationId });
                     showError(`Cash completion failed: ${e.message}`);
@@ -1292,6 +1329,12 @@
         }
 
         function closeGateway() {
+            // Show a manual fallback in case Lightspeed ignores close messages in this embed context.
+            setTimeout(() => {
+                const overlay = document.getElementById('closeOverlay');
+                if (overlay) overlay.classList.add('active');
+            }, 900);
+
             const didClose = lsCloseMode === 'decline'
                 ? lsDecline({ print: false })
                 : lsExit();
@@ -1301,6 +1344,9 @@
                 window.parent.postMessage('EXIT', '*');
                 window.parent.postMessage('DECLINE', '*');
             }
+
+            tryCloseWindow();
+            try { window.history.back(); } catch (e) { }
         }
 
         // Auto-detect refund
