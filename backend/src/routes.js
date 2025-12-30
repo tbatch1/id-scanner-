@@ -670,16 +670,16 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
 
     // 5. Persist to Database FIRST (Dashboard Integration - CRITICAL)
     // Database save must succeed before in-memory update to ensure data integrity
+    const verificationId = `V-${saleId || 'SCAN'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     let dbSaved = false;
     if (db.pool) {
       try {
         saleVerificationStore.addSessionLog(saleId, 'Saving to compliance database...', 'info');
         // Construct verification object for DB
         const safeIso = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString() : null;
-        const vId = `V-${saleId || 'SCAN'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
         const dbVerification = {
-          verificationId: vId,
+          verificationId,
           saleId,
           clerkId: clerkId || 'BLUETOOTH_DEVICE',
           status: approved ? 'approved' : 'rejected',
@@ -724,6 +724,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     res.json({
       success: true,
       approved,
+      verificationId,
       customerName: verificationResult.customerName,
       age: parsed.age,
       dob: parsed.dob && !isNaN(parsed.dob.getTime()) ? parsed.dob.toISOString().slice(0, 10) : null,
@@ -1768,13 +1769,14 @@ router.get('/sales/:saleId/status', async (req, res) => {
         if (result.rows.length > 0) {
           const row = result.rows[0];
           // Map database row to verification format
-          verification = {
-            saleId: row.sale_id,
-            status: row.status,
-            age: row.age,
-            reason: row.reason,
-            customerName: `${row.first_name || ''} ${row.last_name || ''}`.trim() || null
-          };
+           verification = {
+             verificationId: row.verification_id,
+             saleId: row.sale_id,
+             status: row.status,
+             age: row.age,
+             reason: row.reason,
+             customerName: `${row.first_name || ''} ${row.last_name || ''}`.trim() || null
+           };
           logger.info('Retrieved verification from database fallback', { saleId });
         }
       } catch (dbError) {
@@ -1790,6 +1792,7 @@ router.get('/sales/:saleId/status', async (req, res) => {
 
       return res.json({
         saleId,
+        verificationId: null,
         status: newVerification.status,
         age: null,
         reason: null,
@@ -1799,6 +1802,7 @@ router.get('/sales/:saleId/status', async (req, res) => {
 
     res.json({
       saleId: verification.saleId,
+      verificationId: verification.verificationId || null,
       status: verification.status,
       age: verification.age,
       reason: verification.reason,

@@ -255,6 +255,15 @@
             pointer-events: none;
         }
 
+        /* Hide raw keystrokes in normal mode (still captured in ghostInput). */
+        #scanPreview {
+            display: none !important;
+        }
+
+        body.show-keys #scanPreview {
+            display: flex !important;
+        }
+
         .overlay-card {
             display: none;
             position: fixed;
@@ -317,6 +326,66 @@
             width: 100%;
             max-width: 480px;
             padding: 20px;
+            max-height: calc(100vh - 20px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+        }
+
+        .cash-layout {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .cash-left {
+            flex: 1;
+            min-width: 180px;
+            text-align: left;
+        }
+
+        .cash-brand {
+            display: flex;
+            justify-content: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .cash-logo {
+            width: 120px;
+            height: auto;
+            filter: drop-shadow(0 0 18px rgba(66, 180, 230, 0.25));
+        }
+
+        .cash-right {
+            width: 220px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .quick-picks {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .quick-btn {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            color: white;
+            padding: 14px 12px;
+            border-radius: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+
+        .quick-btn:active {
+            transform: scale(0.98);
         }
 
         .cash-total-banner {
@@ -331,6 +400,16 @@
             grid-template-columns: repeat(3, 1fr);
             gap: 10px;
             margin-bottom: 20px;
+        }
+
+        @media (max-width: 520px) {
+            .cash-layout {
+                flex-direction: column;
+            }
+
+            .cash-right {
+                width: 100%;
+            }
         }
 
         .cash-btn {
@@ -456,8 +535,8 @@
         <div id="successOverlay" class="overlay-card">
             <div class="overlay-content">
                 <h2 style="color: var(--thc-green)">Verified</h2>
-                <p id="successMsg">Customer is 21+</p>
-                <div id="successDetails" style="font-size: 12px; margin-bottom: 20px; opacity: 0.6;"></div>
+                <p id="successMsg">Age: --</p>
+                <div id="successDetails" style="display: none;"></div>
                 <button class="btn-action" id="btnContinue" style="width: 100%;">Continue</button>
             </div>
         </div>
@@ -479,40 +558,60 @@
 
     <!-- Cash Calculator -->
     <div class="cash-wrap" id="cashWrap">
-        <div class="cash-total-banner">
-            <div style="font-size: 12px; opacity: 0.6;">SALE TOTAL</div>
-            <div id="dispSaleTotal" style="font-size: 36px; font-weight: 800;">$0.00</div>
-        </div>
+        <div class="cash-layout">
+            <div class="cash-left">
+                <div class="cash-brand">
+                    <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="cash-logo">
+                </div>
 
-        <div style="font-size: 12px; opacity: 0.6; margin-bottom: 10px;">CASH RECEIVED</div>
-        <div id="dispReceived" style="font-size: 32px; font-weight: 700; margin-bottom: 20px;">$0.00</div>
+                <div class="cash-total-banner">
+                    <div style="font-size: 12px; opacity: 0.6;">SALE TOTAL</div>
+                    <div id="dispSaleTotal" style="font-size: 36px; font-weight: 800;">$0.00</div>
+                </div>
 
-        <div class="cash-grid">
-            <button class="cash-btn" onclick="addMoney('7')">7</button>
-            <button class="cash-btn" onclick="addMoney('8')">8</button>
-            <button class="cash-btn" onclick="addMoney('9')">9</button>
-            <button class="cash-btn" onclick="addMoney('4')">4</button>
-            <button class="cash-btn" onclick="addMoney('5')">5</button>
-            <button class="cash-btn" onclick="addMoney('6')">6</button>
-            <button class="cash-btn" onclick="addMoney('1')">1</button>
-            <button class="cash-btn" onclick="addMoney('2')">2</button>
-            <button class="cash-btn" onclick="addMoney('3')">3</button>
-            <button class="cash-btn" onclick="addMoney('.')">.</button>
-            <button class="cash-btn" onclick="addMoney('0')">0</button>
-            <button class="cash-btn" onclick="clearMoney()" style="color: var(--error)">C</button>
-        </div>
+                <div style="font-size: 12px; opacity: 0.6; margin-bottom: 10px;">CASH RECEIVED</div>
+                <div id="dispReceived" style="font-size: 32px; font-weight: 700; margin-bottom: 20px;">$0.00</div>
 
-        <div id="changeBox" class="hidden">
-            <div style="font-size: 12px; opacity: 0.6;">GIVE CHANGE</div>
-            <div id="dispChange" class="change-display">$0.00</div>
-            <button class="btn-action" id="btnCompleteSale" style="width: 100%; padding: 20px;">Complete Cash
-                Sale</button>
+                <div id="changeBox" class="hidden">
+                    <div style="font-size: 12px; opacity: 0.6;">GIVE CHANGE</div>
+                    <div id="dispChange" class="change-display">$0.00</div>
+                    <button class="btn-action" id="btnCompleteSale" style="width: 100%; padding: 20px;"
+                        type="button">Complete Cash Sale</button>
+                </div>
+            </div>
+
+            <div class="cash-right">
+                <div class="quick-picks">
+                    <button class="quick-btn" id="btnQuickExact" type="button">Exact</button>
+                    <button class="quick-btn" id="btnQuickNextDollar" type="button">Next $</button>
+                    <button class="quick-btn" id="btnQuickNextFive" type="button">$10</button>
+                </div>
+
+                <div class="cash-grid">
+                    <button class="cash-btn" onclick="addMoney('7')">7</button>
+                    <button class="cash-btn" onclick="addMoney('8')">8</button>
+                    <button class="cash-btn" onclick="addMoney('9')">9</button>
+                    <button class="cash-btn" onclick="addMoney('4')">4</button>
+                    <button class="cash-btn" onclick="addMoney('5')">5</button>
+                    <button class="cash-btn" onclick="addMoney('6')">6</button>
+                    <button class="cash-btn" onclick="addMoney('1')">1</button>
+                    <button class="cash-btn" onclick="addMoney('2')">2</button>
+                    <button class="cash-btn" onclick="addMoney('3')">3</button>
+                    <button class="cash-btn" onclick="addMoney('.')">.</button>
+                    <button class="cash-btn" onclick="addMoney('0')">0</button>
+                    <button class="cash-btn" onclick="clearMoney()" style="color: var(--error)">C</button>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         // Data from URL (Added fallbacks for different Lightspeed triggers)
         const urlParams = new URLSearchParams(window.location.search);
+        const debugKeysEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugKeys') || urlParams.get('debug') || '').toLowerCase());
+        if (debugKeysEnabled) {
+            document.body.classList.add('show-keys');
+        }
         const saleId = urlParams.get('sale_id') ||
             urlParams.get('saleId') ||
             urlParams.get('transaction_id') ||
@@ -525,6 +624,8 @@
         // State
         let selectedTender = null;
         let isScanning = false;
+        let isProcessingScan = false;
+        let latestVerificationId = null;
         let barcodeBuffer = '';
         let scanIdleTimer = null;
         let scanHardTimer = null;
@@ -541,6 +642,10 @@
         const visualRoot = document.getElementById('visualRoot');
         const ghostInput = document.getElementById('ghostInput');
         const debugStatus = document.getElementById('debugStatus');
+        const btnQuickExact = document.getElementById('btnQuickExact');
+        const btnQuickNextDollar = document.getElementById('btnQuickNextDollar');
+        const btnQuickNextFive = document.getElementById('btnQuickNextFive');
+        const btnCompleteSale = document.getElementById('btnCompleteSale');
 
         // Tender Selection
         function selectTender(type) {
@@ -604,6 +709,10 @@
             }
         }
 
+        function setScanCtaText() {
+            btnScanNow.innerHTML = '<span class="scan-dot"></span> Focus on barcode until verified';
+        }
+
         function scheduleIdleCheck() {
             if (scanIdleTimer) clearTimeout(scanIdleTimer);
             scanIdleTimer = setTimeout(() => {
@@ -621,7 +730,7 @@
             if (scanHardTimer) return;
             scanHardTimer = setTimeout(() => {
                 if (!isScanning || scanLocked) return;
-                showError('Scan timed out. Tap Scan Now and try again.');
+                showError('Scan timed out. Keep the scanner on the barcode and try again.');
                 isScanning = false;
                 visualRoot.classList.remove('scanning');
                 btnScanNow.innerHTML = '<span class="scan-dot"></span> Scan Now';
@@ -630,7 +739,7 @@
         }
 
         function finalizeScan(rawText) {
-            if (scanLocked) return;
+            if (scanLocked || isProcessingScan) return;
             scanLocked = true;
             clearScanTimers();
 
@@ -644,9 +753,10 @@
         btnScanNow.onclick = () => {
             if (!selectedTender) return;
             isScanning = true;
+            isProcessingScan = false;
             visualRoot.classList.add('scanning');
-            btnScanNow.innerHTML = '<span class="scan-dot"></span> Waiting for ID...';
-            if (debugStatus) debugStatus.textContent = 'LISTENING: Waiting for DBB + DAQ...';
+            setScanCtaText();
+            if (debugStatus) debugStatus.textContent = 'LISTENING: Focus on barcode (need DBB + DAQ)';
             resetScanCaptureState();
             ghostInput.focus({ preventScroll: true });
         };
@@ -750,16 +860,18 @@
                 return;
             }
 
-            if (!isScanning) return; // Guard against double calls
+            if (!isScanning || isProcessingScan) return; // Guard against double calls
 
-            isScanning = false;
-            visualRoot.classList.remove('scanning');
-            btnScanNow.innerHTML = '<span class="scan-dot" style="background: #f0ad4e"></span> Processing...';
-            btnScanNow.style.opacity = "0.5";
+            const isTerminalRejection = (reason) => {
+                const r = String(reason || '').toLowerCase();
+                return r.includes('underage') || r.includes('banned');
+            };
+
+            isProcessingScan = true;
+            btnScanNow.innerHTML = '<span class="scan-dot" style="background: #f0ad4e"></span> Checking ID...';
+            btnScanNow.style.opacity = "0.7";
             btnScanNow.style.pointerEvents = "none";
-
-            // Clear the preview immediately to show we've "taken" the data
-            document.getElementById('scanPreviewText').textContent = "(PROCESSING...)";
+            if (debugStatus) debugStatus.textContent = 'PROCESSING: Checking ID...';
 
             try {
                 const response = await fetch(`/api/sales/${encodeURIComponent(saleId)}/verify-bluetooth`, {
@@ -772,6 +884,8 @@
                     const errorJson = await response.json().catch(() => ({}));
                     const errorMsg = errorJson.technical || errorJson.message || response.statusText;
                     reportRemoteError('HTTP_ERROR', { status: response.status, statusText: response.statusText, response: errorJson });
+                    isScanning = false;
+                    isProcessingScan = false;
                     showError(`Server Error (${response.status}): ${errorMsg}`);
                     return;
                 }
@@ -779,17 +893,43 @@
                 const data = await response.json();
 
                 if (data.success && data.approved) {
+                    latestVerificationId = data.verificationId || data.verification_id || latestVerificationId;
+                    isScanning = false;
+                    isProcessingScan = false;
                     showSuccess(data);
-                } else {
-                    reportRemoteError('VERIFICATION_FAILED', { reason: data.reason, details: data.details });
-                    showError(data.reason || 'Verification Failed');
+                    return;
                 }
-            } catch (e) {
-                reportRemoteError('FETCH_EXCEPTION', { message: e.message, stack: e.stack });
-                showError(`Network Error: ${e.message}`);
-            } finally {
+
+                const reason = data.reason || 'Verification failed';
+                reportRemoteError('VERIFICATION_FAILED', { reason, details: data.details });
+
+                if (isTerminalRejection(reason)) {
+                    isScanning = false;
+                    isProcessingScan = false;
+                    showError(reason);
+                    return;
+                }
+
+                // Non-terminal: keep listening. Barcode scanners can stream partial/overlapping payloads.
+                isProcessingScan = false;
+                scanLocked = false;
+                visualRoot.classList.add('scanning');
+                setScanCtaText();
                 btnScanNow.style.opacity = "1";
                 btnScanNow.style.pointerEvents = "auto";
+                resetScanCaptureState();
+                ghostInput.focus({ preventScroll: true });
+                if (debugStatus) debugStatus.textContent = 'LISTENING: Scan again (need DBB + DAQ)';
+            } catch (e) {
+                reportRemoteError('FETCH_EXCEPTION', { message: e.message, stack: e.stack });
+                isScanning = false;
+                isProcessingScan = false;
+                showError(`Network Error: ${e.message}`);
+            } finally {
+                if (!isScanning) {
+                    btnScanNow.style.opacity = "1";
+                    btnScanNow.style.pointerEvents = "auto";
+                }
             }
         }
 
@@ -812,7 +952,9 @@
 
         function showSuccess(data) {
             document.getElementById('successOverlay').classList.add('active');
-            document.getElementById('successDetails').textContent = `${data.customerName || 'Customer'} verified • Age ${data.age || '??'}`;
+            latestVerificationId = data.verificationId || data.verification_id || latestVerificationId;
+            document.getElementById('successMsg').textContent = `Age: ${data.age ?? '??'}`;
+            document.getElementById('successDetails').textContent = '';
 
             document.getElementById('btnContinue').onclick = () => {
                 if (selectedTender === 'cash') {
@@ -852,12 +994,52 @@
             ghostInput.focus({ preventScroll: true });
         }
 
+        function formatMoney(amount) {
+            const value = Number.isFinite(amount) ? amount : 0;
+            return `$${value.toFixed(2)}`;
+        }
+
+        function computeQuickCashOptions(total) {
+            const safeTotal = Number.isFinite(total) ? total : 0;
+            const exact = safeTotal;
+
+            const isWhole = Math.abs(safeTotal - Math.round(safeTotal)) < 0.00001;
+            const nextDollar = isWhole ? (Math.round(safeTotal) + 1) : Math.ceil(safeTotal);
+            const nextFive = Math.ceil(nextDollar / 5) * 5;
+
+            return {
+                exact,
+                nextDollar,
+                nextFive: Math.max(nextFive, nextDollar)
+            };
+        }
+
+        function setCashReceived(amount) {
+            const safe = Number.isFinite(amount) ? amount : 0;
+            receivedAmountStr = safe.toFixed(2);
+            updateCashDisplay();
+        }
+
         // Cash Calculator Logic
         function showCashCalculator() {
             mainWrap.classList.add('hidden');
             cashWrap.style.display = 'block';
-            document.getElementById('dispSaleTotal').textContent = `$${saleAmount.toFixed(2)}`;
+            document.getElementById('dispSaleTotal').textContent = formatMoney(saleAmount);
             clearMoney();
+
+            const options = computeQuickCashOptions(saleAmount);
+            if (btnQuickExact) {
+                btnQuickExact.textContent = `${formatMoney(options.exact)} (Exact)`;
+                btnQuickExact.onclick = () => setCashReceived(options.exact);
+            }
+            if (btnQuickNextDollar) {
+                btnQuickNextDollar.textContent = `${formatMoney(options.nextDollar)} (Next $)`;
+                btnQuickNextDollar.onclick = () => setCashReceived(options.nextDollar);
+            }
+            if (btnQuickNextFive) {
+                btnQuickNextFive.textContent = `${formatMoney(options.nextFive)} (Next 5)`;
+                btnQuickNextFive.onclick = () => setCashReceived(options.nextFive);
+            }
         }
 
         function addMoney(val) {
@@ -884,25 +1066,62 @@
             }
         }
 
-        document.getElementById('btnCompleteSale').onclick = async () => {
-            const val = parseFloat(receivedAmountStr);
-            document.getElementById('btnCompleteSale').textContent = "Processing...";
-            try {
-                await fetch(`/api/sales/${saleId}/complete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        approved: true,
-                        paymentType: 'cash',
-                        cashReceived: val,
-                        changeGiven: val - saleAmount
-                    })
-                });
-                window.parent.postMessage('ACCEPT', '*');
-            } catch (e) {
-                alert("Error completing sale");
-            }
-        };
+        if (btnCompleteSale) {
+            btnCompleteSale.onclick = async () => {
+                if (!saleId) {
+                    showError('Missing Sale ID (Reload from POS)');
+                    return;
+                }
+
+                if (!latestVerificationId) {
+                    showError('Missing verification ID. Please rescan the ID.');
+                    return;
+                }
+
+                const val = parseFloat(receivedAmountStr);
+                if (!Number.isFinite(val) || val <= 0) {
+                    showError('Enter cash received.');
+                    return;
+                }
+
+                const originalLabel = btnCompleteSale.textContent;
+                btnCompleteSale.textContent = 'Processing...';
+                btnCompleteSale.disabled = true;
+
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 20000);
+
+                try {
+                    const res = await fetch(`/api/sales/${encodeURIComponent(saleId)}/complete`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        signal: controller.signal,
+                        body: JSON.stringify({
+                            verificationId: latestVerificationId,
+                            paymentType: 'cash',
+                            cashReceived: val,
+                            changeGiven: val - saleAmount
+                        })
+                    });
+
+                    const payload = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        const msg = payload.message || payload.error || res.statusText;
+                        throw new Error(msg);
+                    }
+
+                    window.parent.postMessage('ACCEPT', '*');
+                } catch (e) {
+                    reportRemoteError('CASH_COMPLETE_FAILED', { message: e.message, verificationId: latestVerificationId });
+                    showError(`Cash completion failed: ${e.message}`);
+                    btnCompleteSale.textContent = originalLabel;
+                    btnCompleteSale.disabled = false;
+                    return;
+                } finally {
+                    clearTimeout(timeout);
+                }
+            };
+        }
 
         function finishCardFlow() {
             // Signal for card tender: exit/close so POS can take over
