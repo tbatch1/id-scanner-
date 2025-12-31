@@ -8,6 +8,21 @@
 
     <!-- GSAP Animation Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script>
+        // Apply verify-only class as early as possible to avoid flashing tender UI.
+        (function () {
+            try {
+                var p = new URLSearchParams(window.location.search || '');
+                var mode = String(p.get('mode') || '').trim().toLowerCase();
+                var verify = mode === 'verify' || mode === 'verify-only' || mode === 'verifyonly';
+                if (!verify) {
+                    var v = String(p.get('verifyOnly') || p.get('verify') || '').trim().toLowerCase();
+                    verify = v === '1' || v === 'true' || v === 'yes' || v === 'on';
+                }
+                if (verify) document.documentElement.classList.add('verify-only');
+            } catch (e) { }
+        })();
+    </script>
 
     <style>
         * {
@@ -72,6 +87,10 @@
             border-radius: 18px;
             box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
             border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        html.verify-only .tender-box {
+            display: none !important;
         }
 
         /* Animated grid background */
@@ -574,6 +593,18 @@
             </div>
             <div class="tender-hint">If you tapped the ID Card button, choose Card.</div>
         </div>
+        <script>
+            // Verify-only mode: adjust text immediately so staff never see tender UI.
+            (function () {
+                try {
+                    if (!document.documentElement.classList.contains('verify-only')) return;
+                    var title = document.getElementById('mainTitle');
+                    var subtitle = document.getElementById('mainSubtitle');
+                    if (title) title.textContent = 'Verify Age';
+                    if (subtitle) subtitle.textContent = 'Focus on the barcode until it confirms.';
+                } catch (e) { }
+            })();
+        </script>
 
         <!-- Scan Trigger -->
         <!-- Scan Data Preview (Visible Keystrokes) -->
