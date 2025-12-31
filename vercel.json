@@ -23,6 +23,10 @@
       "destination": "/frontend/payment-gateway-auto.html"
     },
     {
+      "source": "/payment-gateway-stable.html",
+      "destination": "/frontend/payment-gateway-stable.html"
+    },
+    {
       "source": "/payment-gateway-card.html",
       "destination": "/frontend/payment-gateway-card.html"
     },
