@@ -1623,9 +1623,8 @@
         function finishCardFlow() {
             // Signal for card tender: exit/close so POS can take over
             // For Lightspeed Payments API, prefer EXIT (closes modal) over DECLINE (returns to pay screen with a decline state).
-            const didClose = lsCloseMode === 'decline'
-                ? lsDecline({ print: false })
-                : lsExit();
+            // This stable gateway is intended to *not* close the sale; always return to the pay screen.
+            const didClose = lsDecline({ print: false });
 
             if (!didClose) {
                 window.parent.postMessage('CLOSE', '*');
@@ -1641,12 +1640,13 @@
                 if (overlay) overlay.classList.add('active');
             }, 900);
 
-            // Scan-only: always EXIT (do not ACCEPT/DECLINE or close the sale).
-            const didClose = lsExit();
+            // Scan-only: return to the pay screen without closing the sale.
+            // Lightspeed Payments API docs: DECLINE => "Return to pay screen", EXIT => "Clean exit" and may close dialogs/unbind.
+            const didClose = lsDecline({ print: false });
 
             if (!didClose) {
-                window.parent.postMessage('EXIT', '*');
                 window.parent.postMessage('CLOSE', '*');
+                window.parent.postMessage('DECLINE', '*');
             }
 
             tryCloseWindow();
