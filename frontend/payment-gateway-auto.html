@@ -768,10 +768,12 @@
         }
 
         function postToLightspeed(payload) {
-            if (!lightspeedTargetOrigin) return false;
+            // Prefer an explicit Lightspeed origin via query params, but in embedded/iframe mode
+            // still attempt postMessage using '*' so we can request DATA reliably on iPad webviews.
+            if (!embeddedMode && !lightspeedTargetOrigin) return false;
             try {
                 const message = JSON.stringify(payload);
-                const target = resolvedLightspeedOrigin || '*';
+                const target = resolvedLightspeedOrigin || lightspeedTargetOrigin || '*';
                 const candidates = [];
                 if (window.opener && window.opener !== window) candidates.push(window.opener);
                 candidates.push(window.parent);
@@ -855,6 +857,7 @@
         let scanLocked = false;
         let receivedAmountStr = "";
         const autoStartScan = verifyOnlyMode;
+        let pendingVerifyPayload = null;
 
         // Elements
         const mainWrap = document.getElementById('mainWrap');
@@ -871,8 +874,8 @@
         const btnQuickNextFive = document.getElementById('btnQuickNextFive');
         const btnCompleteSale = document.getElementById('btnCompleteSale');
 
-        // When loaded as a Lightspeed gateway, remove the close button to prevent premature exits.
-        if (lightspeedTargetOrigin) {
+        // When loaded as a Lightspeed gateway (iframe), remove the close button to prevent premature exits.
+        if (embeddedMode) {
             lsSetup(false);
             // Request DATA to (1) resolve the correct event.origin on iOS/webview variants and
             // (2) capture register_sale/payment ids if present.
@@ -897,6 +900,12 @@
                 const maybeRefId = data?.payment?.reference_id || null;
                 if (!saleId && (maybeSaleId || maybeRefId)) {
                     saleId = maybeSaleId || maybeRefId;
+                }
+
+                if (saleId && pendingVerifyPayload && isScanning && !isProcessingScan) {
+                    const payload = pendingVerifyPayload;
+                    pendingVerifyPayload = null;
+                    setTimeout(() => processScan(payload), 0);
                 }
             }
         }, false);
@@ -953,16 +962,23 @@
 
         const SCAN_HARD_TIMEOUT_MS = 30000;
         const SCAN_IDLE_TIMEOUT_MS = 900;
+        // In verify-only mode, use the same proven "timer-delimited buffer" approach from the older gateway:
+        // keep buffering characters until there's a quiet period, then submit.
+        const SCAN_TIMEOUT_MS = 1000;
+        let scanTimer = null;
         const subtitleEl = document.getElementById('mainSubtitle');
         const defaultSubtitleText = subtitleEl ? subtitleEl.textContent : '';
         let lastKeyAt = 0;
         let hasShownArmHint = false;
+        let verifyOnlyKeyCaptureSeen = false;
 
         function clearScanTimers() {
             if (scanIdleTimer) clearTimeout(scanIdleTimer);
             if (scanHardTimer) clearTimeout(scanHardTimer);
+            if (scanTimer) clearTimeout(scanTimer);
             scanIdleTimer = null;
             scanHardTimer = null;
+            scanTimer = null;
         }
 
         function resetScanCaptureState({ keepPreview = false } = {}) {
@@ -1080,6 +1096,28 @@
             scheduleIdleCheck();
         }
 
+        function handleKeyBuffered(key) {
+            if (!isScanning || scanLocked) return;
+            startHardTimeout();
+            barcodeBuffer += key;
+
+            const preview = document.getElementById('scanPreviewText');
+            if (preview) {
+                const display = barcodeBuffer.length > 240 ? '...' + barcodeBuffer.slice(-240) : barcodeBuffer;
+                preview.textContent = display;
+            }
+
+            if (scanTimer) clearTimeout(scanTimer);
+            scanTimer = setTimeout(() => {
+                if (!isScanning || scanLocked) return;
+                if (barcodeBuffer.trim().length > 10) {
+                    finalizeScan(barcodeBuffer);
+                } else {
+                    barcodeBuffer = '';
+                }
+            }, SCAN_TIMEOUT_MS);
+        }
+
         function appendScanText(text) {
             if (!isScanning || scanLocked) return;
             startHardTimeout();
@@ -1115,39 +1153,77 @@
             try { ghostInput.focus({ preventScroll: true }); } catch (e) { }
         }, { passive: true });
 
-        // Barcode listener: wait until required AAMVA fields are present (DBB + DAQ).
-        ghostInput.addEventListener('keydown', (e) => {
-            if (!isScanning || scanLocked) return;
+        if (!verifyOnlyMode) {
+            // Barcode listener: wait until required AAMVA fields are present (DBB + DAQ).
+            ghostInput.addEventListener('keydown', (e) => {
+                if (!isScanning || scanLocked) return;
 
-            if (e.key === 'Tab') {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    appendScanText('\n');
+                    return;
+                }
+            });
+
+            // Primary capture path: let the scanner type into the hidden textarea and react on input events.
+            ghostInput.addEventListener('input', () => {
+                if (!isScanning || scanLocked) return;
+                startHardTimeout();
+                lastKeyAt = Date.now();
+                hasShownArmHint = false;
+                handleBufferChanged();
+            });
+
+            // Fallback capture path for iPad webviews that won't keep focus reliably.
+            window.addEventListener('keydown', (e) => {
+                if (!isScanning || scanLocked) return;
+                if (document.activeElement === ghostInput) return;
+
+                const key = e.key;
+                const isPrintable = key && key.length === 1;
+                const isDelimiter = key === 'Enter' || key === 'Tab';
+                if (!isPrintable && !isDelimiter) return;
+
                 e.preventDefault();
-                appendScanText('\n');
-                return;
-            }
-        });
+                appendScanText(isDelimiter ? '\n' : key);
+            }, true);
+        } else {
+            // Verify-only: use the older gateway's proven, timer-delimited approach (no DBB/DAQ gating).
+            document.addEventListener('keydown', (e) => {
+                if (scanLocked) return;
+                const key = e.key;
+                const isPrintable = key && key.length === 1;
+                if (!isPrintable && key !== 'Enter') return;
 
-        // Primary capture path: let the scanner type into the hidden textarea and react on input events.
-        ghostInput.addEventListener('input', () => {
-            if (!isScanning || scanLocked) return;
-            startHardTimeout();
-            lastKeyAt = Date.now();
-            hasShownArmHint = false;
-            handleBufferChanged();
-        });
+                verifyOnlyKeyCaptureSeen = true;
+                if (!isScanning) {
+                    try { btnScanNow.onclick(); } catch (err) { }
+                }
 
-        // Fallback capture path for iPad webviews that won't keep focus reliably.
-        window.addEventListener('keydown', (e) => {
-            if (!isScanning || scanLocked) return;
-            if (document.activeElement === ghostInput) return;
+                e.preventDefault();
+                e.stopPropagation();
+                handleKeyBuffered(key === 'Enter' ? '\n' : key);
+            }, true);
 
-            const key = e.key;
-            const isPrintable = key && key.length === 1;
-            const isDelimiter = key === 'Enter' || key === 'Tab';
-            if (!isPrintable && !isDelimiter) return;
-
-            e.preventDefault();
-            appendScanText(isDelimiter ? '\n' : key);
-        }, true);
+            ghostInput.addEventListener('input', () => {
+                // If keydown capture is working, avoid double-capturing the same payload.
+                if (verifyOnlyKeyCaptureSeen) return;
+                if (!isScanning || scanLocked) return;
+                startHardTimeout();
+                lastKeyAt = Date.now();
+                hasShownArmHint = false;
+                barcodeBuffer = String(ghostInput.value || '');
+                if (scanTimer) clearTimeout(scanTimer);
+                scanTimer = setTimeout(() => {
+                    if (!isScanning || scanLocked) return;
+                    if (barcodeBuffer.trim().length > 10) {
+                        finalizeScan(barcodeBuffer);
+                    } else {
+                        barcodeBuffer = '';
+                    }
+                }, SCAN_TIMEOUT_MS);
+            });
+        }
 
         // Initialize debug info
         document.getElementById('debugUrl').textContent = window.location.pathname + window.location.search;
@@ -1208,7 +1284,15 @@
 
         async function processScan(rawData) {
             if (!saleId) {
-                showError("Missing Sale ID (Reload from POS)");
+                // In Lightspeed iframe flows, the sale id can arrive via postMessage DATA shortly after load.
+                // Keep listening and process the scan once we have context.
+                pendingVerifyPayload = rawData;
+                try { lsData(); } catch (e) { }
+                if (debugStatus) debugStatus.textContent = 'WAITING: Linking to POS sale...';
+                scanLocked = false;
+                isProcessingScan = false;
+                isScanning = true;
+                visualRoot.classList.add('scanning');
                 return;
             }
 
