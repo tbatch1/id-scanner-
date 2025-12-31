@@ -308,7 +308,13 @@
             height: 2px;
             opacity: 0;
             pointer-events: auto;
-            z-index: -1;
+            z-index: 1;
+        }
+
+        /* Verify-only mode: let a tap anywhere arm the scanner reliably on iPad webviews. */
+        html.verify-only #ghostInput {
+            width: 100vw;
+            height: 100vh;
         }
 
         /* Hide raw keystrokes in normal mode (still captured in ghostInput). */
@@ -574,7 +580,7 @@
     </div>
     <div class="grid-bg"></div>
     <textarea id="ghostInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-        inputmode="none"></textarea>
+        inputmode="none" autofocus></textarea>
 
     <div class="scanner-wrap" id="mainWrap">
         <!-- Logo Area -->
@@ -979,11 +985,19 @@
             scanIdleTimer = setTimeout(() => {
                 if (!isScanning || scanLocked) return;
                 const candidate = extractLikelyScanSegment(barcodeBuffer);
-                if (isScanSatisfied(candidate)) {
-                    finalizeScan(candidate);
+                const trimmed = String(candidate || '').trim();
+                const looksLikePdf417 =
+                    trimmed.includes('@ANSI') ||
+                    trimmed.includes(']L') ||
+                    /DAQ/i.test(trimmed) ||
+                    /DBB/i.test(trimmed);
+
+                if (isScanSatisfied(trimmed) || (looksLikePdf417 && trimmed.length >= 40) || trimmed.length >= 140) {
+                    finalizeScan(trimmed);
                     return;
                 }
-                if (debugStatus) debugStatus.textContent = 'WAITING: Incomplete scan (need DBB + DAQ)';
+
+                if (debugStatus) debugStatus.textContent = 'WAITING: Scan again (tap once to arm if needed)';
             }, SCAN_IDLE_TIMEOUT_MS);
         }
 
@@ -1054,6 +1068,10 @@
             }
 
             const candidate = extractLikelyScanSegment(barcodeBuffer);
+            if ((candidate.includes('\n') || candidate.includes('\r')) && candidate.trim().length > 20) {
+                finalizeScan(candidate);
+                return;
+            }
             if (isScanSatisfied(candidate)) {
                 finalizeScan(candidate);
                 return;
