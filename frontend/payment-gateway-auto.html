@@ -93,6 +93,10 @@
             display: none !important;
         }
 
+        html.verify-only #btnScanNow {
+            display: none !important;
+        }
+
         /* Animated grid background */
         .grid-bg {
             position: fixed;
@@ -298,12 +302,13 @@
         /* ========== HIDDEN INPUT ========== */
         #ghostInput {
             position: fixed;
-            top: -100px;
-            left: -100px;
-            width: 1px;
-            height: 1px;
+            top: 0;
+            left: 0;
+            width: 2px;
+            height: 2px;
             opacity: 0;
-            pointer-events: none;
+            pointer-events: auto;
+            z-index: -1;
         }
 
         /* Hide raw keystrokes in normal mode (still captured in ghostInput). */
@@ -937,6 +942,10 @@
 
         const SCAN_HARD_TIMEOUT_MS = 30000;
         const SCAN_IDLE_TIMEOUT_MS = 900;
+        const subtitleEl = document.getElementById('mainSubtitle');
+        const defaultSubtitleText = subtitleEl ? subtitleEl.textContent : '';
+        let lastKeyAt = 0;
+        let hasShownArmHint = false;
 
         function clearScanTimers() {
             if (scanIdleTimer) clearTimeout(scanIdleTimer);
@@ -1004,6 +1013,7 @@
             visualRoot.classList.add('scanning');
             setScanCtaText();
             if (debugStatus) debugStatus.textContent = 'LISTENING: Focus on barcode (need DBB + DAQ)';
+            if (subtitleEl && verifyOnlyMode) subtitleEl.textContent = defaultSubtitleText || 'Focus on the barcode until it confirms.';
             resetScanCaptureState();
             ghostInput.focus({ preventScroll: true });
         };
@@ -1025,22 +1035,11 @@
             }
         }, 500);
 
-        // Barcode listener: wait until required AAMVA fields are present (DBB + DAQ).
-        ghostInput.addEventListener('keydown', (e) => {
-            if (!isScanning || scanLocked) return;
-
-            const key = e.key;
-            const isPrintable = key && key.length === 1;
-            const isDelimiter = key === 'Enter' || key === 'Tab';
-            if (!isPrintable && !isDelimiter) return;
-
-            startHardTimeout();
-            e.preventDefault();
-
-            if (isDelimiter) {
-                barcodeBuffer += '\n';
-            } else {
-                barcodeBuffer += key;
+        function handleBufferChanged() {
+            barcodeBuffer = String(ghostInput.value || '');
+            if (barcodeBuffer.length > 6000) {
+                barcodeBuffer = barcodeBuffer.slice(-6000);
+                ghostInput.value = barcodeBuffer;
             }
 
             const preview = document.getElementById('scanPreviewText');
@@ -1056,7 +1055,76 @@
             }
 
             scheduleIdleCheck();
+        }
+
+        function appendScanText(text) {
+            if (!isScanning || scanLocked) return;
+            startHardTimeout();
+            lastKeyAt = Date.now();
+            hasShownArmHint = false;
+
+            ghostInput.value = (ghostInput.value || '') + text;
+            handleBufferChanged();
+        }
+
+        function updateArmHint() {
+            if (!verifyOnlyMode || !subtitleEl) return;
+            if (!isScanning) return;
+
+            const active = document.activeElement === ghostInput;
+            const quietForMs = lastKeyAt ? (Date.now() - lastKeyAt) : Number.POSITIVE_INFINITY;
+
+            if (!active && quietForMs > 2500 && !hasShownArmHint) {
+                subtitleEl.textContent = 'Tap once to arm the scanner, then scan the barcode.';
+                hasShownArmHint = true;
+                return;
+            }
+
+            if (active && hasShownArmHint) {
+                subtitleEl.textContent = defaultSubtitleText || 'Focus on the barcode until it confirms.';
+                hasShownArmHint = false;
+            }
+        }
+
+        setInterval(updateArmHint, 400);
+
+        document.addEventListener('touchstart', () => {
+            try { ghostInput.focus({ preventScroll: true }); } catch (e) { }
+        }, { passive: true });
+
+        // Barcode listener: wait until required AAMVA fields are present (DBB + DAQ).
+        ghostInput.addEventListener('keydown', (e) => {
+            if (!isScanning || scanLocked) return;
+
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                appendScanText('\n');
+                return;
+            }
         });
+
+        // Primary capture path: let the scanner type into the hidden textarea and react on input events.
+        ghostInput.addEventListener('input', () => {
+            if (!isScanning || scanLocked) return;
+            startHardTimeout();
+            lastKeyAt = Date.now();
+            hasShownArmHint = false;
+            handleBufferChanged();
+        });
+
+        // Fallback capture path for iPad webviews that won't keep focus reliably.
+        window.addEventListener('keydown', (e) => {
+            if (!isScanning || scanLocked) return;
+            if (document.activeElement === ghostInput) return;
+
+            const key = e.key;
+            const isPrintable = key && key.length === 1;
+            const isDelimiter = key === 'Enter' || key === 'Tab';
+            if (!isPrintable && !isDelimiter) return;
+
+            e.preventDefault();
+            appendScanText(isDelimiter ? '\n' : key);
+        }, true);
 
         // Initialize debug info
         document.getElementById('debugUrl').textContent = window.location.pathname + window.location.search;
