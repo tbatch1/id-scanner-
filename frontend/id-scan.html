@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>THC Club - Smart Checkout</title>
+
+    <!-- GSAP Animation Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+        <script>
+            // Apply verify-only class as early as possible to avoid flashing tender UI.
+            (function () {
+                try {
+                    // Lightspeed/iPad webviews sometimes drop query params; force verify-only mode for this dedicated page.
+                    var url = new URL(window.location.href);
+                    if (!url.searchParams.has('mode') && !url.searchParams.has('verifyOnly') && !url.searchParams.has('verify')) {
+                        url.searchParams.set('mode', 'verify');
+                        window.history.replaceState({}, '', url.toString());
+                    }
+                    var p = new URLSearchParams(window.location.search || '');
+                    var mode = String(p.get('mode') || '').trim().toLowerCase();
+                    var verify = mode === 'verify' || mode === 'verify-only' || mode === 'verifyonly';
+                    if (!verify) {
+                    var v = String(p.get('verifyOnly') || p.get('verify') || '').trim().toLowerCase();
+                    verify = v === '1' || v === 'true' || v === 'yes' || v === 'on';
+                }
+                if (verify) document.documentElement.classList.add('verify-only');
+            } catch (e) { }
+        })();
+    </script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --thc-orange: #e55c2c;
+            --thc-blue: #42b4e6;
+            --thc-black: #1a1a1a;
+            --thc-green: #2ea750;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --bg-dark: #0f1419;
+            --card-bg: rgba(26, 26, 46, 0.95);
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            min-height: 100vh;
+            color: white;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+        }
+
+        /* Embedded/iframe mode: render as a compact popup over the POS. */
+        html.embedded,
+        html.embedded body {
+            background: transparent;
+        }
+
+        html.embedded body {
+            padding-top: 0;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        html.embedded .grid-bg {
+            display: none;
+        }
+
+        html.embedded .scanner-wrap {
+            margin: 16px auto;
+            max-width: 560px;
+            max-height: calc(100vh - 32px);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            background: rgba(15, 20, 25, 0.92);
+            border-radius: 18px;
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        html.verify-only .tender-box {
+            display: none !important;
+        }
+
+        html.verify-only #btnScanNow {
+            display: none !important;
+        }
+
+        /* Animated grid background */
+        .grid-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(66, 180, 230, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(66, 180, 230, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .scanner-wrap {
+            position: relative;
+            width: 100%;
+            max-width: 480px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* ========== LOGO & RING ========== */
+        .logo-container {
+            position: relative;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .logo {
+            width: 140px;
+            height: auto;
+            filter: drop-shadow(0 0 30px rgba(66, 180, 230, 0.3));
+            z-index: 2;
+        }
+
+        .scan-ring {
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border: 3px solid transparent;
+            border-top-color: var(--thc-orange);
+            border-right-color: var(--thc-blue);
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .scanning .scan-ring {
+            opacity: 1;
+            animation: spinRing 1.5s linear infinite;
+        }
+
+        @keyframes spinRing {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ========== HEADERS ========== */
+        .main-title {
+            font-size: 28px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+        }
+
+        /* ========== TENDER SELECTION BOX ========== */
+        .tender-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 30px;
+            position: relative;
+            text-align: left;
+        }
+
+        .tender-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .choose-badge {
+            background: var(--thc-orange);
+            color: black;
+            font-weight: 900;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 5px;
+        }
+
+        .tender-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .tender-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .tender-btn:active {
+            transform: scale(0.95);
+        }
+
+        .tender-btn.selected {
+            border-color: var(--thc-blue);
+            background: rgba(66, 180, 230, 0.1);
+            box-shadow: 0 0 20px rgba(66, 180, 230, 0.3);
+        }
+
+        .tender-hint {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        /* ========== SCAN BUTTON ========== */
+        .scan-now-btn {
+            background: rgba(229, 92, 44, 0.1);
+            border: 2px solid var(--thc-orange);
+            color: var(--thc-orange);
+            width: 100%;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin: 0 auto;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .scan-now-btn.ready {
+            opacity: 1;
+            pointer-events: auto;
+            background: rgba(229, 92, 44, 0.2);
+            box-shadow: 0 0 30px rgba(229, 92, 44, 0.2);
+        }
+
+        .scan-now-btn:active {
+            transform: scale(0.97);
+        }
+
+        .scan-dot {
+            width: 8px;
+            height: 8px;
+            background: currentColor;
+            border-radius: 50%;
+        }
+
+        .scanning .scan-dot {
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.4;
+                transform: scale(0.8);
+            }
+        }
+
+        /* ========== HIDDEN INPUT ========== */
+        #ghostInput {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 2px;
+            height: 2px;
+            opacity: 0;
+            pointer-events: auto;
+            z-index: 1;
+        }
+
+        /* Verify-only mode: let a tap anywhere arm the scanner reliably on iPad webviews. */
+        html.verify-only #ghostInput {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Hide raw keystrokes in normal mode (still captured in ghostInput). */
+        #scanPreview {
+            display: none !important;
+        }
+
+        body.show-keys #scanPreview {
+            display: flex !important;
+        }
+
+        .overlay-card {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 20, 25, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 9999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .overlay-card.active {
+            display: flex;
+        }
+
+        .overlay-content {
+            background: var(--card-bg);
+            border: 2px solid var(--thc-green);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        .overlay-card.error .overlay-content {
+            border-color: var(--error);
+        }
+
+        .overlay-card h2 {
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .overlay-card p {
+            opacity: 0.8;
+            margin-bottom: 20px;
+        }
+
+        .btn-action {
+            background: var(--thc-orange);
+            border: none;
+            color: black;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 800;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        /* ========== CASH CALCULATOR ========== */
+        .cash-wrap {
+            display: none;
+            width: 100%;
+            max-width: 920px;
+            padding: 20px 18px;
+            max-height: calc(100vh - 20px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+            box-sizing: border-box;
+        }
+
+        .cash-layout {
+            display: flex;
+            gap: 22px;
+            align-items: stretch;
+        }
+
+        .cash-logo-rail {
+            width: 160px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cash-logo {
+            width: 132px;
+            height: auto;
+            filter: drop-shadow(0 0 18px rgba(66, 180, 230, 0.25));
+            opacity: 0.85;
+        }
+
+        .cash-center {
+            flex: 1;
+            min-width: 320px;
+            text-align: left;
+        }
+
+        .cash-right {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .quick-picks {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .quick-btn {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.06);
+            border: 2px solid rgba(255, 255, 255, 0.14);
+            color: white;
+            padding: 18px 16px;
+            border-radius: 15px;
+            font-size: 22px;
+            font-weight: 700;
+            cursor: pointer;
+            letter-spacing: 0.2px;
+            touch-action: manipulation;
+        }
+
+        .quick-btn:active {
+            transform: scale(0.98);
+        }
+
+        .cash-total-banner {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 22px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+        }
+
+        .cash-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 860px) {
+            .cash-layout {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .cash-logo-rail {
+                width: 100%;
+            }
+
+            .cash-right {
+                width: 100%;
+            }
+
+            .cash-center {
+                min-width: 0;
+            }
+        }
+
+        .cash-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 22px;
+            border-radius: 14px;
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .cash-btn-spacer {
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .cash-btn:active {
+            background: var(--thc-orange);
+            color: black;
+        }
+
+        .change-display {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--thc-green);
+            margin: 20px 0;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #debugPanel {
+            display: none;
+            position: fixed;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 10000;
+            max-width: 250px;
+            border: 1px solid #0f0;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            pointer-events: auto;
+        }
+
+        body.debug-ui #debugPanel {
+            display: block;
+        }
+
+        .debug-btn {
+            background: #222;
+            color: #0ff;
+            border: 1px solid #0ff;
+            padding: 6px 10px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 11px;
+            border-radius: 4px;
+            width: 100%;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        #debugStatus {
+            margin: 8px 0;
+            color: #fff;
+            padding: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            word-break: break-all;
+        }
+    </style>
+</head>
+
+<body class="embedded">
+    <div id="debugPanel">
+        <div style="font-weight: bold; border-bottom: 1px solid #0f0; margin-bottom: 5px;">REMOTE DIAGNOSTICS</div>
+        <div>URL: <span id="debugUrl">...</span></div>
+        <div>ID: <span id="debugSale">...</span></div>
+        <div id="debugStatus">SYSTEM READY</div>
+        <button class="debug-btn" onclick="testConnectivity(event)">TEST PING</button>
+        <div id="debugLogs"
+            style="margin-top: 10px; font-size: 9px; max-height: 80px; overflow-y: auto; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 4px; font-family: monospace; border: 1px solid rgba(0,255,0,0.2);">
+            (Waiting for scan...)
+        </div>
+    </div>
+    <div class="grid-bg"></div>
+    <textarea id="ghostInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        inputmode="none" autofocus></textarea>
+
+    <div class="scanner-wrap" id="mainWrap">
+        <!-- Logo Area -->
+        <div class="logo-container" id="visualRoot">
+            <div class="scan-ring"></div>
+            <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="logo">
+        </div>
+
+        <h1 class="main-title" id="mainTitle">Select Tender Type</h1>
+        <p class="subtitle" id="mainSubtitle">Tap the box below, then scan the ID.</p>
+
+        <!-- Tender Selection Box -->
+        <div class="tender-box" id="tenderBox">
+            <div class="tender-label">
+                Tender
+                <span class="choose-badge">CHOOSE</span>
+            </div>
+            <div class="tender-buttons">
+                <button class="tender-btn" id="btnCash">Cash</button>
+                <button class="tender-btn" id="btnCard">Card</button>
+            </div>
+            <div class="tender-hint">If you tapped the ID Card button, choose Card.</div>
+        </div>
+        <script>
+            // Verify-only mode: adjust text immediately so staff never see tender UI.
+            (function () {
+                try {
+                    if (!document.documentElement.classList.contains('verify-only')) return;
+                    var title = document.getElementById('mainTitle');
+                    var subtitle = document.getElementById('mainSubtitle');
+                    if (title) title.textContent = 'Verify Age';
+                    if (subtitle) subtitle.textContent = 'Focus on the barcode until it confirms.';
+                } catch (e) { }
+            })();
+        </script>
+
+        <!-- Scan Trigger -->
+        <!-- Scan Data Preview (Visible Keystrokes) -->
+        <div id="scanPreview"
+            style="margin-bottom: 20px; font-family: monospace; font-size: 14px; color: #0f0; background: rgba(0,0,0,0.3); padding: 10px; border: 1px solid #0f0; border-radius: 8px; word-break: break-all; min-height: 40px; text-align: left; display: flex; align-items: center;">
+            <span style="opacity: 0.5; margin-right: 10px;">SCAN:</span>
+            <span id="scanPreviewText">...</span>
+        </div>
+
+        <button id="btnScanNow" class="scan-now-btn">
+            Scan Now
+        </button>
+
+        <!-- Success overlay -->
+        <div id="successOverlay" class="overlay-card">
+            <div class="overlay-content">
+                <h2 style="color: var(--thc-green)">Verified</h2>
+                <p id="successMsg">Age: --</p>
+                <div id="successDetails" style="display: none;"></div>
+                <button class="btn-action" id="btnContinue" style="width: 100%;">Continue</button>
+            </div>
+        </div>
+
+        <!-- Error overlay -->
+        <div id="errorOverlay" class="overlay-card error">
+            <div class="overlay-content">
+                <h2 style="color: var(--error)">Error</h2>
+                <p id="errorMsg">Failed to verify ID</p>
+                <div style="display: flex; gap: 10px; flex-direction: column;">
+                    <button class="btn-action" style="background: var(--error)" onclick="resetUI()">Try
+                        Again</button>
+                    <button class="btn-action" style="background: rgba(255,255,255,0.1); color: white;"
+                        onclick="closeGateway()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Close helper overlay (shown only if Lightspeed doesn't close the modal) -->
+        <div id="closeOverlay" class="overlay-card">
+            <div class="overlay-content">
+                <h2>Return to POS</h2>
+                <p>If this screen doesn’t close automatically, tap Return.</p>
+                <button class="btn-action" type="button" onclick="closeGateway()">Return</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cash Calculator -->
+    <div class="cash-wrap" id="cashWrap">
+        <div class="cash-layout">
+            <div class="cash-logo-rail" aria-hidden="true">
+                <img src="/frontend/assets/thc-logo.png" alt="THC Club" class="cash-logo">
+            </div>
+
+            <div class="cash-center">
+                <div class="cash-total-banner">
+                    <div style="font-size: 12px; opacity: 0.6;">SALE TOTAL</div>
+                    <div id="dispSaleTotal" style="font-size: 48px; font-weight: 800;">$0.00</div>
+                </div>
+
+                <div style="font-size: 12px; opacity: 0.6; margin-bottom: 10px;">CASH RECEIVED</div>
+                <div id="dispReceived" style="font-size: 40px; font-weight: 700; margin-bottom: 20px;">$0.00</div>
+
+                <div id="changeBox" class="hidden">
+                    <div style="font-size: 12px; opacity: 0.6;">GIVE CHANGE</div>
+                    <div id="dispChange" class="change-display">$0.00</div>
+                    <button class="btn-action" id="btnCompleteSale" style="width: 100%; padding: 20px;"
+                        type="button">Complete Cash Sale</button>
+                </div>
+            </div>
+
+            <div class="cash-right">
+                <div class="quick-picks">
+                    <button class="quick-btn" id="btnQuickExact" type="button">Exact</button>
+                    <button class="quick-btn" id="btnQuickNextDollar" type="button">Next $</button>
+                    <button class="quick-btn" id="btnQuickNextFive" type="button">$10</button>
+                </div>
+
+                <div class="cash-grid">
+                    <button class="cash-btn" onclick="addMoney('7')">7</button>
+                    <button class="cash-btn" onclick="addMoney('8')">8</button>
+                    <button class="cash-btn" onclick="addMoney('9')">9</button>
+                    <button class="cash-btn" onclick="addMoney('4')">4</button>
+                    <button class="cash-btn" onclick="addMoney('5')">5</button>
+                    <button class="cash-btn" onclick="addMoney('6')">6</button>
+                    <button class="cash-btn" onclick="addMoney('1')">1</button>
+                    <button class="cash-btn" onclick="addMoney('2')">2</button>
+                    <button class="cash-btn" onclick="addMoney('3')">3</button>
+                    <button class="cash-btn" onclick="addMoney('.')">.</button>
+                    <button class="cash-btn" onclick="addMoney('0')">0</button>
+                    <button class="cash-btn cash-btn-spacer" type="button" tabindex="-1" aria-hidden="true"></button>
+                    <button class="cash-btn" type="button" onclick="backspaceMoney()">X</button>
+                    <button class="cash-btn" type="button" onclick="clearMoney()" style="color: var(--error); grid-column: span 2;">C</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data from URL (Added fallbacks for different Lightspeed triggers)
+        const urlParams = new URLSearchParams(window.location.search);
+        const debugKeysEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugKeys') || urlParams.get('debug') || '').toLowerCase());
+        if (debugKeysEnabled) {
+            document.body.classList.add('show-keys');
+        }
+        const debugUiEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugUi') || urlParams.get('debug') || '').toLowerCase());
+        if (debugUiEnabled) {
+            document.body.classList.add('debug-ui');
+        }
+
+        const embeddedMode =
+            window.self !== window.top ||
+            ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('embedded') || urlParams.get('embed') || '').toLowerCase());
+        if (embeddedMode) {
+            document.documentElement.classList.add('embedded');
+            document.body.classList.add('embedded');
+        }
+
+        const verifyOnlyMode = (() => {
+            const raw = String(urlParams.get('mode') || '').trim().toLowerCase();
+            if (raw === 'verify' || raw === 'verify-only' || raw === 'verifyonly') return true;
+            return ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('verifyOnly') || urlParams.get('verify') || '').toLowerCase());
+        })();
+
+        // Lightspeed Retail X-Series Payments API (gateway-in-iframe) uses postMessage JSON strings.
+        // Key steps: SETUP (toggle close button), ACCEPT (complete sale), DECLINE (back to pay screen), EXIT (close dialogs/unbind).
+        // Docs: https://x-series-api.lightspeedhq.com/docs/payments_api_reference
+        const lightspeedOriginParam =
+            (urlParams.get('origin') || urlParams.get('ls_origin') || urlParams.get('parent_origin') || '').trim();
+
+        function normalizeLightspeedOrigin(origin) {
+            const value = String(origin || '').trim();
+            if (!value) return null;
+            if (value.startsWith('http://') || value.startsWith('https://')) return value;
+            return `https://${value}`;
+        }
+
+        const lightspeedTargetOrigin = normalizeLightspeedOrigin(lightspeedOriginParam);
+        let resolvedLightspeedOrigin = null;
+        const lsCloseMode = String(urlParams.get('lsCloseMode') || 'exit').trim().toLowerCase();
+        // Default is verification-only: close/return to POS without marking a payment as accepted.
+        // If you intentionally want Lightspeed to record a payment for this gateway payment type, set `lsCashMode=accept`.
+        const lsCashMode = String(urlParams.get('lsCashMode') || 'exit').trim().toLowerCase();
+        const apiKeyParam = String(urlParams.get('apiKey') || '').trim();
+
+        function getApiHeaders(extra = {}) {
+            const headers = { ...extra };
+            if (apiKeyParam) headers['X-API-Key'] = apiKeyParam;
+            return headers;
+        }
+
+        function postToLightspeed(payload) {
+            // Prefer an explicit Lightspeed origin via query params, but in embedded/iframe mode
+            // still attempt postMessage using '*' so we can request DATA reliably on iPad webviews.
+            if (!embeddedMode && !lightspeedTargetOrigin) return false;
+            try {
+                const message = JSON.stringify(payload);
+                const target = resolvedLightspeedOrigin || lightspeedTargetOrigin || '*';
+                const candidates = [];
+                if (window.opener && window.opener !== window) candidates.push(window.opener);
+                candidates.push(window.parent);
+                if (window.top && window.top !== window.parent) candidates.push(window.top);
+
+                for (const receiver of candidates) {
+                    try {
+                        receiver.postMessage(message, target);
+                    } catch (e) {
+                        // ignore and keep trying other candidates
+                    }
+                }
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function lsSetup(enableClose) {
+            return postToLightspeed({
+                step: 'SETUP',
+                setup: { enable_close: Boolean(enableClose) }
+            });
+        }
+
+        function lsExit() {
+            return postToLightspeed({ step: 'EXIT' });
+        }
+
+        function lsData() {
+            return postToLightspeed({ step: 'DATA' });
+        }
+
+        function lsDecline({ receiptHtmlExtra = null, print = false } = {}) {
+            const payload = { step: 'DECLINE', print: Boolean(print) };
+            if (typeof receiptHtmlExtra === 'string') payload.receipt_html_extra = receiptHtmlExtra;
+            return postToLightspeed(payload);
+        }
+
+        function lsAccept({ receiptHtmlExtra = null, print = false, amount = null } = {}) {
+            const payload = { step: 'ACCEPT', print: Boolean(print) };
+            if (typeof receiptHtmlExtra === 'string') payload.receipt_html_extra = receiptHtmlExtra;
+            if (Number.isFinite(Number(amount))) {
+                const normalized = Math.round(Number(amount) * 100) / 100;
+                payload.amount = normalized;
+                payload.approved_amount = normalized;
+            }
+            return postToLightspeed(payload);
+        }
+
+        function tryCloseWindow() {
+            try {
+                window.close();
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+        let saleId = urlParams.get('sale_id') ||
+            urlParams.get('saleId') ||
+            urlParams.get('transaction_id') ||
+            urlParams.get('reference') ||
+            urlParams.get('reference_id');
+
+        const clerkIdParam =
+            (urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('user_id') || urlParams.get('userId') || '').trim();
+        const registerIdParam =
+            (urlParams.get('register_id') || urlParams.get('registerId') || '').trim();
+
+        const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
+        const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
+
+        // State
+        let selectedTender = null;
+        let isScanning = false;
+        let isProcessingScan = false;
+        let latestVerificationId = null;
+        let barcodeBuffer = '';
+        let scanIdleTimer = null;
+        let scanHardTimer = null;
+        let scanLocked = false;
+        let receivedAmountStr = "";
+        const autoStartScan = verifyOnlyMode;
+        let pendingVerifyPayload = null;
+
+        // Elements
+        const mainWrap = document.getElementById('mainWrap');
+        const cashWrap = document.getElementById('cashWrap');
+        const tenderBox = document.getElementById('tenderBox');
+        const btnCash = document.getElementById('btnCash');
+        const btnCard = document.getElementById('btnCard');
+        const btnScanNow = document.getElementById('btnScanNow');
+        const visualRoot = document.getElementById('visualRoot');
+        const ghostInput = document.getElementById('ghostInput');
+        const debugStatus = document.getElementById('debugStatus');
+        const btnQuickExact = document.getElementById('btnQuickExact');
+        const btnQuickNextDollar = document.getElementById('btnQuickNextDollar');
+        const btnQuickNextFive = document.getElementById('btnQuickNextFive');
+        const btnCompleteSale = document.getElementById('btnCompleteSale');
+
+        // When loaded as a Lightspeed gateway (iframe), remove the close button to prevent premature exits.
+        if (embeddedMode) {
+            lsSetup(false);
+            // Request DATA to (1) resolve the correct event.origin on iOS/webview variants and
+            // (2) capture register_sale/payment ids if present.
+            lsData();
+        }
+
+        window.addEventListener('message', (event) => {
+            if (!event || typeof event.data !== 'string') return;
+            let data = null;
+            try {
+                data = JSON.parse(event.data);
+            } catch (e) {
+                return;
+            }
+
+            if (!resolvedLightspeedOrigin && event.origin && event.origin !== 'null') {
+                resolvedLightspeedOrigin = event.origin;
+            }
+
+            if (data && data.step === 'DATA') {
+                const maybeSaleId = data?.register_sale?.id || data?.register_sale?.client_sale_id || null;
+                const maybeRefId = data?.payment?.reference_id || null;
+                if (!saleId && (maybeSaleId || maybeRefId)) {
+                    saleId = maybeSaleId || maybeRefId;
+                }
+
+                if (saleId && pendingVerifyPayload && isScanning && !isProcessingScan) {
+                    const payload = pendingVerifyPayload;
+                    pendingVerifyPayload = null;
+                    setTimeout(() => processScan(payload), 0);
+                }
+            }
+        }, false);
+
+        // Tender Selection
+        function selectTender(type) {
+            selectedTender = type;
+            btnCash.classList.toggle('selected', type === 'cash');
+            btnCard.classList.toggle('selected', type === 'card');
+            btnScanNow.classList.add('ready');
+            gsap.fromTo(type === 'cash' ? btnCash : btnCard, { scale: 0.95 }, { scale: 1, duration: 0.4, ease: "elastic.out(1, 0.3)" });
+        }
+
+        btnCash.onclick = () => selectTender('cash');
+        btnCard.onclick = () => selectTender('card');
+
+        if (verifyOnlyMode) {
+            const title = document.getElementById('mainTitle');
+            const subtitle = document.getElementById('mainSubtitle');
+            if (title) title.textContent = 'Verify Age';
+            if (subtitle) subtitle.textContent = 'Focus on the barcode until it confirms.';
+            if (tenderBox) tenderBox.style.display = 'none';
+            selectTender('card');
+        }
+
+        function normalizeScanText(text) {
+            return String(text || '')
+                .replace(/\r\n/g, '\n')
+                .replace(/[\r\n]/g, '\n')
+                .replace(/[\x1c-\x1f]/g, '\n');
+        }
+
+        function hasAamvaField(text, field) {
+            const normalized = normalizeScanText(text);
+            const re = new RegExp(`${field}([^\\n]{1,64})`, 'i');
+            return re.test(normalized);
+        }
+
+        function extractLikelyScanSegment(text) {
+            const raw = String(text || '');
+            const idxAnsi = raw.lastIndexOf('@ANSI');
+            if (idxAnsi >= 0) return raw.slice(idxAnsi);
+            const idxAt = raw.lastIndexOf('@');
+            if (idxAt >= 0) return raw.slice(idxAt);
+            return raw;
+        }
+
+        function isScanSatisfied(text) {
+            const normalized = normalizeScanText(text);
+            const hasDob = /DBB[^0-9]*([0-9]{8}|[0-9]{2}\/[0-9]{2}\/[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})/i.test(normalized);
+            const hasId = hasAamvaField(normalized, 'DAQ');
+            return hasDob && hasId && normalized.length >= 60;
+        }
+
+        const SCAN_HARD_TIMEOUT_MS = 30000;
+        const SCAN_IDLE_TIMEOUT_MS = 900;
+        // In verify-only mode, use the same proven "timer-delimited buffer" approach from the older gateway:
+        // keep buffering characters until there's a quiet period, then submit.
+        const SCAN_TIMEOUT_MS = 1000;
+        let scanTimer = null;
+        const subtitleEl = document.getElementById('mainSubtitle');
+        const defaultSubtitleText = subtitleEl ? subtitleEl.textContent : '';
+        let lastKeyAt = 0;
+        let hasShownArmHint = false;
+        let verifyOnlyKeyCaptureSeen = false;
+
+        function clearScanTimers() {
+            if (scanIdleTimer) clearTimeout(scanIdleTimer);
+            if (scanHardTimer) clearTimeout(scanHardTimer);
+            if (scanTimer) clearTimeout(scanTimer);
+            scanIdleTimer = null;
+            scanHardTimer = null;
+            scanTimer = null;
+        }
+
+        function resetScanCaptureState({ keepPreview = false } = {}) {
+            barcodeBuffer = '';
+            scanLocked = false;
+            clearScanTimers();
+            if (ghostInput) ghostInput.value = '';
+            if (!keepPreview) {
+                const preview = document.getElementById('scanPreviewText');
+                if (preview) preview.textContent = '...';
+            }
+        }
+
+        function setScanCtaText() {
+            btnScanNow.innerHTML = '<span class="scan-dot"></span> Focus on barcode until verified';
+        }
+
+        function scheduleIdleCheck() {
+            if (scanIdleTimer) clearTimeout(scanIdleTimer);
+            scanIdleTimer = setTimeout(() => {
+                if (!isScanning || scanLocked) return;
+                const candidate = extractLikelyScanSegment(barcodeBuffer);
+                const trimmed = String(candidate || '').trim();
+                const looksLikePdf417 =
+                    trimmed.includes('@ANSI') ||
+                    trimmed.includes(']L') ||
+                    /DAQ/i.test(trimmed) ||
+                    /DBB/i.test(trimmed);
+
+                if (isScanSatisfied(trimmed) || (looksLikePdf417 && trimmed.length >= 40) || trimmed.length >= 140) {
+                    finalizeScan(trimmed);
+                    return;
+                }
+
+                if (debugStatus) debugStatus.textContent = 'WAITING: Scan again (tap once to arm if needed)';
+            }, SCAN_IDLE_TIMEOUT_MS);
+        }
+
+        function startHardTimeout() {
+            if (scanHardTimer) return;
+            scanHardTimer = setTimeout(() => {
+                if (!isScanning || scanLocked) return;
+                showError('Scan timed out. Keep the scanner on the barcode and try again.');
+                isScanning = false;
+                visualRoot.classList.remove('scanning');
+                btnScanNow.innerHTML = '<span class="scan-dot"></span> Scan Now';
+                resetScanCaptureState();
+            }, SCAN_HARD_TIMEOUT_MS);
+        }
+
+        function finalizeScan(rawText) {
+            if (scanLocked || isProcessingScan) return;
+            scanLocked = true;
+            clearScanTimers();
+
+            const payload = extractLikelyScanSegment(rawText);
+            processScan(payload);
+            barcodeBuffer = '';
+            if (ghostInput) ghostInput.value = '';
+        }
+
+        // Scan Activation
+        btnScanNow.onclick = () => {
+            if (!selectedTender) return;
+            isScanning = true;
+            isProcessingScan = false;
+            visualRoot.classList.add('scanning');
+            setScanCtaText();
+            if (debugStatus) debugStatus.textContent = 'LISTENING: Focus on barcode (need DBB + DAQ)';
+            if (subtitleEl && verifyOnlyMode) subtitleEl.textContent = defaultSubtitleText || 'Focus on the barcode until it confirms.';
+            resetScanCaptureState();
+            ghostInput.focus({ preventScroll: true });
+        };
+
+        if (autoStartScan) {
+            // Auto-start listening for barcode input when this page is used as a "Verify ID" button.
+            // Small delay avoids focus issues on iPad webviews.
+            setTimeout(() => {
+                try {
+                    btnScanNow.onclick();
+                } catch (e) { }
+            }, 50);
+        }
+
+        // Ghost Focus Loop
+        setInterval(() => {
+            if (isScanning && document.activeElement !== ghostInput) {
+                ghostInput.focus({ preventScroll: true });
+            }
+        }, 500);
+
+        function handleBufferChanged() {
+            barcodeBuffer = String(ghostInput.value || '');
+            if (barcodeBuffer.length > 6000) {
+                barcodeBuffer = barcodeBuffer.slice(-6000);
+                ghostInput.value = barcodeBuffer;
+            }
+
+            const preview = document.getElementById('scanPreviewText');
+            if (preview) {
+                const display = barcodeBuffer.length > 240 ? '...' + barcodeBuffer.slice(-240) : barcodeBuffer;
+                preview.textContent = display;
+            }
+
+            const candidate = extractLikelyScanSegment(barcodeBuffer);
+            if ((candidate.includes('\n') || candidate.includes('\r')) && candidate.trim().length > 20) {
+                finalizeScan(candidate);
+                return;
+            }
+            if (isScanSatisfied(candidate)) {
+                finalizeScan(candidate);
+                return;
+            }
+
+            scheduleIdleCheck();
+        }
+
+        function handleKeyBuffered(key) {
+            if (!isScanning || scanLocked) return;
+            startHardTimeout();
+            barcodeBuffer += key;
+
+            const preview = document.getElementById('scanPreviewText');
+            if (preview) {
+                const display = barcodeBuffer.length > 240 ? '...' + barcodeBuffer.slice(-240) : barcodeBuffer;
+                preview.textContent = display;
+            }
+
+            if (scanTimer) clearTimeout(scanTimer);
+            scanTimer = setTimeout(() => {
+                if (!isScanning || scanLocked) return;
+                if (barcodeBuffer.trim().length > 10) {
+                    finalizeScan(barcodeBuffer);
+                } else {
+                    barcodeBuffer = '';
+                }
+            }, SCAN_TIMEOUT_MS);
+        }
+
+        function appendScanText(text) {
+            if (!isScanning || scanLocked) return;
+            startHardTimeout();
+            lastKeyAt = Date.now();
+            hasShownArmHint = false;
+
+            ghostInput.value = (ghostInput.value || '') + text;
+            handleBufferChanged();
+        }
+
+        function updateArmHint() {
+            if (!verifyOnlyMode || !subtitleEl) return;
+            if (!isScanning) return;
+
+            const active = document.activeElement === ghostInput;
+            const quietForMs = lastKeyAt ? (Date.now() - lastKeyAt) : Number.POSITIVE_INFINITY;
+
+            if (!active && quietForMs > 2500 && !hasShownArmHint) {
+                subtitleEl.textContent = 'Tap once to arm the scanner, then scan the barcode.';
+                hasShownArmHint = true;
+                return;
+            }
+
+            if (active && hasShownArmHint) {
+                subtitleEl.textContent = defaultSubtitleText || 'Focus on the barcode until it confirms.';
+                hasShownArmHint = false;
+            }
+        }
+
+        setInterval(updateArmHint, 400);
+
+        document.addEventListener('touchstart', () => {
+            try { ghostInput.focus({ preventScroll: true }); } catch (e) { }
+        }, { passive: true });
+
+        if (!verifyOnlyMode) {
+            // Barcode listener: wait until required AAMVA fields are present (DBB + DAQ).
+            ghostInput.addEventListener('keydown', (e) => {
+                if (!isScanning || scanLocked) return;
+
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    appendScanText('\n');
+                    return;
+                }
+            });
+
+            // Primary capture path: let the scanner type into the hidden textarea and react on input events.
+            ghostInput.addEventListener('input', () => {
+                if (!isScanning || scanLocked) return;
+                startHardTimeout();
+                lastKeyAt = Date.now();
+                hasShownArmHint = false;
+                handleBufferChanged();
+            });
+
+            // Fallback capture path for iPad webviews that won't keep focus reliably.
+            window.addEventListener('keydown', (e) => {
+                if (!isScanning || scanLocked) return;
+                if (document.activeElement === ghostInput) return;
+
+                const key = e.key;
+                const isPrintable = key && key.length === 1;
+                const isDelimiter = key === 'Enter' || key === 'Tab';
+                if (!isPrintable && !isDelimiter) return;
+
+                e.preventDefault();
+                appendScanText(isDelimiter ? '\n' : key);
+            }, true);
+        } else {
+            // Verify-only: use the older gateway's proven, timer-delimited approach (no DBB/DAQ gating).
+            document.addEventListener('keydown', (e) => {
+                if (scanLocked) return;
+                const key = e.key;
+                const isPrintable = key && key.length === 1;
+                if (!isPrintable && key !== 'Enter') return;
+
+                verifyOnlyKeyCaptureSeen = true;
+                if (!isScanning) {
+                    try { btnScanNow.onclick(); } catch (err) { }
+                }
+
+                e.preventDefault();
+                e.stopPropagation();
+                handleKeyBuffered(key === 'Enter' ? '\n' : key);
+            }, true);
+
+            ghostInput.addEventListener('input', () => {
+                // If keydown capture is working, avoid double-capturing the same payload.
+                if (verifyOnlyKeyCaptureSeen) return;
+                if (!isScanning || scanLocked) return;
+                startHardTimeout();
+                lastKeyAt = Date.now();
+                hasShownArmHint = false;
+                barcodeBuffer = String(ghostInput.value || '');
+                if (scanTimer) clearTimeout(scanTimer);
+                scanTimer = setTimeout(() => {
+                    if (!isScanning || scanLocked) return;
+                    if (barcodeBuffer.trim().length > 10) {
+                        finalizeScan(barcodeBuffer);
+                    } else {
+                        barcodeBuffer = '';
+                    }
+                }, SCAN_TIMEOUT_MS);
+            });
+        }
+
+        // Initialize debug info
+        document.getElementById('debugUrl').textContent = window.location.pathname + window.location.search;
+        document.getElementById('debugSale').textContent = saleId || 'MISSING';
+
+        // Polling for updates (for resilience and diagnostic logs)
+        let pollInterval = null;
+        function startPolling() {
+            if (pollInterval) return;
+            pollInterval = setInterval(async () => {
+                if (!saleId) return;
+                try {
+                    const res = await fetch(`/api/sales/${encodeURIComponent(saleId)}/status?t=${Date.now()}`, {
+                        headers: getApiHeaders()
+                    });
+                    if (!res.ok) return;
+                    const data = await res.json();
+
+                    // Update logs
+                    if (data.logs && data.logs.length > 0) {
+                        const logEl = document.getElementById('debugLogs');
+                        logEl.innerHTML = data.logs.map(l => {
+                            let color = '#fff';
+                            if (l.type === 'error') color = '#ff4d4d';
+                            if (l.type === 'warn') color = '#ffcc00';
+                            return `<div style="color: ${color}; margin-bottom: 2px;">• ${l.message}</div>`;
+                        }).join('');
+                        logEl.scrollTop = logEl.scrollHeight;
+                    }
+
+                    // Auto-advance if verified by another device or background
+                    if (data.status === 'approved' || data.status === 'approved_override') {
+                        showSuccess(data);
+                        clearInterval(pollInterval);
+                    }
+                } catch (e) { }
+            }, 2000);
+        }
+        startPolling();
+
+        async function testConnectivity(ev) {
+            const statusEl = document.getElementById('debugStatus');
+            statusEl.textContent = 'PINGING SERVER...';
+            statusEl.style.color = '#fff';
+
+            try {
+                const res = await fetch(`/api/debug/ping?t=${Date.now()}`, {
+                    headers: getApiHeaders()
+                });
+                const data = await res.json();
+                statusEl.textContent = `SUCCESS: DB=${data.db}`;
+                statusEl.style.color = '#0f0';
+            } catch (err) {
+                statusEl.textContent = `ERROR: ${err.message}`;
+                statusEl.style.color = '#f00';
+            }
+        }
+
+        async function processScan(rawData) {
+            if (!saleId) {
+                // In Lightspeed iframe flows, the sale id can arrive via postMessage DATA shortly after load.
+                // Keep listening and process the scan once we have context.
+                pendingVerifyPayload = rawData;
+                try { lsData(); } catch (e) { }
+                if (debugStatus) debugStatus.textContent = 'WAITING: Linking to POS sale...';
+                scanLocked = false;
+                isProcessingScan = false;
+                isScanning = true;
+                visualRoot.classList.add('scanning');
+                return;
+            }
+
+            if (!isScanning || isProcessingScan) return; // Guard against double calls
+
+            const isTerminalRejection = (reason) => {
+                const r = String(reason || '').toLowerCase();
+                return r.includes('underage') || r.includes('banned');
+            };
+
+            isProcessingScan = true;
+            btnScanNow.innerHTML = '<span class="scan-dot" style="background: #f0ad4e"></span> Checking ID...';
+            btnScanNow.style.opacity = "0.7";
+            btnScanNow.style.pointerEvents = "none";
+            if (debugStatus) debugStatus.textContent = 'PROCESSING: Checking ID...';
+
+            try {
+                const response = await fetch(`/api/sales/${encodeURIComponent(saleId)}/verify-bluetooth`, {
+                    method: 'POST',
+                    headers: getApiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({
+                        barcodeData: rawData,
+                        clerkId: clerkIdParam,
+                        registerId: registerIdParam
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorJson = await response.json().catch(() => ({}));
+                    const errorMsg = errorJson.technical || errorJson.message || response.statusText;
+                    reportRemoteError('HTTP_ERROR', { status: response.status, statusText: response.statusText, response: errorJson });
+                    isScanning = false;
+                    isProcessingScan = false;
+                    showError(`Server Error (${response.status}): ${errorMsg}`);
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.approved) {
+                    latestVerificationId = data.verificationId || data.verification_id || latestVerificationId;
+                    isScanning = false;
+                    isProcessingScan = false;
+                    showSuccess(data);
+                    return;
+                }
+
+                const reason = data.reason || 'Verification failed';
+                reportRemoteError('VERIFICATION_FAILED', { reason, details: data.details });
+
+                if (isTerminalRejection(reason)) {
+                    isScanning = false;
+                    isProcessingScan = false;
+                    showError(reason);
+                    return;
+                }
+
+                // Non-terminal: keep listening. Barcode scanners can stream partial/overlapping payloads.
+                isProcessingScan = false;
+                scanLocked = false;
+                visualRoot.classList.add('scanning');
+                setScanCtaText();
+                btnScanNow.style.opacity = "1";
+                btnScanNow.style.pointerEvents = "auto";
+                resetScanCaptureState();
+                ghostInput.focus({ preventScroll: true });
+                if (debugStatus) debugStatus.textContent = 'LISTENING: Scan again (need DBB + DAQ)';
+            } catch (e) {
+                reportRemoteError('FETCH_EXCEPTION', { message: e.message, stack: e.stack });
+                isScanning = false;
+                isProcessingScan = false;
+                showError(`Network Error: ${e.message}`);
+            } finally {
+                if (!isScanning) {
+                    btnScanNow.style.opacity = "1";
+                    btnScanNow.style.pointerEvents = "auto";
+                }
+            }
+        }
+
+        async function reportRemoteError(type, details) {
+            try {
+                await fetch('/api/debug/client-errors', {
+                    method: 'POST',
+                    headers: getApiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({
+                        error: type,
+                        details: details,
+                        userAgent: navigator.userAgent,
+                        saleId: saleId
+                    })
+                });
+            } catch (err) {
+                console.error('Failed to report remote error:', err);
+            }
+        }
+
+        function showSuccess(data) {
+            document.getElementById('successOverlay').classList.add('active');
+            latestVerificationId = data.verificationId || data.verification_id || latestVerificationId;
+            document.getElementById('successMsg').textContent = `Age: ${data.age ?? '??'}`;
+            document.getElementById('successDetails').textContent = '';
+
+            document.getElementById('btnContinue').onclick = () => {
+                if (verifyOnlyMode) {
+                    closeGateway();
+                    return;
+                }
+
+                if (selectedTender === 'cash') {
+                    document.getElementById('successOverlay').classList.remove('active');
+                    showCashCalculator();
+                } else {
+                    finishCardFlow();
+                }
+            };
+
+            if (verifyOnlyMode) {
+                const btn = document.getElementById('btnContinue');
+                if (btn) {
+                    btn.textContent = 'Returning to POS…';
+                    btn.disabled = true;
+                }
+                setTimeout(() => {
+                    closeGateway();
+                }, 1200);
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('errorOverlay').classList.add('active');
+            document.getElementById('errorMsg').textContent = msg;
+            document.getElementById('debugStatus').textContent = 'ERROR: ' + msg;
+        }
+
+        function resetUI() {
+            // Hide overlays
+            document.getElementById('errorOverlay').classList.remove('active');
+            document.getElementById('successOverlay').classList.remove('active');
+
+            // Reset scan button
+            isScanning = false;
+            visualRoot.classList.remove('scanning');
+            btnScanNow.innerHTML = '<span class="scan-dot"></span> Scan Now';
+            btnScanNow.style.opacity = "1";
+            btnScanNow.style.pointerEvents = "auto";
+            resetScanCaptureState();
+            document.getElementById('debugStatus').textContent = 'SYSTEM READY';
+
+            // Re-show main controls
+            tenderBox.classList.remove('hidden');
+            btnScanNow.classList.remove('hidden');
+
+            // Ensure ghost input is ready
+            ghostInput.focus({ preventScroll: true });
+        }
+
+        function formatMoney(amount) {
+            const value = Number.isFinite(amount) ? amount : 0;
+            return `$${value.toFixed(2)}`;
+        }
+
+        function computeQuickCashOptions(total) {
+            const safeTotal = Number.isFinite(total) ? total : 0;
+            const exact = safeTotal;
+
+            const isWhole = Math.abs(safeTotal - Math.round(safeTotal)) < 0.00001;
+            const nextDollar = isWhole ? (Math.round(safeTotal) + 1) : Math.ceil(safeTotal);
+            const nextFive = Math.ceil(nextDollar / 5) * 5;
+
+            return {
+                exact,
+                nextDollar,
+                nextFive: Math.max(nextFive, nextDollar)
+            };
+        }
+
+        function setCashReceived(amount) {
+            const safe = Number.isFinite(amount) ? amount : 0;
+            receivedAmountStr = safe.toFixed(2);
+            updateCashDisplay();
+        }
+
+        // Cash Calculator Logic
+        function showCashCalculator() {
+            mainWrap.classList.add('hidden');
+            cashWrap.style.display = 'block';
+            document.getElementById('dispSaleTotal').textContent = formatMoney(saleAmount);
+            clearMoney();
+
+            const options = computeQuickCashOptions(saleAmount);
+            if (btnQuickExact) {
+                btnQuickExact.textContent = formatMoney(options.exact);
+                btnQuickExact.onclick = () => setCashReceived(options.exact);
+            }
+            if (btnQuickNextDollar) {
+                btnQuickNextDollar.textContent = formatMoney(options.nextDollar);
+                btnQuickNextDollar.onclick = () => setCashReceived(options.nextDollar);
+            }
+            if (btnQuickNextFive) {
+                btnQuickNextFive.textContent = formatMoney(options.nextFive);
+                btnQuickNextFive.onclick = () => setCashReceived(options.nextFive);
+            }
+        }
+
+        function addMoney(val) {
+            if (val === '.' && receivedAmountStr.includes('.')) return;
+            receivedAmountStr += val;
+            updateCashDisplay();
+        }
+
+        function backspaceMoney() {
+            if (!receivedAmountStr) return;
+            receivedAmountStr = receivedAmountStr.slice(0, -1);
+            updateCashDisplay();
+        }
+
+        function clearMoney() {
+            receivedAmountStr = "";
+            updateCashDisplay();
+        }
+
+        function updateCashDisplay() {
+            const val = parseFloat(receivedAmountStr || "0");
+            document.getElementById('dispReceived').textContent = `$${val.toFixed(2)}`;
+
+            const change = Math.round((val - saleAmount) * 100) / 100;
+            if (change >= 0 && val > 0) {
+                document.getElementById('changeBox').classList.remove('hidden');
+                document.getElementById('dispChange').textContent = `$${change.toFixed(2)}`;
+            } else {
+                document.getElementById('changeBox').classList.add('hidden');
+            }
+        }
+
+        if (btnCompleteSale) {
+            btnCompleteSale.onclick = async () => {
+                if (!saleId) {
+                    showError('Missing Sale ID (Reload from POS)');
+                    return;
+                }
+
+                if (!latestVerificationId) {
+                    showError('Missing verification ID. Please rescan the ID.');
+                    return;
+                }
+
+                const val = parseFloat(receivedAmountStr);
+                if (!Number.isFinite(val) || val <= 0) {
+                    showError('Enter cash received.');
+                    return;
+                }
+
+                const total = Math.round(saleAmount * 100) / 100;
+                const received = Math.round(val * 100) / 100;
+                const change = Math.round((received - total) * 100) / 100;
+
+                const originalLabel = btnCompleteSale.textContent;
+                btnCompleteSale.textContent = 'Processing...';
+                btnCompleteSale.disabled = true;
+
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 20000);
+
+                try {
+                    const res = await fetch(`/api/sales/${encodeURIComponent(saleId)}/complete`, {
+                        method: 'POST',
+                        headers: getApiHeaders({ 'Content-Type': 'application/json' }),
+                        signal: controller.signal,
+                        body: JSON.stringify({
+                            verificationId: latestVerificationId,
+                            paymentType: 'cash',
+                            saleTotal: total,
+                            cashReceived: received,
+                            changeGiven: change
+                        })
+                    });
+
+                    const payload = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        const msg = payload.message || payload.error || res.statusText;
+                        throw new Error(msg);
+                    }
+
+                    // Prefer the documented Lightspeed Payments API exit step (closes modal/dialog in X-Series).
+                    const didClose = (() => {
+                        if (!lightspeedTargetOrigin) return false;
+                        if (selectedTender === 'cash' && lsCashMode === 'accept') {
+                            const ok = lsAccept({ amount: saleAmount, print: false });
+                            // Some embedded environments don't auto-close on ACCEPT; follow with EXIT to force close.
+                            setTimeout(() => { try { lsExit(); } catch (e) { } }, 400);
+                            return ok;
+                        }
+                        if (lsCloseMode === 'decline') {
+                            return lsDecline({ print: false });
+                        }
+                        return lsExit();
+                    })();
+
+                    if (!didClose) {
+                        window.parent.postMessage('ACCEPT', '*');
+                        window.parent.postMessage('CLOSE', '*');
+                        window.parent.postMessage('EXIT', '*');
+                    }
+
+                    // If the container doesn't respond, show the Return-to-POS helper overlay.
+                    setTimeout(() => {
+                        const overlay = document.getElementById('closeOverlay');
+                        if (overlay) overlay.classList.add('active');
+                    }, 900);
+                } catch (e) {
+                    reportRemoteError('CASH_COMPLETE_FAILED', { message: e.message, verificationId: latestVerificationId });
+                    showError(`Cash completion failed: ${e.message}`);
+                    btnCompleteSale.textContent = originalLabel;
+                    btnCompleteSale.disabled = false;
+                    return;
+                } finally {
+                    clearTimeout(timeout);
+                }
+            };
+        }
+
+        function finishCardFlow() {
+            // Signal for card tender: exit/close so POS can take over
+            // For Lightspeed Payments API, prefer EXIT (closes modal) over DECLINE (returns to pay screen with a decline state).
+            const didClose = lsCloseMode === 'decline'
+                ? lsDecline({ print: false })
+                : lsExit();
+
+            if (!didClose) {
+                window.parent.postMessage('CLOSE', '*');
+                window.parent.postMessage('EXIT', '*');
+                window.parent.postMessage('DECLINE', '*');
+            }
+        }
+
+        function closeGateway() {
+            // Show a manual fallback in case Lightspeed ignores close messages in this embed context.
+            setTimeout(() => {
+                const overlay = document.getElementById('closeOverlay');
+                if (overlay) overlay.classList.add('active');
+            }, 900);
+
+            const didClose = lsCloseMode === 'decline'
+                ? lsDecline({ print: false })
+                : lsExit();
+
+            if (!didClose) {
+                window.parent.postMessage('CLOSE', '*');
+                window.parent.postMessage('EXIT', '*');
+                window.parent.postMessage('DECLINE', '*');
+            }
+
+            tryCloseWindow();
+            try { window.history.back(); } catch (e) { }
+        }
+
+        // Auto-detect refund
+        if (saleAmount < 0) {
+            if (!lsExit()) {
+                window.parent.postMessage('ACCEPT', '*');
+            }
+        } </script>
+</body>
+
+</html>
