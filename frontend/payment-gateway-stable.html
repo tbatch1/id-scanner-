@@ -734,10 +734,15 @@
             document.body.classList.add('embedded');
         }
 
+        // Stable gateway is used as a scan-only verifier: after success, return to POS and use native tender buttons.
+        // On iPad/Lightspeed webviews, query params may be dropped; in embedded mode default to verify-only.
         const verifyOnlyMode = (() => {
             const raw = String(urlParams.get('mode') || '').trim().toLowerCase();
             if (raw === 'verify' || raw === 'verify-only' || raw === 'verifyonly') return true;
-            return ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('verifyOnly') || urlParams.get('verify') || '').toLowerCase());
+            const explicit =
+                ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('verifyOnly') || urlParams.get('verify') || urlParams.get('scanOnly') || '').toLowerCase());
+            if (embeddedMode) return true;
+            return explicit;
         })();
 
         // Lightspeed Retail X-Series Payments API (gateway-in-iframe) uses postMessage JSON strings.
@@ -928,6 +933,7 @@
             if (title) title.textContent = 'Verify Age';
             if (subtitle) subtitle.textContent = 'Focus on the barcode until it confirms.';
             if (tenderBox) tenderBox.style.display = 'none';
+            if (cashWrap) cashWrap.style.display = 'none';
             selectTender('card');
         }
 
@@ -1413,12 +1419,11 @@
             if (verifyOnlyMode) {
                 const btn = document.getElementById('btnContinue');
                 if (btn) {
-                    btn.textContent = 'Returning to POS…';
-                    btn.disabled = true;
+                    btn.style.display = 'none';
                 }
                 setTimeout(() => {
                     closeGateway();
-                }, 1200);
+                }, 250);
             }
         }
 
@@ -1636,14 +1641,12 @@
                 if (overlay) overlay.classList.add('active');
             }, 900);
 
-            const didClose = lsCloseMode === 'decline'
-                ? lsDecline({ print: false })
-                : lsExit();
+            // Scan-only: always EXIT (do not ACCEPT/DECLINE or close the sale).
+            const didClose = lsExit();
 
             if (!didClose) {
-                window.parent.postMessage('CLOSE', '*');
                 window.parent.postMessage('EXIT', '*');
-                window.parent.postMessage('DECLINE', '*');
+                window.parent.postMessage('CLOSE', '*');
             }
 
             tryCloseWindow();
