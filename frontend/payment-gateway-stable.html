@@ -970,7 +970,8 @@
         const SCAN_IDLE_TIMEOUT_MS = 900;
         // In verify-only mode, use the same proven "timer-delimited buffer" approach from the older gateway:
         // keep buffering characters until there's a quiet period, then submit.
-        const SCAN_TIMEOUT_MS = 1000;
+        // Slightly longer than the original to reduce premature flush on scanners that pause mid-payload.
+        const SCAN_TIMEOUT_MS = 1500;
         let scanTimer = null;
         const subtitleEl = document.getElementById('mainSubtitle');
         const defaultSubtitleText = subtitleEl ? subtitleEl.textContent : '';
@@ -1019,7 +1020,11 @@
                     return;
                 }
 
-                if (debugStatus) debugStatus.textContent = 'WAITING: Scan again (tap once to arm if needed)';
+                if (debugStatus) {
+                    debugStatus.textContent = verifyOnlyMode
+                        ? 'LISTENING: Focus on the barcode…'
+                        : 'WAITING: Scan again (tap once to arm if needed)';
+                }
             }, SCAN_IDLE_TIMEOUT_MS);
         }
 
@@ -1027,6 +1032,11 @@
             if (scanHardTimer) return;
             scanHardTimer = setTimeout(() => {
                 if (!isScanning || scanLocked) return;
+                if (verifyOnlyMode) {
+                    resumeListening('TIMEOUT: Scan again.');
+                    return;
+                }
+
                 showError('Scan timed out. Keep the scanner on the barcode and try again.');
                 isScanning = false;
                 visualRoot.classList.remove('scanning');
@@ -1102,6 +1112,19 @@
             scheduleIdleCheck();
         }
 
+        function resumeListening(statusText = null) {
+            isScanning = true;
+            isProcessingScan = false;
+            scanLocked = false;
+            visualRoot.classList.add('scanning');
+            setScanCtaText();
+            btnScanNow.style.opacity = "1";
+            btnScanNow.style.pointerEvents = "auto";
+            resetScanCaptureState();
+            try { ghostInput.focus({ preventScroll: true }); } catch (e) { }
+            if (debugStatus && statusText) debugStatus.textContent = statusText;
+        }
+
         function handleKeyBuffered(key) {
             if (!isScanning || scanLocked) return;
             startHardTimeout();
@@ -1116,8 +1139,10 @@
             if (scanTimer) clearTimeout(scanTimer);
             scanTimer = setTimeout(() => {
                 if (!isScanning || scanLocked) return;
-                if (barcodeBuffer.trim().length > 10) {
-                    finalizeScan(barcodeBuffer);
+                const candidate = extractLikelyScanSegment(barcodeBuffer);
+                const trimmed = String(candidate || '').trim();
+                if (trimmed.length >= 40) {
+                    finalizeScan(trimmed);
                 } else {
                     barcodeBuffer = '';
                 }
@@ -1222,8 +1247,10 @@
                 if (scanTimer) clearTimeout(scanTimer);
                 scanTimer = setTimeout(() => {
                     if (!isScanning || scanLocked) return;
-                    if (barcodeBuffer.trim().length > 10) {
-                        finalizeScan(barcodeBuffer);
+                    const candidate = extractLikelyScanSegment(barcodeBuffer);
+                    const trimmed = String(candidate || '').trim();
+                    if (trimmed.length >= 40) {
+                        finalizeScan(trimmed);
                     } else {
                         barcodeBuffer = '';
                     }
@@ -1330,6 +1357,14 @@
                     const errorJson = await response.json().catch(() => ({}));
                     const errorMsg = errorJson.technical || errorJson.message || response.statusText;
                     reportRemoteError('HTTP_ERROR', { status: response.status, statusText: response.statusText, response: errorJson });
+
+                    // Scan-only mode should be resilient: treat most server errors as transient and keep listening.
+                    // 401/403 usually indicate a configuration/auth issue; surface those as terminal.
+                    if (verifyOnlyMode && response.status !== 401 && response.status !== 403) {
+                        resumeListening(`SERVER ${response.status}: ${errorMsg}. Scan again.`);
+                        return;
+                    }
+
                     isScanning = false;
                     isProcessingScan = false;
                     showError(`Server Error (${response.status}): ${errorMsg}`);
@@ -1357,17 +1392,14 @@
                 }
 
                 // Non-terminal: keep listening. Barcode scanners can stream partial/overlapping payloads.
-                isProcessingScan = false;
-                scanLocked = false;
-                visualRoot.classList.add('scanning');
-                setScanCtaText();
-                btnScanNow.style.opacity = "1";
-                btnScanNow.style.pointerEvents = "auto";
-                resetScanCaptureState();
-                ghostInput.focus({ preventScroll: true });
-                if (debugStatus) debugStatus.textContent = 'LISTENING: Scan again (need DBB + DAQ)';
+                resumeListening(verifyOnlyMode ? 'LISTENING: Focus on the barcode…' : 'LISTENING: Scan again (need DBB + DAQ)');
             } catch (e) {
                 reportRemoteError('FETCH_EXCEPTION', { message: e.message, stack: e.stack });
+                if (verifyOnlyMode) {
+                    resumeListening(`NETWORK: ${e.message}. Scan again.`);
+                    return;
+                }
+
                 isScanning = false;
                 isProcessingScan = false;
                 showError(`Network Error: ${e.message}`);
