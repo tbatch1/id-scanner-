@@ -491,6 +491,7 @@
         }
 
         #debugPanel {
+            display: none;
             position: fixed;
             bottom: 15px;
             left: 15px;
@@ -505,6 +506,10 @@
             border: 1px solid #0f0;
             box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
             pointer-events: auto;
+        }
+
+        body.debug-ui #debugPanel {
+            display: block;
         }
 
         .debug-btn {
@@ -673,6 +678,10 @@
         const debugKeysEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugKeys') || urlParams.get('debug') || '').toLowerCase());
         if (debugKeysEnabled) {
             document.body.classList.add('show-keys');
+        }
+        const debugUiEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugUi') || urlParams.get('debug') || '').toLowerCase());
+        if (debugUiEnabled) {
+            document.body.classList.add('debug-ui');
         }
 
         const embeddedMode =
