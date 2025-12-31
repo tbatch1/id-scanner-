@@ -830,6 +830,11 @@
             urlParams.get('reference') ||
             urlParams.get('reference_id');
 
+        const clerkIdParam =
+            (urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('user_id') || urlParams.get('userId') || '').trim();
+        const registerIdParam =
+            (urlParams.get('register_id') || urlParams.get('registerId') || '').trim();
+
         const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
         const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
 
@@ -1206,7 +1211,11 @@
                 const response = await fetch(`/api/sales/${encodeURIComponent(saleId)}/verify-bluetooth`, {
                     method: 'POST',
                     headers: getApiHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ barcodeData: rawData })
+                    body: JSON.stringify({
+                        barcodeData: rawData,
+                        clerkId: clerkIdParam,
+                        registerId: registerIdParam
+                    })
                 });
 
                 if (!response.ok) {
