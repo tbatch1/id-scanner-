@@ -64,13 +64,15 @@
         /* Embedded/iframe mode: render as a compact popup over the POS. */
         html.embedded,
         html.embedded body {
-            background: transparent;
+            /* Fill the entire iframe with the dark overlay so the POS white doesn't show through. */
+            background: rgba(15, 20, 25, 0.98);
         }
 
         html.embedded body {
-            padding-top: 0;
-            min-height: 0;
+            padding: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-right, 0px) + 16px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 16px);
+            min-height: 100vh;
             overflow: hidden;
+            justify-content: center;
         }
 
         html.embedded .grid-bg {
@@ -78,15 +80,35 @@
         }
 
         html.embedded .scanner-wrap {
-            margin: 16px auto;
-            max-width: 560px;
-            max-height: calc(100vh - 32px);
+            margin: 0 auto;
+            width: min(92vw, 860px);
+            max-width: 860px;
+            max-height: calc(100vh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             background: rgba(15, 20, 25, 0.92);
             border-radius: 18px;
             box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
             border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 30px 26px;
+        }
+
+        html.embedded .logo {
+            width: 170px;
+        }
+
+        html.embedded .main-title {
+            font-size: clamp(34px, 4vw, 46px);
+            letter-spacing: 2px;
+        }
+
+        html.embedded .subtitle {
+            font-size: clamp(16px, 2.2vw, 20px);
+        }
+
+        html.embedded #btnScanNow {
+            font-size: clamp(18px, 2.4vw, 22px);
+            padding: 20px 18px;
         }
 
         html.verify-only .tender-box {
