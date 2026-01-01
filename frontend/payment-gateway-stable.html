@@ -1717,17 +1717,17 @@
                 if (overlay) overlay.classList.add('active');
             }, 900);
 
-            // Scan-only: return to the pay screen without closing the sale.
-            // Lightspeed Payments API docs: DECLINE => "Return to pay screen", EXIT => "Clean exit" and may close dialogs/unbind.
-            const didClose = lsDecline({ print: false });
+            // Scan-only: close the gateway dialog and return to the sell/pay screen without marking the payment declined.
+            // Using DECLINE shows a red "payment declined" state in POS; EXIT is the clean close/unbind step.
+            const didClose = lsExit();
+
+            // In embedded (Lightspeed) mode, do not attempt browser navigation/window close; it can break the webview.
+            if (embeddedMode) return;
 
             if (!didClose) {
-                window.parent.postMessage('CLOSE', '*');
-                window.parent.postMessage('DECLINE', '*');
+                tryCloseWindow();
+                try { window.history.back(); } catch (e) { }
             }
-
-            tryCloseWindow();
-            try { window.history.back(); } catch (e) { }
         }
 
         // Auto-detect refund
