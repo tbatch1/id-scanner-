@@ -100,6 +100,15 @@
       ]
     },
     {
+      "source": "/payment-gateway-stable.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
       "source": "/id-scan.html",
       "headers": [
         {
