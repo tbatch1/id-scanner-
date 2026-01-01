@@ -306,15 +306,22 @@
             left: 0;
             width: 2px;
             height: 2px;
-            opacity: 0;
+            /* iOS webviews often refuse to focus fully-hidden inputs; keep it effectively invisible but focusable. */
+            opacity: 0.01;
+            background: transparent;
+            color: transparent;
+            caret-color: transparent;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 0 transparent;
             pointer-events: auto;
-            z-index: 1;
+            z-index: 10;
         }
 
         /* Verify-only mode: let a tap anywhere arm the scanner reliably on iPad webviews. */
         html.verify-only #ghostInput {
             width: 100vw;
             height: 100vh;
+            z-index: 10000;
         }
 
         /* Hide raw keystrokes in normal mode (still captured in ghostInput). */
@@ -902,6 +909,17 @@
             lsData();
         }
 
+        function focusGhostInput(reason = 'focus') {
+            try {
+                ghostInput.focus({ preventScroll: true });
+                clientLog('focusGhostInput', { reason, active: document.activeElement === ghostInput });
+                return true;
+            } catch (e) {
+                clientLog('focusGhostInput failed', { reason });
+                return false;
+            }
+        }
+
         window.addEventListener('message', (event) => {
             if (!event || typeof event.data !== 'string') return;
             let data = null;
@@ -1100,7 +1118,7 @@
             if (debugStatus) debugStatus.textContent = 'LISTENING: Focus on barcode (need DBB + DAQ)';
             if (subtitleEl && verifyOnlyMode) subtitleEl.textContent = defaultSubtitleText || 'Focus on the barcode until it confirms.';
             resetScanCaptureState();
-            ghostInput.focus({ preventScroll: true });
+            focusGhostInput('btnScanNow');
             clientLog('scan armed', { verifyOnlyMode, saleId: saleId || null });
         };
 
@@ -1118,9 +1136,32 @@
         // Ghost Focus Loop
         setInterval(() => {
             if (isScanning && document.activeElement !== ghostInput) {
-                ghostInput.focus({ preventScroll: true });
+                focusGhostInput('interval');
             }
         }, 500);
+
+        // Extra focus attempts right after load: iOS/Lightspeed webviews can ignore the first focus call.
+        (function focusBurst() {
+            let attempts = 0;
+            const maxAttempts = 16; // ~2s at 125ms intervals
+            const tick = () => {
+                attempts += 1;
+                if (attempts > maxAttempts) return;
+                if (!isScanning) return;
+                if (document.activeElement === ghostInput) return;
+                focusGhostInput(`burst-${attempts}`);
+                setTimeout(tick, 125);
+            };
+            setTimeout(tick, 125);
+        })();
+
+        window.addEventListener('focus', () => {
+            if (isScanning) focusGhostInput('window-focus');
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && isScanning) focusGhostInput('visibility');
+        });
 
         function handleBufferChanged() {
             barcodeBuffer = String(ghostInput.value || '');
@@ -1157,7 +1198,7 @@
             btnScanNow.style.opacity = "1";
             btnScanNow.style.pointerEvents = "auto";
             resetScanCaptureState();
-            try { ghostInput.focus({ preventScroll: true }); } catch (e) { }
+            focusGhostInput('resumeListening');
             if (debugStatus && statusText) debugStatus.textContent = statusText;
         }
 
@@ -1231,7 +1272,7 @@
         setInterval(updateArmHint, 400);
 
         document.addEventListener('touchstart', () => {
-            try { ghostInput.focus({ preventScroll: true }); } catch (e) { }
+            focusGhostInput('touchstart');
         }, { passive: true });
 
         if (!verifyOnlyMode) {
