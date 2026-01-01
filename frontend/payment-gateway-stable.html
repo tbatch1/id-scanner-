@@ -326,7 +326,7 @@
 
         /* Hide raw keystrokes in normal mode (still captured in ghostInput). */
         #scanPreview {
-            display: flex !important;
+            display: none !important;
         }
 
         body.show-keys #scanPreview {
@@ -528,7 +528,7 @@
         }
 
         #debugPanel {
-            display: block;
+            display: none;
             position: fixed;
             bottom: 15px;
             left: 15px;
@@ -729,9 +729,14 @@
     <script>
         // Data from URL (Added fallbacks for different Lightspeed triggers)
         const urlParams = new URLSearchParams(window.location.search);
-        // Debug is forced on for now so we can stabilize iPad scanner capture.
-        document.body.classList.add('show-keys');
-        document.body.classList.add('debug-ui');
+        const debugKeysEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugKeys') || urlParams.get('debug') || '').toLowerCase());
+        if (debugKeysEnabled) {
+            document.body.classList.add('show-keys');
+        }
+        const debugUiEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugUi') || urlParams.get('debug') || '').toLowerCase());
+        if (debugUiEnabled) {
+            document.body.classList.add('debug-ui');
+        }
 
         const embeddedMode =
             window.self !== window.top ||
