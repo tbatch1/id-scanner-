@@ -319,7 +319,7 @@
 
         /* Hide raw keystrokes in normal mode (still captured in ghostInput). */
         #scanPreview {
-            display: none !important;
+            display: flex !important;
         }
 
         body.show-keys #scanPreview {
@@ -521,7 +521,7 @@
         }
 
         #debugPanel {
-            display: none;
+            display: block;
             position: fixed;
             bottom: 15px;
             left: 15px;
@@ -573,6 +573,11 @@
         <div>ID: <span id="debugSale">...</span></div>
         <div id="debugStatus">SYSTEM READY</div>
         <button class="debug-btn" onclick="testConnectivity(event)">TEST PING</button>
+        <div style="margin-top: 10px; font-size: 10px; color: #9ff; opacity: 0.95;">CLIENT LOGS</div>
+        <div id="debugClientLogs"
+            style="margin-top: 6px; font-size: 9px; max-height: 70px; overflow-y: auto; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 4px; font-family: monospace; border: 1px solid rgba(0,255,255,0.25);">
+            (waiting...)
+        </div>
         <div id="debugLogs"
             style="margin-top: 10px; font-size: 9px; max-height: 80px; overflow-y: auto; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 4px; font-family: monospace; border: 1px solid rgba(0,255,0,0.2);">
             (Waiting for scan...)
@@ -717,14 +722,9 @@
     <script>
         // Data from URL (Added fallbacks for different Lightspeed triggers)
         const urlParams = new URLSearchParams(window.location.search);
-        const debugKeysEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugKeys') || urlParams.get('debug') || '').toLowerCase());
-        if (debugKeysEnabled) {
-            document.body.classList.add('show-keys');
-        }
-        const debugUiEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugUi') || urlParams.get('debug') || '').toLowerCase());
-        if (debugUiEnabled) {
-            document.body.classList.add('debug-ui');
-        }
+        // Debug is forced on for now so we can stabilize iPad scanner capture.
+        document.body.classList.add('show-keys');
+        document.body.classList.add('debug-ui');
 
         const embeddedMode =
             window.self !== window.top ||
@@ -861,8 +861,23 @@
         let scanHardTimer = null;
         let scanLocked = false;
         let receivedAmountStr = "";
-        const autoStartScan = verifyOnlyMode;
+        const autoStartScan = true;
         let pendingVerifyPayload = null;
+
+        function clientLog(message, extra = null) {
+            try {
+                const el = document.getElementById('debugClientLogs');
+                if (!el) return;
+                const time = new Date().toISOString().slice(11, 19);
+                const line = document.createElement('div');
+                line.style.marginBottom = '2px';
+                const suffix = extra ? ` ${JSON.stringify(extra)}` : '';
+                line.textContent = `[${time}] ${message}${suffix}`;
+                if (el.textContent && el.textContent.trim() === '(waiting...)') el.textContent = '';
+                el.appendChild(line);
+                el.scrollTop = el.scrollHeight;
+            } catch (e) { }
+        }
 
         // Elements
         const mainWrap = document.getElementById('mainWrap');
@@ -935,6 +950,7 @@
             if (tenderBox) tenderBox.style.display = 'none';
             if (cashWrap) cashWrap.style.display = 'none';
             selectTender('card');
+            clientLog('verifyOnlyMode enabled', { embeddedMode: embeddedMode });
         }
 
         function normalizeScanText(text) {
@@ -1085,6 +1101,7 @@
             if (subtitleEl && verifyOnlyMode) subtitleEl.textContent = defaultSubtitleText || 'Focus on the barcode until it confirms.';
             resetScanCaptureState();
             ghostInput.focus({ preventScroll: true });
+            clientLog('scan armed', { verifyOnlyMode, saleId: saleId || null });
         };
 
         if (autoStartScan) {
@@ -1093,6 +1110,7 @@
             setTimeout(() => {
                 try {
                     btnScanNow.onclick();
+                    clientLog('autoStartScan fired');
                 } catch (e) { }
             }, 50);
         }
@@ -1199,7 +1217,7 @@
             const quietForMs = lastKeyAt ? (Date.now() - lastKeyAt) : Number.POSITIVE_INFINITY;
 
             if (!active && quietForMs > 2500 && !hasShownArmHint) {
-                subtitleEl.textContent = 'Tap once to arm the scanner, then scan the barcode.';
+                subtitleEl.textContent = defaultSubtitleText || 'Focus on the barcode until it confirms.';
                 hasShownArmHint = true;
                 return;
             }
@@ -1265,6 +1283,11 @@
 
                 e.preventDefault();
                 e.stopPropagation();
+                if (key === 'Enter') {
+                    clientLog('keydown', { key: 'Enter', len: barcodeBuffer.length, active: document.activeElement === ghostInput });
+                } else if (barcodeBuffer.length % 25 === 0) {
+                    clientLog('keydown', { key: '(char)', len: barcodeBuffer.length, active: document.activeElement === ghostInput });
+                }
                 handleKeyBuffered(key === 'Enter' ? '\n' : key);
             }, true);
 
@@ -1367,6 +1390,7 @@
                 pendingVerifyPayload = rawData;
                 try { lsData(); } catch (e) { }
                 if (debugStatus) debugStatus.textContent = 'WAITING: Linking to POS sale...';
+                clientLog('missing saleId; requesting DATA', { len: String(rawData || '').length });
                 scanLocked = false;
                 isProcessingScan = false;
                 isScanning = true;
@@ -1386,6 +1410,7 @@
             btnScanNow.style.opacity = "0.7";
             btnScanNow.style.pointerEvents = "none";
             if (debugStatus) debugStatus.textContent = 'PROCESSING: Checking ID...';
+            clientLog('submitting verify', { saleId, len: String(rawData || '').length });
 
             try {
                 const response = await fetch(`/api/sales/${encodeURIComponent(saleId)}/verify-bluetooth`, {
