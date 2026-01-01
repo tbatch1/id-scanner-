@@ -19,6 +19,12 @@
                     var v = String(p.get('verifyOnly') || p.get('verify') || '').trim().toLowerCase();
                     verify = v === '1' || v === 'true' || v === 'yes' || v === 'on';
                 }
+                // In the Lightspeed gateway iframe, params are sometimes dropped; treat embedded as verify-only.
+                try {
+                    if (window.self !== window.top) verify = true;
+                } catch (e) {
+                    verify = true;
+                }
                 if (verify) document.documentElement.classList.add('verify-only');
             } catch (e) { }
         })();
@@ -111,13 +117,7 @@
             padding: 20px 18px;
         }
 
-        html.verify-only .tender-box {
-            display: none !important;
-        }
-
-        html.verify-only #btnScanNow {
-            display: none !important;
-        }
+        /* verify-only styling is controlled by JS so we can optionally show tender choices after scan. */
 
         /* Animated grid background */
         .grid-bg {
