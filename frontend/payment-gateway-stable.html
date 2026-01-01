@@ -614,7 +614,7 @@
     </div>
     <div class="grid-bg"></div>
     <textarea id="ghostInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-        inputmode="none" autofocus></textarea>
+        inputmode="text" enterkeyhint="done" autofocus></textarea>
 
     <div class="scanner-wrap" id="mainWrap">
         <!-- Logo Area -->
@@ -934,6 +934,16 @@
         const btnQuickNextFive = document.getElementById('btnQuickNextFive');
         const btnCompleteSale = document.getElementById('btnCompleteSale');
 
+        try {
+            // Some iOS webviews are more reliable when the focused element is a normal text field.
+            ghostInput.setAttribute('inputmode', 'text');
+            ghostInput.setAttribute('enterkeyhint', 'done');
+            ghostInput.setAttribute('autocomplete', 'off');
+            ghostInput.setAttribute('autocorrect', 'off');
+            ghostInput.setAttribute('autocapitalize', 'off');
+            ghostInput.setAttribute('spellcheck', 'false');
+        } catch (e) { }
+
         // When loaded as a Lightspeed gateway (iframe), remove the close button to prevent premature exits.
         if (embeddedMode) {
             lsSetup(false);
@@ -952,6 +962,11 @@
                 return false;
             }
         }
+
+        ghostInput.addEventListener('blur', () => {
+            if (!isScanning) return;
+            setTimeout(() => focusGhostInput('blur'), 50);
+        });
 
         window.addEventListener('message', (event) => {
             if (!event || typeof event.data !== 'string') return;
