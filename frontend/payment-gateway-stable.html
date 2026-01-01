@@ -752,6 +752,12 @@
             return explicit;
         })();
 
+        const postScanTenderChoice = (() => {
+            const raw = String(urlParams.get('postScan') || urlParams.get('afterScan') || '').trim().toLowerCase();
+            if (raw === 'tender' || raw === 'cashcard') return true;
+            return ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('postScanTender') || '').trim().toLowerCase());
+        })();
+
         // Lightspeed Retail X-Series Payments API (gateway-in-iframe) uses postMessage JSON strings.
         // Key steps: SETUP (toggle close button), ACCEPT (complete sale), DECLINE (back to pay screen), EXIT (close dialogs/unbind).
         // Docs: https://x-series-api.lightspeedhq.com/docs/payments_api_reference
@@ -1539,6 +1545,28 @@
             }
         }
 
+        function showTenderChoiceAfterScan() {
+            // Hide scan UI (still keep debug/preview visible for now).
+            try { btnScanNow.style.display = 'none'; } catch (e) { }
+
+            // Show tender selection.
+            if (tenderBox) tenderBox.style.display = 'block';
+            const title = document.getElementById('mainTitle');
+            const subtitle = document.getElementById('mainSubtitle');
+            if (title) title.textContent = 'Choose Tender';
+            if (subtitle) subtitle.textContent = 'Tap Cash or Card, then return to POS.';
+
+            // Make buttons just return to POS (no cash calculator, no sale closing).
+            btnCash.onclick = () => {
+                clientLog('postScan tender selected', { tender: 'cash' });
+                closeGateway();
+            };
+            btnCard.onclick = () => {
+                clientLog('postScan tender selected', { tender: 'card' });
+                closeGateway();
+            };
+        }
+
         function showSuccess(data) {
             document.getElementById('successOverlay').classList.add('active');
             latestVerificationId = data.verificationId || data.verification_id || latestVerificationId;
@@ -1560,10 +1588,21 @@
             };
 
             if (verifyOnlyMode) {
+                // Stop any scanning/focus loops once verified.
+                isScanning = false;
+                isProcessingScan = false;
+                scanLocked = true;
+                try { visualRoot.classList.remove('scanning'); } catch (e) { }
+
                 const btn = document.getElementById('btnContinue');
-                if (btn) {
-                    btn.style.display = 'none';
+                if (btn) btn.style.display = 'none';
+
+                if (postScanTenderChoice) {
+                    document.getElementById('successOverlay').classList.remove('active');
+                    showTenderChoiceAfterScan();
+                    return;
                 }
+
                 setTimeout(() => {
                     closeGateway();
                 }, 250);
