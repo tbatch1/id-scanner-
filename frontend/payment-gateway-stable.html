@@ -687,6 +687,15 @@
             </div>
         </div>
 
+        <!-- Focus/arm overlay: only shown when iPad webviews refuse to focus a hidden input -->
+        <div id="armOverlay" class="overlay-card">
+            <div class="overlay-content">
+                <h2>Ready to Scan</h2>
+                <p>Tap once anywhere, then scan the barcode.</p>
+                <button class="btn-action" type="button" onclick="armScannerNow()">Tap to Arm</button>
+            </div>
+        </div>
+
         <!-- Close helper overlay (shown only if Lightspeed doesn't close the modal) -->
         <div id="closeOverlay" class="overlay-card">
             <div class="overlay-content">
@@ -963,6 +972,22 @@
             }
         }
 
+        function hideArmOverlay() {
+            const overlay = document.getElementById('armOverlay');
+            if (overlay) overlay.classList.remove('active');
+        }
+
+        function showArmOverlay() {
+            const overlay = document.getElementById('armOverlay');
+            if (overlay) overlay.classList.add('active');
+        }
+
+        // Global hook for the overlay button.
+        window.armScannerNow = function armScannerNow() {
+            hideArmOverlay();
+            focusGhostInput('armOverlay');
+        };
+
         ghostInput.addEventListener('blur', () => {
             if (!isScanning) return;
             setTimeout(() => focusGhostInput('blur'), 50);
@@ -1181,6 +1206,15 @@
             }, 50);
         }
 
+        // If iOS/Lightspeed refuses to focus a hidden input, show a single-tap "arm" overlay as a fallback.
+        setTimeout(() => {
+            if (!verifyOnlyMode) return;
+            if (!embeddedMode) return;
+            if (!isScanning) return;
+            if (document.activeElement === ghostInput) return;
+            showArmOverlay();
+        }, 700);
+
         // Ghost Focus Loop
         setInterval(() => {
             if (isScanning && document.activeElement !== ghostInput) {
@@ -1321,6 +1355,7 @@
 
         document.addEventListener('touchstart', () => {
             focusGhostInput('touchstart');
+            hideArmOverlay();
         }, { passive: true });
 
         if (!verifyOnlyMode) {
