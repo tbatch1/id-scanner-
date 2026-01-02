@@ -16,6 +16,50 @@
             max-width: 800px;
             margin: 0 auto;
         }
+        .barcode-panel {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            margin: 18px 0 22px;
+        }
+        .barcode-card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            flex: 1 1 240px;
+            min-width: 240px;
+        }
+        .barcode-card h2 {
+            font-size: 16px;
+            margin: 0 0 10px;
+            color: #93c5fd;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .barcode-img {
+            width: 220px;
+            height: 220px;
+            background: #fff;
+            border-radius: 10px;
+            padding: 10px;
+            display: block;
+        }
+        .barcode-text {
+            margin-top: 10px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            color: #e2e8f0;
+            word-break: break-all;
+            opacity: 0.9;
+        }
+        .hint {
+            opacity: 0.85;
+            margin: 8px 0 0;
+            line-height: 1.35;
+            color: #94a3b8;
+        }
         h1 {
             font-size: 32px;
             margin-bottom: 10px;
@@ -92,7 +136,24 @@
 <body>
     <div class="container">
         <h1>🔫 Scanner Test Page</h1>
-        <p style="color: #94a3b8;">Point your Netum NT1200 scanner at an ID and pull the trigger. This page will show exactly what keys are being typed.</p>
+        <p style="color: #94a3b8;">Scan the QR codes below to confirm your Netum is sending keystrokes reliably (no ID needed).</p>
+
+        <div class="barcode-panel">
+            <div class="barcode-card">
+                <h2>Test QR (Short)</h2>
+                <img class="barcode-img" alt="Test QR short"
+                    src="https://quickchart.io/qr?size=220&text=THC_CLUB_SCANNER_TEST_SHORT_12345" />
+                <div class="barcode-text">THC_CLUB_SCANNER_TEST_SHORT_12345</div>
+                <p class="hint">If this appears in the log, the scanner + Bluetooth are good.</p>
+            </div>
+            <div class="barcode-card">
+                <h2>Test QR (Long)</h2>
+                <img class="barcode-img" alt="Test QR long"
+                    src="https://quickchart.io/qr?size=220&text=THC_CLUB_SCANNER_TEST_LONG%7Cabcdefghijklmnopqrstuvwxyz0123456789%7CABCDEFGHIJKLMNOPQRSTUVWXYZ%7Cend" />
+                <div class="barcode-text">THC_CLUB_SCANNER_TEST_LONG|abcdefghijklmnopqrstuvwxyz0123456789|ABCDEFGHIJKLMNOPQRSTUVWXYZ|end</div>
+                <p class="hint">Use this to validate buffering/timeout behavior with longer payloads.</p>
+            </div>
+        </div>
 
         <div class="status ready">
             <strong>✅ Ready to Receive Scanner Input</strong>
