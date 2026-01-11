@@ -7,6 +7,7 @@ const complianceStore = require('./complianceStore');
 const saleVerificationStore = require('./saleVerificationStore');
 const { validateVerification, validateCompletion, validateBannedCreate, validateBannedId, validateOverride, validateSaleId, sanitizeString } = require('./validation');
 const lightspeedWebhookQueue = require('./lightspeedWebhookQueue');
+const customerReconcileQueue = require('./customerReconcileQueue');
 
 const router = express.Router();
 
@@ -751,6 +752,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     let customerUpdatedFields = [];
     let customerUpdateSkipped = null;
     let customerUpdateStatus = null;
+    let customerUpdatesPayload = null;
     if (approved && sale?.customerId && typeof lightspeed.updateCustomerById === 'function') {
       try {
         saleVerificationStore.addSessionLog(saleId, `Updating customer profile (${sale.customerId})...`, 'info');
@@ -776,6 +778,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
           postal_state: parsed.state,
           postal_postcode: parsed.postalCode
         };
+        customerUpdatesPayload = updates;
 
         const result = await lightspeed.updateCustomerById(sale.customerId, updates, { fillBlanksOnly: true });
         customerUpdated = Boolean(result?.updated);
@@ -794,6 +797,29 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       }
     } else if (approved && !sale?.customerId) {
       customerUpdateSkipped = 'no_customer_on_sale';
+      try {
+        const safeDate = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString().slice(0, 10) : null;
+        customerUpdatesPayload = {
+          first_name: parsed.firstName,
+          last_name: parsed.lastName,
+          date_of_birth: safeDate(parsed.dob),
+          sex: parsed.sex,
+          physical_address1: parsed.address1,
+          physical_address2: parsed.address2,
+          physical_suburb: parsed.suburb,
+          physical_city: parsed.city,
+          physical_state: parsed.state,
+          physical_postcode: parsed.postalCode,
+          postal_address1: parsed.address1,
+          postal_address2: parsed.address2,
+          postal_suburb: parsed.suburb,
+          postal_city: parsed.city,
+          postal_state: parsed.state,
+          postal_postcode: parsed.postalCode
+        };
+      } catch (e) {
+        customerUpdatesPayload = null;
+      }
     }
 
     // 5. Persist to Database FIRST (Dashboard Integration - CRITICAL)
@@ -840,6 +866,38 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     // 6. Update In-Memory Store (for Polling) - ONLY after DB save succeeds
     saleVerificationStore.updateVerification(saleId, verificationResult);
 
+    // 6.5 Queue a customer reconcile job so fields get filled even if loyalty customer attaches a few seconds later.
+    let customerReconcileQueued = false;
+    let customerReconcileReason = null;
+    try {
+      const canReconcile = approved && Boolean(db.pool) && typeof lightspeed.updateCustomerById === 'function' && customerUpdatesPayload;
+      const missingCustomer = canReconcile && (!sale || !sale.customerId);
+      const transientUpdateFailure =
+        canReconcile &&
+        Boolean(sale?.customerId) &&
+        !customerUpdated &&
+        !customerUpdateSkipped &&
+        [429, 500, 502, 503, 504].includes(Number(customerUpdateStatus || 0));
+
+      if (missingCustomer || transientUpdateFailure) {
+        const queued = await customerReconcileQueue.enqueueJob({
+          saleId,
+          verificationId,
+          fields: customerUpdatesPayload,
+          delayMs: 5000
+        });
+        customerReconcileQueued = Boolean(queued?.queued);
+        customerReconcileReason = missingCustomer ? 'no_customer_on_sale' : 'transient_customer_update_failure';
+        saleVerificationStore.addSessionLog(
+          saleId,
+          customerReconcileQueued ? 'Queued customer reconcile job' : `Customer reconcile not queued (${queued?.reason || 'unknown'})`,
+          customerReconcileQueued ? 'info' : 'warn'
+        );
+      }
+    } catch (e) {
+      logger.warn({ event: 'customer_reconcile_enqueue_failed', saleId, error: e.message }, 'Failed to enqueue customer reconcile job');
+    }
+
     // Final success logging
     console.log('===========================================');
     console.log('✅ SCAN PROCESSED SUCCESSFULLY');
@@ -869,7 +927,9 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       customerUpdated,
       customerUpdatedFields,
       customerUpdateSkipped,
-      customerUpdateStatus
+      customerUpdateStatus,
+      customerReconcileQueued,
+      customerReconcileReason
     });
 
   } catch (error) {
@@ -1834,6 +1894,16 @@ router.post('/cron/retention', async (req, res) => {
       }
     }
 
+    // Cleanup short-lived customer reconcile jobs (keeps PII from lingering unnecessarily).
+    let customerReconcileCleanup = null;
+    try {
+      const doneDays = Number.parseInt(process.env.CUSTOMER_RECONCILE_DONE_RETENTION_DAYS || '3', 10) || 3;
+      const pendingDays = Number.parseInt(process.env.CUSTOMER_RECONCILE_PENDING_RETENTION_DAYS || '2', 10) || 2;
+      customerReconcileCleanup = await customerReconcileQueue.cleanup({ doneDays, pendingDays });
+    } catch (cleanupError) {
+      logger.logAPIError('customer_reconcile_cleanup', cleanupError);
+    }
+
     res.status(200).json({
       success: true,
       daily: {
@@ -1847,7 +1917,8 @@ router.post('/cron/retention', async (req, res) => {
       retention: retentionResult,
       retentionSkipped,
       customerSync: customerSyncResult,
-      snapshots: snapshotResult
+      snapshots: snapshotResult,
+      customerReconcileCleanup
     });
   } catch (error) {
     logger.logAPIError('retention_enforcement', error);
@@ -2107,7 +2178,20 @@ async function runWebhooksCron(req, res) {
 
     const result = await lightspeedWebhookQueue.processPendingWebhookEvents({ limit, maxDurationMs });
     const health = await lightspeedWebhookQueue.getWebhookQueueHealth();
-    return res.status(200).json({ success: true, ...result, health });
+
+    // Also run the customer reconcile queue here so webhook delivery can make customer autofill feel "instant".
+    // This is best-effort and will never fail the webhook processor response.
+    let customerReconcile = null;
+    try {
+      customerReconcile = await customerReconcileQueue.processDueJobs({
+        limit: Math.max(1, Math.min(limit, 200)),
+        maxDurationMs: Math.max(1000, Math.min(maxDurationMs, 8000))
+      });
+    } catch (e) {
+      logger.warn({ event: 'cron_customer_reconcile_failed', error: e.message }, 'Customer reconcile run failed');
+    }
+
+    return res.status(200).json({ success: true, ...result, health, customerReconcile });
   } catch (error) {
     logger.logAPIError('cron_webhooks', error);
     return res.status(500).json({
@@ -2119,6 +2203,36 @@ async function runWebhooksCron(req, res) {
 
 router.get('/cron/webhooks', runWebhooksCron);
 router.post('/cron/webhooks', runWebhooksCron);
+
+async function runCustomerReconcileCron(req, res) {
+  if (!verifyCronRequest(req)) {
+    return res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid cron secret'
+    });
+  }
+
+  try {
+    const limit = Math.max(1, Math.min(Number.parseInt(req.query?.limit || req.body?.limit || '150', 10) || 150, 500));
+    const maxDurationMs = Math.max(
+      1000,
+      Math.min(Number.parseInt(req.query?.maxDurationMs || req.body?.maxDurationMs || '8000', 10) || 8000, 60000)
+    );
+
+    const result = await customerReconcileQueue.processDueJobs({ limit, maxDurationMs });
+    const health = await customerReconcileQueue.getHealth();
+    return res.status(200).json({ success: true, ...result, health });
+  } catch (error) {
+    logger.logAPIError('cron_customer_reconcile', error);
+    return res.status(500).json({
+      error: 'CUSTOMER_RECONCILE_FAILED',
+      message: error.message
+    });
+  }
+}
+
+router.get('/cron/customer-reconcile', runCustomerReconcileCron);
+router.post('/cron/customer-reconcile', runCustomerReconcileCron);
 
 /**
  * POST /api/sales/:saleId/verify

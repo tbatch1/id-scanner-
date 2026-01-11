@@ -51,6 +51,8 @@ Copy and paste these into Vercel Dashboard → Settings → Environment Variable
 | `CRON_SNAPSHOT_MODE` | Snapshot mode run nightly | `sales` |
 | `CRON_RUN_CUSTOMER_SYNC` | Run customer profile sync during the nightly cron tick | `true` |
 | `CRON_CUSTOMER_SYNC_MAX_DURATION_MS` | Max time per polling tick | `8000` |
+| `CUSTOMER_RECONCILE_DONE_RETENTION_DAYS` | Keep successful customer-autofill jobs (PII wiped) | `3` |
+| `CUSTOMER_RECONCILE_PENDING_RETENTION_DAYS` | Keep pending/failed customer-autofill jobs | `2` |
 | `SNAPSHOT_DAY_CUTOFF_HOUR` | Local cutoff (hour) for “business day” | `6` |
 | `SNAPSHOT_CUSTOMER_LOOKUP_LIMIT` | Max customer lookups per run | `2000` |
 | `SNAPSHOT_CUSTOMER_LOOKUP_CONCURRENCY` | Parallel customer lookups | `6` |
@@ -160,6 +162,8 @@ curl https://your-app.vercel.app/api/health
 - View cron execution logs
 - Endpoint: `/api/cron/retention` (runs once/day at 11:30pm CST)
 - Marketing customer sync endpoint: `/api/cron/customers` (manual trigger; polling runs via `/api/cron/retention` when `CRON_RUN_CUSTOMER_SYNC=true`)
+- Customer autofill reconcile endpoint: `/api/cron/customer-reconcile` (runs frequently; fills loyalty customer fields after scans)
+- Webhook processor endpoint: `/api/cron/webhooks` (processes stored webhook events; also triggers customer reconcile)
 - For near-real-time polling on Vercel Hobby: use `.github/workflows/customer-sync.yml` to call `/api/cron/customers` every 15 minutes.
 
 ---

@@ -6,6 +6,7 @@ const logger = require('./logger');
 const chatService = require('./chatService');
 const marketingService = require('./marketingService');
 const lightspeedWebhookQueue = require('./lightspeedWebhookQueue');
+const customerReconcileQueue = require('./customerReconcileQueue');
 
 const router = express.Router();
 
@@ -1499,6 +1500,43 @@ router.post('/webhooks/process', async (req, res) => {
   } catch (error) {
     logger.logAPIError('admin_webhooks_process', error);
     return res.status(500).json({ error: 'WEBHOOK_PROCESS_FAILED', message: error.message });
+  }
+});
+
+// --- Customer Reconcile Jobs (admin) ---
+router.get('/customer-reconcile/health', async (req, res) => {
+  try {
+    if (!db.pool) {
+      return res.status(503).json({
+        error: 'DB_DISABLED',
+        message: 'DATABASE_URL is not configured'
+      });
+    }
+    const health = await customerReconcileQueue.getHealth();
+    return res.status(200).json({ success: true, health });
+  } catch (error) {
+    logger.logAPIError('admin_customer_reconcile_health', error);
+    return res.status(500).json({ error: 'CUSTOMER_RECONCILE_HEALTH_FAILED', message: error.message });
+  }
+});
+
+router.post('/customer-reconcile/process', async (req, res) => {
+  try {
+    if (!db.pool) {
+      return res.status(503).json({
+        error: 'DB_DISABLED',
+        message: 'DATABASE_URL is not configured'
+      });
+    }
+
+    const limit = Math.max(1, Math.min(Number.parseInt(req.body?.limit || '150', 10) || 150, 500));
+    const maxDurationMs = Math.max(1000, Math.min(Number.parseInt(req.body?.maxDurationMs || '8000', 10) || 8000, 60000));
+    const result = await customerReconcileQueue.processDueJobs({ limit, maxDurationMs });
+    const health = await customerReconcileQueue.getHealth();
+    return res.status(200).json({ success: true, ...result, health });
+  } catch (error) {
+    logger.logAPIError('admin_customer_reconcile_process', error);
+    return res.status(500).json({ error: 'CUSTOMER_RECONCILE_PROCESS_FAILED', message: error.message });
   }
 });
 
