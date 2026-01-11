@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/retention",
       "schedule": "30 5 * * *"
+    },
+    {
+      "path": "/api/cron/customer-reconcile",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/webhooks",
+      "schedule": "*/5 * * * *"
     }
   ],
   "rewrites": [
