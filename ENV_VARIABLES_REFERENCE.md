@@ -164,7 +164,7 @@ curl https://your-app.vercel.app/api/health
 - Marketing customer sync endpoint: `/api/cron/customers` (manual trigger; polling runs via `/api/cron/retention` when `CRON_RUN_CUSTOMER_SYNC=true`)
 - Customer autofill reconcile endpoint: `/api/cron/customer-reconcile` (runs frequently; fills loyalty customer fields after scans)
 - Webhook processor endpoint: `/api/cron/webhooks` (processes stored webhook events; also triggers customer reconcile)
-- For near-real-time polling on Vercel Hobby: use `.github/workflows/customer-sync.yml` to call `/api/cron/customers` every 15 minutes.
+- On Vercel Pro: schedule `/api/cron/customers` every 15 minutes via `vercel.json`.
 
 ---
 
