@@ -6,6 +6,8 @@ const db = require('./db');
 const complianceStore = require('./complianceStore');
 const saleVerificationStore = require('./saleVerificationStore');
 const { validateVerification, validateCompletion, validateBannedCreate, validateBannedId, validateOverride, validateSaleId, sanitizeString } = require('./validation');
+const lightspeedWebhookQueue = require('./lightspeedWebhookQueue');
+const customerReconcileQueue = require('./customerReconcileQueue');
 
 const router = express.Router();
 
@@ -15,9 +17,11 @@ const lightspeedMode = process.env.LIGHTSPEED_USE_MOCK === 'true' ? 'mock' : 'li
 // Client Error Reporting Endpoint
 router.post('/debug/client-errors', async (req, res) => {
   try {
-    const { error, details, userAgent, saleId } = req.body;
+    const { type, error, details, userAgent, saleId } = req.body || {};
+    const allowedTypes = new Set(['CLIENT_ERROR', 'CLIENT_LOG']);
+    const normalizedType = allowedTypes.has(type) ? type : 'CLIENT_ERROR';
     await complianceStore.logDiagnostic({
-      type: 'CLIENT_ERROR',
+      type: normalizedType,
       saleId,
       userAgent,
       error,
@@ -138,7 +142,7 @@ function normalizeSource(value) {
 function normalizeDocumentType(value) {
   const sanitized = sanitizeString(value || '');
   const lower = sanitized.toLowerCase();
-  const allowed = ['drivers_license', 'passport', 'mrz_id', 'id_card'];
+  const allowed = ['drivers_license', 'passport', 'mrz_id', 'id_card', 'routed_id'];
   if (allowed.includes(lower)) {
     return lower;
   }
@@ -431,6 +435,11 @@ function parseAAMVA(data) {
   const sex = extract('DBC');
   const country = extract('DCG') || 'USA';
   const postalCode = extract('DAK');
+  const address1 = extract('DAG');
+  const address2 = extract('DAH');
+  const city = extract('DAI');
+  const state = extract('DAJ');
+  const suburb = extract('DAI'); // Lightspeed has a suburb field; for US IDs this maps closest to city.
 
   // Parse DOB (YYYYMMDD or MMDDYYYY)
   let dob = null;
@@ -488,7 +497,12 @@ function parseAAMVA(data) {
     documentExpiry: expiryRaw, // Keep raw for now, normalization happens later
     sex: sex === '1' ? 'M' : (sex === '2' ? 'F' : sex),
     issuingCountry: country,
-    postalCode
+    postalCode,
+    address1,
+    address2,
+    suburb,
+    city,
+    state
   };
 }
 
@@ -547,12 +561,16 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
 
     let sale = null;
     let locationId = determineLocationId(req, null);
+    let saleFetchAttempts = 0;
+    let saleFetchError = null;
     try {
       saleVerificationStore.addSessionLog(saleId, 'Checking Lightspeed sale context...', 'info');
+      saleFetchAttempts += 1;
       sale = await lightspeed.getSaleById(saleId);
       locationId = determineLocationId(req, sale);
       saleVerificationStore.addSessionLog(saleId, `Sale context OK (${sale.items.length} items)`, 'info');
     } catch (e) {
+      saleFetchError = e.message;
       saleVerificationStore.addSessionLog(saleId, `Sale context failed: ${e.message}`, 'warn');
       console.warn('Sale lookup failed during bluetooth scan, proceeding with defaults');
     }
@@ -598,6 +616,30 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       reason = 'Could not read DOB';
     }
 
+    // If the clerk attached a loyalty customer right before scanning, the sale->customer link can lag briefly.
+    // Re-fetch the sale a few times (fast) so customer profile sync is reliable.
+    if (approved && (!sale || !sale.customerId) && typeof lightspeed.getSaleById === 'function') {
+      const delays = [250, 500, 750, 1000];
+      for (const delayMs of delays) {
+        if (sale?.customerId) break;
+        try {
+          await new Promise((r) => setTimeout(r, delayMs));
+          saleFetchAttempts += 1;
+          const refreshed = await lightspeed.getSaleById(saleId);
+          if (refreshed) {
+            sale = refreshed;
+            locationId = determineLocationId(req, sale);
+          }
+          if (sale?.customerId) {
+            saleVerificationStore.addSessionLog(saleId, `Customer attached detected after ${saleFetchAttempts} sale fetch(es)`, 'info');
+            break;
+          }
+        } catch (e) {
+          saleFetchError = e?.message || saleFetchError;
+        }
+      }
+    }
+
     // 3. Check Banned List (Database)
     let bannedRecord = null;
     if (db.pool && parsed.documentNumber) {
@@ -634,13 +676,46 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       registerId: registerId || 'BLUETOOTH-SCANNER'
     };
 
+    // 4.25 "Seen before" signal (helps when customer isn't in rewards).
+    let seenBefore = false;
+    let priorVerificationCount = null;
+    let lastSeenAt = null;
+    if (db.pool && parsed.documentNumber && !String(parsed.documentNumber).startsWith('RAW-')) {
+      try {
+        const docType = 'drivers_license';
+        const issuing = parsed.issuingCountry || 'USA';
+        const { rows } = await db.pool.query(
+          `
+            SELECT
+              COUNT(*)::int as count,
+              MAX(created_at) as last_seen_at
+            FROM verifications
+            WHERE document_type = $1
+              AND document_number = $2
+              AND issuing_country = $3
+          `,
+          [docType, String(parsed.documentNumber), String(issuing)]
+        );
+        priorVerificationCount = rows?.[0]?.count ?? null;
+        lastSeenAt = rows?.[0]?.last_seen_at ?? null;
+        seenBefore = Number(priorVerificationCount || 0) > 0;
+        saleVerificationStore.addSessionLog(
+          saleId,
+          seenBefore ? `Seen before (${priorVerificationCount})` : 'First-time ID (no prior verifications)',
+          'info'
+        );
+      } catch (e) {
+        logger.warn({ event: 'seen_before_query_failed', saleId }, 'Seen-before lookup failed');
+      }
+    }
+
     // 4.5 Write an audit note back to Lightspeed (best-effort, never blocks checkout)
     let noteUpdated = false;
     try {
       saleVerificationStore.addSessionLog(saleId, 'Updating Lightspeed sale note...', 'info');
       const safeDate = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString().slice(0, 10) : null;
 
-      await lightspeed.recordVerification({
+      const verification = await lightspeed.recordVerification({
         saleId,
         clerkId: clerkId || 'BLUETOOTH_DEVICE',
         verificationData: {
@@ -661,11 +736,90 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
         sale,
         locationId
       });
-      noteUpdated = true;
-      saleVerificationStore.addSessionLog(saleId, 'Lightspeed note recorded', 'info');
+      noteUpdated = Boolean(verification?.noteUpdated);
+      saleVerificationStore.addSessionLog(
+        saleId,
+        noteUpdated ? 'Lightspeed note recorded' : approved ? 'Lightspeed note not written' : 'Lightspeed note not written (rejected)',
+        noteUpdated ? 'info' : 'warn'
+      );
     } catch (e) {
       saleVerificationStore.addSessionLog(saleId, `Lightspeed note failed: ${e.message}`, 'warn');
       logger.warn({ event: 'bluetooth_note_update_failed', saleId }, 'Failed to update Lightspeed note for bluetooth scan');
+    }
+
+    // 4.6 Optionally update the Lightspeed customer profile (when a customer was selected via phone/loyalty)
+    let customerUpdated = false;
+    let customerUpdatedFields = [];
+    let customerUpdateSkipped = null;
+    let customerUpdateStatus = null;
+    let customerUpdatesPayload = null;
+    if (approved && sale?.customerId && typeof lightspeed.updateCustomerById === 'function') {
+      try {
+        saleVerificationStore.addSessionLog(saleId, `Updating customer profile (${sale.customerId})...`, 'info');
+        const safeDate = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString().slice(0, 10) : null;
+
+        const updates = {
+          first_name: parsed.firstName,
+          last_name: parsed.lastName,
+          date_of_birth: safeDate(parsed.dob),
+          // Lightspeed customer field is `sex` (commonly "M"/"F" in their API payloads).
+          sex: parsed.sex,
+          // Lightspeed customer fields use ...address1/...address2 (no extra underscore before the number).
+          physical_address1: parsed.address1,
+          physical_address2: parsed.address2,
+          physical_suburb: parsed.suburb,
+          physical_city: parsed.city,
+          physical_state: parsed.state,
+          physical_postcode: parsed.postalCode,
+          postal_address1: parsed.address1,
+          postal_address2: parsed.address2,
+          postal_suburb: parsed.suburb,
+          postal_city: parsed.city,
+          postal_state: parsed.state,
+          postal_postcode: parsed.postalCode
+        };
+        customerUpdatesPayload = updates;
+
+        const result = await lightspeed.updateCustomerById(sale.customerId, updates, { fillBlanksOnly: true });
+        customerUpdated = Boolean(result?.updated);
+        customerUpdatedFields = Array.isArray(result?.fields) ? result.fields : [];
+        customerUpdateSkipped = result?.skipped || null;
+        customerUpdateStatus = result?.status || null;
+        saleVerificationStore.addSessionLog(
+          saleId,
+          customerUpdated ? `Customer updated (${customerUpdatedFields.length} fields)` : `Customer update skipped (${customerUpdateSkipped || 'no_changes'})`,
+          customerUpdated ? 'info' : 'warn'
+        );
+      } catch (e) {
+        customerUpdateSkipped = e?.message || 'update_failed';
+        saleVerificationStore.addSessionLog(saleId, `Customer update failed: ${customerUpdateSkipped}`, 'warn');
+        logger.warn({ event: 'customer_update_failed_from_scan', saleId, customerId: sale.customerId }, 'Failed to update customer from scan');
+      }
+    } else if (approved && !sale?.customerId) {
+      customerUpdateSkipped = 'no_customer_on_sale';
+      try {
+        const safeDate = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString().slice(0, 10) : null;
+        customerUpdatesPayload = {
+          first_name: parsed.firstName,
+          last_name: parsed.lastName,
+          date_of_birth: safeDate(parsed.dob),
+          sex: parsed.sex,
+          physical_address1: parsed.address1,
+          physical_address2: parsed.address2,
+          physical_suburb: parsed.suburb,
+          physical_city: parsed.city,
+          physical_state: parsed.state,
+          physical_postcode: parsed.postalCode,
+          postal_address1: parsed.address1,
+          postal_address2: parsed.address2,
+          postal_suburb: parsed.suburb,
+          postal_city: parsed.city,
+          postal_state: parsed.state,
+          postal_postcode: parsed.postalCode
+        };
+      } catch (e) {
+        customerUpdatesPayload = null;
+      }
     }
 
     // 5. Persist to Database FIRST (Dashboard Integration - CRITICAL)
@@ -712,6 +866,38 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     // 6. Update In-Memory Store (for Polling) - ONLY after DB save succeeds
     saleVerificationStore.updateVerification(saleId, verificationResult);
 
+    // 6.5 Queue a customer reconcile job so fields get filled even if loyalty customer attaches a few seconds later.
+    let customerReconcileQueued = false;
+    let customerReconcileReason = null;
+    try {
+      const canReconcile = approved && Boolean(db.pool) && typeof lightspeed.updateCustomerById === 'function' && customerUpdatesPayload;
+      const missingCustomer = canReconcile && (!sale || !sale.customerId);
+      const transientUpdateFailure =
+        canReconcile &&
+        Boolean(sale?.customerId) &&
+        !customerUpdated &&
+        !customerUpdateSkipped &&
+        [429, 500, 502, 503, 504].includes(Number(customerUpdateStatus || 0));
+
+      if (missingCustomer || transientUpdateFailure) {
+        const queued = await customerReconcileQueue.enqueueJob({
+          saleId,
+          verificationId,
+          fields: customerUpdatesPayload,
+          delayMs: 5000
+        });
+        customerReconcileQueued = Boolean(queued?.queued);
+        customerReconcileReason = missingCustomer ? 'no_customer_on_sale' : 'transient_customer_update_failure';
+        saleVerificationStore.addSessionLog(
+          saleId,
+          customerReconcileQueued ? 'Queued customer reconcile job' : `Customer reconcile not queued (${queued?.reason || 'unknown'})`,
+          customerReconcileQueued ? 'info' : 'warn'
+        );
+      }
+    } catch (e) {
+      logger.warn({ event: 'customer_reconcile_enqueue_failed', saleId, error: e.message }, 'Failed to enqueue customer reconcile job');
+    }
+
     // Final success logging
     console.log('===========================================');
     console.log('✅ SCAN PROCESSED SUCCESSFULLY');
@@ -730,7 +916,20 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       dob: parsed.dob && !isNaN(parsed.dob.getTime()) ? parsed.dob.toISOString().slice(0, 10) : null,
       reason,
       dbSaved,
-      noteUpdated
+      noteUpdated,
+      saleFetchOk: Boolean(sale && sale.saleId),
+      saleFetchAttempts,
+      saleFetchError,
+      saleCustomerId: sale?.customerId || null,
+      seenBefore,
+      priorVerificationCount,
+      lastSeenAt,
+      customerUpdated,
+      customerUpdatedFields,
+      customerUpdateSkipped,
+      customerUpdateStatus,
+      customerReconcileQueued,
+      customerReconcileReason
     });
 
   } catch (error) {
@@ -847,35 +1046,6 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
       sale,
       locationId
     });
-
-    if (db.pool) {
-      try {
-        await complianceStore.saveVerification({
-          verificationId: verification.verificationId || require('crypto').randomUUID(),
-          saleId,
-          clerkId,
-          status: normalizedScan.approved ? 'approved' : 'rejected',
-          reason: normalizedScan.reason,
-          firstName: normalizedScan.firstName,
-          lastName: normalizedScan.lastName,
-          dob: normalizedScan.dob,
-          age: normalizedScan.age,
-          documentType: normalizedScan.documentType,
-          documentNumber: normalizedScan.documentNumber,
-          issuingCountry: normalizedScan.issuingCountry,
-          nationality: normalizedScan.nationality,
-          sex: normalizedScan.sex,
-          source: normalizedScan.source || 'api_verify',
-          documentExpiry: normalizedScan.documentExpiry
-        }, {
-          locationId,
-          ipAddress: req.ip,
-          userAgent: req.get('user-agent')
-        });
-      } catch (dbError) {
-        logger.error('Failed to save api verification to DB', dbError);
-      }
-    }
 
     logger.logVerification(saleId, clerkId, normalizedScan.approved, normalizedScan.age, {
       documentType: normalizedScan.documentType,
@@ -1252,12 +1422,12 @@ router.post('/banned', validateBannedCreate, async (req, res) => {
   }
 
   const payload = {
-    documentType: req.body.documentType.trim(),
-    documentNumber: req.body.documentNumber.trim(),
-    issuingCountry: req.body.issuingCountry ? req.body.issuingCountry.trim() : null,
-    dateOfBirth: req.body.dateOfBirth || null,
-    firstName: req.body.firstName ? req.body.firstName.trim() : null,
-    lastName: req.body.lastName ? req.body.lastName.trim() : null,
+    documentType: normalizeDocumentType(req.body.documentType),
+    documentNumber: normalizeDocumentNumber(req.body.documentNumber),
+    issuingCountry: normalizeCountry(req.body.issuingCountry),
+    dateOfBirth: normalizeDateInput(req.body.dateOfBirth) || null,
+    firstName: req.body.firstName ? sanitizeString(req.body.firstName).trim() : null,
+    lastName: req.body.lastName ? sanitizeString(req.body.lastName).trim() : null,
     notes: req.body.notes ? sanitizeString(req.body.notes) : null
   };
 
@@ -1269,6 +1439,42 @@ router.post('/banned', validateBannedCreate, async (req, res) => {
     res.status(500).json({
       error: 'INTERNAL_ERROR',
       message: 'Unable to save banned customer.'
+    });
+  }
+});
+
+router.get('/banned', async (req, res) => {
+  if (!db.pool) {
+    return res.status(503).json({
+      error: 'BANNED_LIST_UNAVAILABLE',
+      message: 'Banned customer management requires DATABASE_URL to be configured.'
+    });
+  }
+
+  try {
+    const q = req.query?.q ? sanitizeString(req.query.q) : null;
+    const limit = req.query?.limit ? req.query.limit : undefined;
+    const offset = req.query?.offset ? req.query.offset : undefined;
+
+    const banned = await complianceStore.listBannedCustomers({
+      query: q,
+      limit,
+      offset
+    });
+
+    res.status(200).json({
+      success: true,
+      count: banned.length,
+      data: banned
+    });
+  } catch (error) {
+    logger.logAPIError('list_banned_customers', error, {
+      q: req.query?.q || null
+    });
+
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'Unable to load banned customers.'
     });
   }
 });
@@ -1610,8 +1816,8 @@ router.post('/sales/:saleId/verify-from-note', validateSaleId, async (req, res) 
 });
 
 /**
- * Cron job endpoint for data retention enforcement
- * Called daily by Vercel Cron to delete old records per TABC compliance
+ * Cron job endpoint for scheduled maintenance (retention + BI snapshots + customer profile sync)
+ * Called periodically by Vercel Cron; heavy tasks are gated to run once per local day.
  *
  * TABC requires 2-year retention (730 days)
  * This endpoint is protected by Vercel's internal cron authentication
@@ -1644,20 +1850,75 @@ router.post('/cron/retention', async (req, res) => {
   }
 
   try {
-    logger.info({ event: 'retention_started' }, 'Starting scheduled data retention enforcement');
+    const timeZone = (process.env.CRON_DAILY_TIMEZONE || 'America/Chicago').trim() || 'America/Chicago';
+    const dailyHour = Math.max(0, Math.min(23, Number.parseInt(process.env.CRON_DAILY_HOUR || '23', 10) || 23));
+    const dailyMinute = Math.max(0, Math.min(59, Number.parseInt(process.env.CRON_DAILY_MINUTE || '30', 10) || 30));
+    const daily = await shouldRunDailyMaintenance(db.pool, { timeZone, hour: dailyHour, minute: dailyMinute });
 
-    const result = await complianceStore.enforceRetention({
-      verificationDays: 730 // TABC 2-year requirement
-    });
+    logger.info(
+      { event: 'cron_tick', timeZone, dailyHour, dailyMinute, daily },
+      'Cron tick received'
+    );
 
-    logger.info({
-      event: 'retention_completed',
-      ...result
-    }, `Data retention completed: ${result.verificationsDeleted} verifications, ${result.completionsDeleted} completions, ${result.overridesDeleted} overrides deleted`);
+    let retentionResult = null;
+    let retentionSkipped = null;
+    let snapshotResult = null;
+
+    if (daily.shouldRun) {
+      logger.info({ event: 'retention_started', ymd: daily.ymd, timeZone }, 'Starting daily retention enforcement');
+      retentionResult = await complianceStore.enforceRetention({
+        verificationDays: 730 // TABC 2-year requirement
+      });
+
+      if (process.env.CRON_RUN_SNAPSHOTS === 'true') {
+        try {
+          const snapshots = require('../../api/cron/snapshots.js');
+          const mode = process.env.CRON_SNAPSHOT_MODE || 'all';
+          snapshotResult = await snapshots.runSnapshotJob({ mode });
+        } catch (snapshotError) {
+          logger.logAPIError('cron_snapshots_from_retention', snapshotError);
+        }
+      }
+    } else {
+      retentionSkipped = daily.lastRunYmd === daily.ymd ? 'already_ran_today' : 'not_due_yet';
+    }
+
+    let customerSyncResult = null;
+    if (process.env.CRON_RUN_CUSTOMER_SYNC === 'true') {
+      try {
+        const marketingService = require('./marketingService');
+        const maxDurationMs = Math.max(1000, Math.min(Number.parseInt(process.env.CRON_CUSTOMER_SYNC_MAX_DURATION_MS || '8000', 10) || 8000, 60000));
+        customerSyncResult = await marketingService.syncCustomerProfiles(db.pool, { maxDurationMs });
+      } catch (customerError) {
+        logger.logAPIError('cron_customer_sync_from_retention', customerError);
+      }
+    }
+
+    // Cleanup short-lived customer reconcile jobs (keeps PII from lingering unnecessarily).
+    let customerReconcileCleanup = null;
+    try {
+      const doneDays = Number.parseInt(process.env.CUSTOMER_RECONCILE_DONE_RETENTION_DAYS || '3', 10) || 3;
+      const pendingDays = Number.parseInt(process.env.CUSTOMER_RECONCILE_PENDING_RETENTION_DAYS || '2', 10) || 2;
+      customerReconcileCleanup = await customerReconcileQueue.cleanup({ doneDays, pendingDays });
+    } catch (cleanupError) {
+      logger.logAPIError('customer_reconcile_cleanup', cleanupError);
+    }
 
     res.status(200).json({
       success: true,
-      ...result
+      daily: {
+        shouldRun: daily.shouldRun,
+        ymd: daily.ymd,
+        timeZone,
+        localHour: daily.localHour,
+        localMinute: daily.localMinute,
+        lastRunYmd: daily.lastRunYmd || null
+      },
+      retention: retentionResult,
+      retentionSkipped,
+      customerSync: customerSyncResult,
+      snapshots: snapshotResult,
+      customerReconcileCleanup
     });
   } catch (error) {
     logger.logAPIError('retention_enforcement', error);
@@ -1670,21 +1931,308 @@ router.post('/cron/retention', async (req, res) => {
 
 // Cron job endpoint for retention enforcement
 router.get('/cron/retention', async (req, res) => {
-  // Verify that the request is authorized (Vercel cron jobs can be secured, or we rely on API key)
-  // For now, we'll rely on the global authenticateRequest middleware if it's applied to /api
+  const authHeader = req.headers.authorization;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid cron secret'
+    });
+  }
 
   if (!db.pool) {
     return res.status(503).json({ error: 'DB_UNAVAILABLE' });
   }
 
   try {
-    const results = await complianceStore.enforceRetention();
-    res.json({ data: results });
+    const timeZone = (process.env.CRON_DAILY_TIMEZONE || 'America/Chicago').trim() || 'America/Chicago';
+    const dailyHour = Math.max(0, Math.min(23, Number.parseInt(process.env.CRON_DAILY_HOUR || '23', 10) || 23));
+    const dailyMinute = Math.max(0, Math.min(59, Number.parseInt(process.env.CRON_DAILY_MINUTE || '30', 10) || 30));
+    const daily = await shouldRunDailyMaintenance(db.pool, { timeZone, hour: dailyHour, minute: dailyMinute });
+
+    let retentionResult = null;
+    let retentionSkipped = null;
+    if (daily.shouldRun) {
+      retentionResult = await complianceStore.enforceRetention({ verificationDays: 730 });
+    } else {
+      retentionSkipped = daily.lastRunYmd === daily.ymd ? 'already_ran_today' : 'not_due_yet';
+    }
+
+    let customerSyncResult = null;
+    if (process.env.CRON_RUN_CUSTOMER_SYNC === 'true') {
+      try {
+        const marketingService = require('./marketingService');
+        const maxDurationMs = Math.max(1000, Math.min(Number.parseInt(process.env.CRON_CUSTOMER_SYNC_MAX_DURATION_MS || '8000', 10) || 8000, 60000));
+        customerSyncResult = await marketingService.syncCustomerProfiles(db.pool, { maxDurationMs });
+      } catch (customerError) {
+        logger.logAPIError('cron_customer_sync_from_retention', customerError);
+      }
+    }
+    let snapshotResult = null;
+    if (daily.shouldRun && process.env.CRON_RUN_SNAPSHOTS === 'true') {
+      try {
+        const snapshots = require('../../api/cron/snapshots.js');
+        const mode = process.env.CRON_SNAPSHOT_MODE || 'all';
+        snapshotResult = await snapshots.runSnapshotJob({ mode });
+      } catch (snapshotError) {
+        logger.logAPIError('cron_snapshots_from_retention', snapshotError);
+      }
+    }
+
+    res.json({
+      success: true,
+      daily: {
+        shouldRun: daily.shouldRun,
+        ymd: daily.ymd,
+        timeZone,
+        localHour: daily.localHour,
+        localMinute: daily.localMinute,
+        lastRunYmd: daily.lastRunYmd || null
+      },
+      retention: retentionResult,
+      retentionSkipped,
+      customerSync: customerSyncResult,
+      snapshots: snapshotResult
+    });
   } catch (error) {
     logger.logAPIError('cron_retention', error);
     res.status(500).json({ error: 'INTERNAL_ERROR' });
   }
 });
+
+function verifyCronRequest(req) {
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers.authorization;
+  if (process.env.NODE_ENV === 'production' && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return false;
+  }
+  return true;
+}
+
+function timePartsInZone(date, timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(date);
+
+    const map = {};
+    for (const p of parts) {
+      if (p.type !== 'literal') map[p.type] = p.value;
+    }
+
+    return {
+      ymd: `${map.year}-${map.month}-${map.day}`,
+      hour: Number.parseInt(map.hour, 10),
+      minute: Number.parseInt(map.minute, 10)
+    };
+  } catch {
+    const iso = date.toISOString();
+    return { ymd: iso.slice(0, 10), hour: date.getUTCHours(), minute: date.getUTCMinutes() };
+  }
+}
+
+async function ensureCronStateTable(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cron_state (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+async function getCronState(pool, key) {
+  const { rows } = await pool.query('SELECT value FROM cron_state WHERE key = $1', [key]);
+  return rows[0]?.value ?? null;
+}
+
+async function setCronState(pool, key, value) {
+  await pool.query(
+    `
+      INSERT INTO cron_state (key, value, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (key)
+      DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `,
+    [key, value === null || value === undefined ? null : String(value)]
+  );
+}
+
+async function shouldRunDailyMaintenance(pool, { timeZone, hour, minute }) {
+  await ensureCronStateTable(pool);
+  const now = new Date();
+  const parts = timePartsInZone(now, timeZone);
+  const key = `daily_maintenance_last_run_${timeZone}`;
+  const lastRunYmd = await getCronState(pool, key);
+
+  const reached = (Number.isFinite(parts.hour) && Number.isFinite(parts.minute))
+    ? (parts.hour > hour || (parts.hour === hour && parts.minute >= minute))
+    : false;
+
+  if (!reached) {
+    return { shouldRun: false, ymd: parts.ymd, localHour: parts.hour, localMinute: parts.minute, lastRunYmd };
+  }
+
+  if (lastRunYmd === parts.ymd) {
+    return { shouldRun: false, ymd: parts.ymd, localHour: parts.hour, localMinute: parts.minute, lastRunYmd };
+  }
+
+  await setCronState(pool, key, parts.ymd);
+  return { shouldRun: true, ymd: parts.ymd, localHour: parts.hour, localMinute: parts.minute, lastRunYmd };
+}
+
+async function runSnapshotsCron(req, res) {
+  if (!verifyCronRequest(req)) {
+    logger.logSecurity('unauthorized_cron_attempt', {
+      ip: req.ip,
+      path: req.path
+    });
+    return res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid cron secret'
+    });
+  }
+
+  try {
+    const snapshots = require('../../api/cron/snapshots.js');
+    const mode = req.params?.mode || req.query?.mode || req.body?.mode || 'all';
+    const date = req.query?.date || req.body?.date || null;
+    const results = await snapshots.runSnapshotJob({ mode, date });
+    return res.status(200).json({ success: true, mode, ...results });
+  } catch (error) {
+    logger.logAPIError('cron_snapshots', error, { mode: req.query?.mode || null });
+    return res.status(500).json({
+      error: 'SNAPSHOT_FAILED',
+      message: error.message
+    });
+  }
+}
+
+router.get('/cron/snapshots', runSnapshotsCron);
+router.post('/cron/snapshots', runSnapshotsCron);
+router.get('/cron/snapshots/:mode', runSnapshotsCron);
+router.post('/cron/snapshots/:mode', runSnapshotsCron);
+
+async function runCustomerProfilesCron(req, res) {
+  if (!verifyCronRequest(req)) {
+    logger.logSecurity('unauthorized_cron_attempt', {
+      ip: req.ip,
+      path: req.path
+    });
+    return res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid cron secret'
+    });
+  }
+
+  if (!db.pool) {
+    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'Database not configured.' });
+  }
+
+  try {
+    const marketingService = require('./marketingService');
+    const resetCursor = ['1', 'true', 'yes', 'on'].includes(String(req.query?.reset || req.body?.reset || '').toLowerCase());
+    const pageSize = Math.max(1, Math.min(Number.parseInt(req.query?.pageSize || req.body?.pageSize || '200', 10) || 200, 200));
+    const maxPages = Math.max(1, Math.min(Number.parseInt(req.query?.maxPages || req.body?.maxPages || '50', 10) || 50, 500));
+    const maxDurationMs = Math.max(1000, Math.min(Number.parseInt(req.query?.maxDurationMs || req.body?.maxDurationMs || '8000', 10) || 8000, 60000));
+
+    const result = await marketingService.syncCustomerProfiles(db.pool, { resetCursor, pageSize, maxPages, maxDurationMs });
+    return res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    logger.logAPIError('cron_customers', error);
+    return res.status(500).json({
+      error: 'CUSTOMER_SYNC_FAILED',
+      message: error.message
+    });
+  }
+}
+
+router.get('/cron/customers', runCustomerProfilesCron);
+router.post('/cron/customers', runCustomerProfilesCron);
+
+async function runWebhooksCron(req, res) {
+  if (!verifyCronRequest(req)) {
+    logger.logSecurity('unauthorized_cron_attempt', {
+      ip: req.ip,
+      path: req.path
+    });
+    return res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid cron secret'
+    });
+  }
+
+  try {
+    const limit = Math.max(1, Math.min(Number.parseInt(req.query?.limit || req.body?.limit || '100', 10) || 100, 500));
+    const maxDurationMs = Math.max(
+      1000,
+      Math.min(Number.parseInt(req.query?.maxDurationMs || req.body?.maxDurationMs || '8000', 10) || 8000, 60000)
+    );
+
+    const result = await lightspeedWebhookQueue.processPendingWebhookEvents({ limit, maxDurationMs });
+    const health = await lightspeedWebhookQueue.getWebhookQueueHealth();
+
+    // Also run the customer reconcile queue here so webhook delivery can make customer autofill feel "instant".
+    // This is best-effort and will never fail the webhook processor response.
+    let customerReconcile = null;
+    try {
+      customerReconcile = await customerReconcileQueue.processDueJobs({
+        limit: Math.max(1, Math.min(limit, 200)),
+        maxDurationMs: Math.max(1000, Math.min(maxDurationMs, 8000))
+      });
+    } catch (e) {
+      logger.warn({ event: 'cron_customer_reconcile_failed', error: e.message }, 'Customer reconcile run failed');
+    }
+
+    return res.status(200).json({ success: true, ...result, health, customerReconcile });
+  } catch (error) {
+    logger.logAPIError('cron_webhooks', error);
+    return res.status(500).json({
+      error: 'WEBHOOK_PROCESS_FAILED',
+      message: error.message
+    });
+  }
+}
+
+router.get('/cron/webhooks', runWebhooksCron);
+router.post('/cron/webhooks', runWebhooksCron);
+
+async function runCustomerReconcileCron(req, res) {
+  if (!verifyCronRequest(req)) {
+    return res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Invalid cron secret'
+    });
+  }
+
+  try {
+    const limit = Math.max(1, Math.min(Number.parseInt(req.query?.limit || req.body?.limit || '150', 10) || 150, 500));
+    const maxDurationMs = Math.max(
+      1000,
+      Math.min(Number.parseInt(req.query?.maxDurationMs || req.body?.maxDurationMs || '8000', 10) || 8000, 60000)
+    );
+
+    const result = await customerReconcileQueue.processDueJobs({ limit, maxDurationMs });
+    const health = await customerReconcileQueue.getHealth();
+    return res.status(200).json({ success: true, ...result, health });
+  } catch (error) {
+    logger.logAPIError('cron_customer_reconcile', error);
+    return res.status(500).json({
+      error: 'CUSTOMER_RECONCILE_FAILED',
+      message: error.message
+    });
+  }
+}
+
+router.get('/cron/customer-reconcile', runCustomerReconcileCron);
+router.post('/cron/customer-reconcile', runCustomerReconcileCron);
 
 /**
  * POST /api/sales/:saleId/verify
@@ -1786,7 +2334,7 @@ router.get('/sales/:saleId/status', async (req, res) => {
   try {
     let verification = saleVerificationStore.getVerification(saleId);
 
-    // If not in memory, check database as fallback
+    // If not in memory, check database as fallback (single row only) and then create a live session so logs work.
     if (!verification && db.pool) {
       try {
         const result = await db.pool.query(
@@ -1796,45 +2344,40 @@ router.get('/sales/:saleId/status', async (req, res) => {
 
         if (result.rows.length > 0) {
           const row = result.rows[0];
-          // Map database row to verification format
-           verification = {
-             verificationId: row.verification_id,
-             saleId: row.sale_id,
-             status: row.status,
-             age: row.age,
-             reason: row.reason,
-             customerName: `${row.first_name || ''} ${row.last_name || ''}`.trim() || null
-           };
-          logger.info('Retrieved verification from database fallback', { saleId });
+          verification = saleVerificationStore.createVerification(saleId);
+          saleVerificationStore.updateVerification(saleId, {
+            approved: String(row.status || '').startsWith('approved'),
+            status: row.status,
+            age: row.age,
+            reason: row.reason,
+            customerName: `${row.first_name || ''} ${row.last_name || ''}`.trim() || null,
+            updatedAt: row.created_at || null
+          });
+          saleVerificationStore.addSessionLog(saleId, 'Loaded latest verification from DB fallback', 'info');
+          verification = saleVerificationStore.getVerification(saleId);
         }
       } catch (dbError) {
         logger.error('Failed to query database for verification', dbError);
-        // Continue to create pending verification
       }
     }
 
     if (!verification) {
-      // Create a new pending verification if it doesn't exist
-      // This handles the case where payment-gateway.html loads before verification is created
-      const newVerification = saleVerificationStore.createVerification(saleId);
-
-      return res.json({
-        saleId,
-        verificationId: null,
-        status: newVerification.status,
-        age: null,
-        reason: null,
-        customerName: null
-      });
+      verification = saleVerificationStore.createVerification(saleId);
     }
 
     res.json({
       saleId: verification.saleId,
       verificationId: verification.verificationId || null,
       status: verification.status,
-      age: verification.age,
-      reason: verification.reason,
-      customerName: verification.customerName
+      age: verification.age ?? null,
+      reason: verification.reason ?? null,
+      customerName: verification.customerName ?? null,
+      updatedAt: verification.updatedAt ? new Date(verification.updatedAt).toISOString() : null,
+      updatedAtMs: verification.updatedAt ? new Date(verification.updatedAt).getTime() : null,
+      remoteScannerActive: verification.remoteScannerActive,
+      lastHeartbeat: verification.lastHeartbeat,
+      logs: verification.logs || [],
+      expiresAt: verification.expiresAt
     });
   } catch (error) {
     logger.logAPIError('sale_status', error, { saleId });
@@ -1941,31 +2484,6 @@ router.post('/sales/:saleId/complete', async (req, res) => {
       message: 'Failed to complete verification'
     });
   }
-});
-
-router.get('/sales/:saleId/status', async (req, res) => {
-  const { saleId } = req.params;
-  const verification = saleVerificationStore.getVerification(saleId);
-
-  if (!verification) {
-    return res.status(404).json({
-      status: 'not_found',
-      message: 'Verification session not found or expired'
-    });
-  }
-
-  // Add Friendship metadata for frontend troubleshooting
-  res.json({
-    saleId: verification.saleId,
-    status: verification.status,
-    customerName: verification.customerName,
-    reason: verification.reason,
-    // Friendship Data
-    remoteScannerActive: verification.remoteScannerActive,
-    lastHeartbeat: verification.lastHeartbeat,
-    logs: verification.logs, // Full trace for "dev testing"
-    expiresAt: verification.expiresAt
-  });
 });
 
 module.exports = router;

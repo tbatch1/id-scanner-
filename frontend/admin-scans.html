@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>All Scans - THC Club Admin</title>
+    <link rel="stylesheet" href="/frontend/admin-shared.css" />
     <style>
         :root {
             color-scheme: dark;
@@ -111,6 +112,17 @@
             border: none;
             border-radius: 10px;
             color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .refresh-btn {
+            padding: 10px 20px;
+            background: rgba(34, 211, 238, 0.14);
+            border: 1px solid rgba(34, 211, 238, 0.35);
+            border-radius: 10px;
+            color: var(--ls-text);
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
@@ -262,6 +274,9 @@
 </head>
 
 <body>
+    <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+        <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+    </a>
     <div class="header">
         <h1>All ID Scans</h1>
     </div>
@@ -306,6 +321,7 @@
             </select>
 
             <button class="load-btn" onclick="loadScans(true)">Load Scans</button>
+            <button id="refreshNowBtn" class="refresh-btn" onclick="refreshNow()" disabled>Refresh Now</button>
         </div>
     </div>
 
@@ -338,15 +354,16 @@
             </div>
         </div>
         <div id="lastUpdate" style="font-size: 12px; color: rgba(244, 246, 255, 0.5); text-align: center; padding: 8px; margin-top: 8px;">
-            Auto-refresh: Every 10 seconds
+            Updates come from the backend every ~60 seconds. Tap Refresh Now to pull the latest.
         </div>
     </div>
 
     <div class="nav-links">
-
-        <a href="admin-audit.html" class="nav-link">Transaction Audit</a>
-        <a href="admin-banned.html" class="nav-link">Banned Customers</a>
-        <a href="admin-overrides.html" class="nav-link">Override History</a>
+        <a href="/admin/data-center.html" class="nav-link">Manager Dashboard</a>
+        <a href="/admin/marketing.html" class="nav-link">Marketing Analytics</a>
+        <a href="/admin/audit.html" class="nav-link">Transaction Audit</a>
+        <a href="/admin/banned.html" class="nav-link">Banned Customers</a>
+        <a href="/admin/overrides.html" class="nav-link">Override History</a>
     </div>
 
     <script>
@@ -354,7 +371,7 @@
         let currentLimit = 100;
         let hasMore = false;
 
-        async function loadScans(reset = false) {
+        async function loadScans(reset = false, { force = false, keepTable = false } = {}) {
             if (reset) {
                 currentPage = 0;
             }
@@ -364,7 +381,9 @@
             currentLimit = parseInt(document.getElementById('limitFilter').value);
 
             const tbody = document.getElementById('scansTableBody');
-            tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
+            if (!keepTable) {
+                tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
+            }
 
             try {
                 const params = new URLSearchParams();
@@ -372,6 +391,7 @@
                 if (status) params.append('status', status);
                 params.append('limit', currentLimit + 1); // Request +1 to check if there are more
                 params.append('offset', currentPage * currentLimit);
+                if (force) params.append('force', '1');
 
                 const response = await fetch(`/admin/scans?${params}`);
                 const data = await response.json();
@@ -418,6 +438,9 @@
                 }).join('');
 
                 tbody.innerHTML = html;
+                updateLastRefreshTime(data.generatedAt || null, Boolean(data.cached));
+                const refreshBtn = document.getElementById('refreshNowBtn');
+                if (refreshBtn) refreshBtn.disabled = false;
 
                 // Update pagination info
                 const start = currentPage * currentLimit + 1;
@@ -449,61 +472,46 @@
         function nextPage() {
             if (hasMore) {
                 currentPage++;
-                loadScans(false);
+                loadScans(false, { keepTable: false });
             }
         }
 
         function previousPage() {
             if (currentPage > 0) {
                 currentPage--;
-                loadScans(false);
+                loadScans(false, { keepTable: false });
             }
         }
 
-        // Auto-refresh functionality
-        let autoRefreshInterval = null;
-        let lastUpdateTime = null;
-
-        function startAutoRefresh() {
-            // Only refresh if page is visible
-            if (!document.hidden) {
-                loadScans(false); // Don't reset page
-                updateLastRefreshTime();
-            }
-        }
-
-        function updateLastRefreshTime() {
-            lastUpdateTime = new Date();
+        function updateLastRefreshTime(isoTimestamp = null, cached = false) {
+            const lastUpdateTime = isoTimestamp ? new Date(isoTimestamp) : new Date();
             const timeStr = lastUpdateTime.toLocaleTimeString();
             const updateIndicator = document.getElementById('lastUpdate');
             if (updateIndicator) {
-                updateIndicator.textContent = `Last updated: ${timeStr} • Auto-refresh: Every 10 seconds`;
+                updateIndicator.textContent = `Last updated: ${timeStr}${cached ? ' • cached' : ''} • Backend updates ~60s • Tap Refresh Now for latest`;
             }
         }
 
-        // Auto-load on page load
-        window.addEventListener('load', () => {
-            loadScans(true);
-            updateLastRefreshTime();
-            // Start auto-refresh after initial load
-            autoRefreshInterval = setInterval(startAutoRefresh, 10000); // 10 seconds
-        });
-
-        // Pause/resume based on page visibility
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                // Pause auto-refresh when tab is hidden
-                if (autoRefreshInterval) {
-                    clearInterval(autoRefreshInterval);
-                    autoRefreshInterval = null;
-                }
-            } else {
-                // Resume auto-refresh when tab becomes visible
-                if (!autoRefreshInterval) {
-                    autoRefreshInterval = setInterval(startAutoRefresh, 10000);
-                    startAutoRefresh(); // Immediate refresh when returning
+        async function refreshNow() {
+            const btn = document.getElementById('refreshNowBtn');
+            const oldLabel = btn ? btn.textContent : null;
+            if (btn) {
+                btn.textContent = 'Refreshing...';
+                btn.disabled = true;
+            }
+            try {
+                await loadScans(false, { force: true, keepTable: true });
+            } finally {
+                if (btn) {
+                    btn.textContent = oldLabel || 'Refresh Now';
+                    btn.disabled = false;
                 }
             }
+        }
+
+        // Load once on page load (no auto-refresh; prevents flicker + resets).
+        window.addEventListener('load', () => {
+            loadScans(true, { keepTable: false });
         });
     </script>
 </body>

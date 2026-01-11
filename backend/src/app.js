@@ -12,6 +12,8 @@ const apiRoutes = require('./routes');
 const adminRoutes = require('./adminRoutes');
 const scanSessionRoutes = require('./scanSessionRoutes');
 const terminalRoutes = require('./terminalRoutes');
+const oauthRoutes = require('./oauthRoutes');
+const lightspeedWebhookRoutes = require('./lightspeedWebhookRoutes');
 
 const app = express();
 
@@ -113,6 +115,9 @@ app.use(
   })
 );
 
+// Webhooks need raw body for signature verification. Mount before JSON parsing.
+app.use('/api/webhooks/lightspeed', lightspeedWebhookRoutes);
+
 app.use(express.json({ limit: '1mb' }));
 
 // Scan sessions - Production ready for high volume (13 locations, 500+ scans/day)
@@ -147,6 +152,7 @@ app.use('/admin', adminAuth, adminRoutes);
 // Note: Sale verification routes (/api/sales/*) use optionalAuth to allow iframe access
 app.use('/api/scan-sessions', authenticateRequest, scanSessionRoutes);
 app.use('/api/terminal', optionalAuth, terminalRoutes);
+app.use('/api/auth', optionalAuth, oauthRoutes);
 app.use('/api', optionalAuth, apiRoutes);
 
 const frontendDir = path.resolve(__dirname, '..', '..', 'frontend');

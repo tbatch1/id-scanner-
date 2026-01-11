@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Marketing Analytics - THC Club Admin</title>
+  <link rel="stylesheet" href="/frontend/admin-shared.css" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --panel: rgba(17, 24, 39, 0.65);
+      --border: rgba(255, 255, 255, 0.10);
+      --text: #f4f6ff;
+      --muted: rgba(244, 246, 255, 0.65);
+      --blue: #60a5fa;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #fb7185;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at top, rgba(90, 84, 255, 0.22), transparent 55%),
+        radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.16), transparent 50%),
+        var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 18px 16px 28px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.02em;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      background: rgba(96, 165, 250, 0.14);
+      border: 1px solid rgba(96, 165, 250, 0.35);
+      color: #dbeafe;
+      white-space: nowrap;
+    }
+
+    .pill.warn {
+      background: rgba(251, 191, 36, 0.14);
+      border-color: rgba(251, 191, 36, 0.35);
+      color: #fef3c7;
+    }
+
+    .pill.bad {
+      background: rgba(251, 113, 133, 0.14);
+      border-color: rgba(251, 113, 133, 0.35);
+      color: #ffe4e6;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    select,
+    button,
+    input {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    button {
+      cursor: pointer;
+      border-color: rgba(52, 211, 153, 0.35);
+      background: rgba(52, 211, 153, 0.14);
+      font-weight: 650;
+    }
+
+    button.secondary {
+      border-color: rgba(96, 165, 250, 0.35);
+      background: rgba(96, 165, 250, 0.14);
+      color: #dbeafe;
+    }
+
+    button.warn {
+      border-color: rgba(251, 191, 36, 0.35);
+      background: rgba(251, 191, 36, 0.14);
+      color: #fef3c7;
+    }
+
+    button:active {
+      transform: scale(0.99);
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    @media (max-width: 1100px) {
+      .grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .grid {
+        grid-template-columns: repeat(1, 1fr);
+      }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 12px 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .kpi {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .kpi .value {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+
+    .kpi .label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 16px 0 8px;
+      flex-wrap: wrap;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 15px;
+      color: #e5e7eb;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th,
+    td {
+      padding: 12px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: rgba(15, 23, 42, 0.55);
+      position: sticky;
+      top: 0;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .split {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .mini-list {
+      display: grid;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .mini-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 13px;
+    }
+
+    .mini-item span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .nav-links {
+      margin-top: 18px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .nav-link {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(17, 24, 39, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      max-width: 92vw;
+      display: none;
+    }
+
+    .toast.show {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+    <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+  </a>
+  <div class="wrap">
+    <div class="header">
+      <h1>Marketing Analytics</h1>
+      <div class="pill" id="healthPill">Loading customer profiles…</div>
+    </div>
+
+    <div class="controls">
+      <select id="daysSelect">
+        <option value="30">Last 30 days</option>
+        <option value="90" selected>Last 90 days</option>
+        <option value="180">Last 180 days</option>
+        <option value="365">Last 365 days</option>
+      </select>
+      <button class="secondary" id="refreshBtn">Refresh</button>
+      <button id="syncBtn">Sync Customers</button>
+      <button class="warn" id="resetSyncBtn" title="Rebuild cursor from scratch (runs incremental chunks)">Reset Sync</button>
+      <input id="adminTokenInput" placeholder="Admin token (optional)" style="flex:1;min-width:240px" />
+      <button class="secondary" id="saveTokenBtn">Save Token</button>
+    </div>
+
+    <div class="grid" id="kpiGrid"></div>
+
+    <div class="split">
+      <div class="card">
+        <div class="kpi">
+          <div>
+            <div class="label">Top ZIP Codes</div>
+            <div class="muted">Where your customers are (from customer profiles).</div>
+          </div>
+        </div>
+        <div class="mini-list" id="topZips"></div>
+      </div>
+      <div class="card">
+        <div class="kpi">
+          <div>
+            <div class="label">Top Cities</div>
+            <div class="muted">Useful for local campaigns and store targeting.</div>
+          </div>
+        </div>
+        <div class="mini-list" id="topCities"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 14px;">
+      <div class="kpi">
+        <div>
+          <div class="label">Age Distribution (from DOB)</div>
+          <div class="muted">Helps target promos; based on customer profile DOB (not scan logs).</div>
+        </div>
+      </div>
+      <div class="mini-list" id="ageBuckets"></div>
+    </div>
+
+    <div class="section-title">
+      <h2>Segments</h2>
+      <div class="muted">Export CSV for email/SMS/CRM uploads.</div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Segment</th>
+            <th>Description</th>
+            <th>Count</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="segmentsBody">
+          <tr>
+            <td colspan="4" class="muted">Loading segments…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-title">
+      <h2 id="segmentTitle">Segment Preview</h2>
+      <div class="controls" style="margin:0">
+        <button class="secondary" id="prevPageBtn">Prev</button>
+        <button class="secondary" id="nextPageBtn">Next</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr id="segmentColumns"></tr>
+        </thead>
+        <tbody id="segmentRows">
+          <tr>
+            <td class="muted">Select a segment…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="nav-links">
+      <a href="/admin/data-center.html" class="nav-link">Data Center</a>
+      <a href="/admin/scans.html" class="nav-link">All Scans</a>
+      <a href="/admin/banned.html" class="nav-link">Banned Customers</a>
+      <a href="/admin/overrides.html" class="nav-link">Override History</a>
+      <a href="/admin/audit.html" class="nav-link">Transaction Audit</a>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const state = {
+      days: 90,
+      currentSegment: null,
+      limit: 50,
+      offset: 0,
+      segmentColumns: []
+    };
+
+    function showToast(message) {
+      const el = document.getElementById('toast');
+      el.textContent = message;
+      el.classList.add('show');
+      window.clearTimeout(showToast._t);
+      showToast._t = window.setTimeout(() => el.classList.remove('show'), 3400);
+    }
+
+    function getAdminToken() {
+      return (localStorage.getItem('ADMIN_TOKEN') || '').trim();
+    }
+
+    function setAdminToken(token) {
+      if (!token) {
+        localStorage.removeItem('ADMIN_TOKEN');
+        return;
+      }
+      localStorage.setItem('ADMIN_TOKEN', token);
+    }
+
+    async function apiFetch(path, options = {}) {
+      const headers = new Headers(options.headers || {});
+      const token = getAdminToken();
+      if (token) headers.set('x-admin-token', token);
+      const response = await fetch(path, { ...options, headers });
+      if (response.status === 401) {
+        showToast('Unauthorized (admin token). Paste token above and click Save Token.');
+      }
+      return response;
+    }
+
+    function formatNumber(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return '--';
+      return new Intl.NumberFormat().format(num);
+    }
+
+    function renderKpis(summary) {
+      const grid = document.getElementById('kpiGrid');
+      grid.innerHTML = '';
+
+      const customers = summary?.customers || {};
+      const activity = summary?.activity || {};
+
+      const cards = [
+        { label: 'Total Customers', value: formatNumber(customers.total_customers) },
+        { label: `Active (last ${state.days}d)`, value: formatNumber(activity.active_customers) },
+        { label: 'With Email', value: formatNumber(customers.with_email) },
+        { label: 'With Phone/Mobile', value: formatNumber(customers.with_phone) },
+        { label: 'DOB Collected', value: formatNumber(customers.with_dob) },
+        { label: 'Gender Collected', value: formatNumber(customers.with_sex) },
+        { label: 'ZIP Collected', value: formatNumber(customers.with_postcode) },
+        { label: 'Loyalty Enabled', value: formatNumber(customers.loyalty_enabled) }
+      ];
+
+      for (const card of cards) {
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.innerHTML = `
+          <div class="kpi">
+            <div class="value">${card.value}</div>
+            <div class="label">${card.label}</div>
+          </div>
+        `;
+        grid.appendChild(el);
+      }
+    }
+
+    function renderMiniList(containerId, rows, keyLabel) {
+      const el = document.getElementById(containerId);
+      el.innerHTML = '';
+      if (!rows || !rows.length) {
+        el.innerHTML = `<div class="muted">No data yet.</div>`;
+        return;
+      }
+      for (const row of rows) {
+        const item = document.createElement('div');
+        item.className = 'mini-item';
+        item.innerHTML = `
+          <div>${row[keyLabel] || '--'}</div>
+          <span>${formatNumber(row.count)}</span>
+        `;
+        el.appendChild(item);
+      }
+    }
+
+    function renderSegments(segments) {
+      const body = document.getElementById('segmentsBody');
+      if (!segments || !segments.length) {
+        body.innerHTML = `<tr><td colspan="4" class="muted">No segments available.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = '';
+      for (const seg of segments) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${seg.name}</td>
+          <td class="muted">${seg.description}</td>
+          <td>${formatNumber(seg.count)}</td>
+          <td>
+            <button class="secondary" data-action="view" data-id="${seg.id}">View</button>
+            <button class="secondary" data-action="csv" data-id="${seg.id}">CSV</button>
+          </td>
+        `;
+        body.appendChild(tr);
+      }
+
+      body.querySelectorAll('button[data-action]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          const action = btn.getAttribute('data-action');
+          if (action === 'view') {
+            state.currentSegment = id;
+            state.offset = 0;
+            loadSegment().then(() => {
+              const titleEl = document.getElementById('segmentTitle');
+              if (titleEl && typeof titleEl.scrollIntoView === 'function') {
+                titleEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            });
+          } else if (action === 'csv') {
+            const url = `/admin/marketing/segments/${encodeURIComponent(id)}?format=csv&days=${state.days}&limit=500&offset=0`;
+            window.open(url, '_blank', 'noopener');
+          }
+        });
+      });
+    }
+
+    function renderSegmentTable(customers) {
+      const columnsEl = document.getElementById('segmentColumns');
+      const rowsEl = document.getElementById('segmentRows');
+
+      if (!customers || !customers.length) {
+        columnsEl.innerHTML = `<th>Customer</th>`;
+        rowsEl.innerHTML = `<tr><td class="muted">No results.</td></tr>`;
+        state.segmentColumns = [];
+        return;
+      }
+
+      const keys = Object.keys(customers[0]);
+      state.segmentColumns = keys;
+
+      columnsEl.innerHTML = keys.map((k) => `<th>${k.replace(/_/g, ' ')}</th>`).join('');
+      rowsEl.innerHTML = customers
+        .map((row) => `<tr>${keys.map((k) => `<td>${row[k] === null || row[k] === undefined ? '' : String(row[k])}</td>`).join('')}</tr>`)
+        .join('');
+    }
+
+    function setHealthPill(health) {
+      const pill = document.getElementById('healthPill');
+      const count = health?.profilesCount ?? 0;
+      const lastSyncedAt = health?.lastSyncedAt ? new Date(health.lastSyncedAt).toLocaleString() : 'never';
+      const cursor = health?.cursor ?? null;
+      const ok = count > 0;
+
+      pill.className = 'pill' + (ok ? '' : ' warn');
+      pill.textContent = `Profiles: ${formatNumber(count)} • Last sync: ${lastSyncedAt}` + (cursor ? ` • Cursor: ${cursor}` : '');
+    }
+
+    async function loadHealth() {
+      const res = await apiFetch('/admin/marketing/health');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setHealthPill({ profilesCount: 0, lastSyncedAt: null });
+        showToast(data.message || 'Failed to load marketing health.');
+        return;
+      }
+      setHealthPill(data);
+    }
+
+    async function loadSummaryAndSegments() {
+      const [summaryRes, segRes] = await Promise.all([
+        apiFetch(`/admin/marketing/summary?days=${state.days}`),
+        apiFetch(`/admin/marketing/segments?days=${state.days}`)
+      ]);
+
+      const summary = await summaryRes.json().catch(() => ({}));
+      const segPayload = await segRes.json().catch(() => ({}));
+
+      if (!summaryRes.ok) {
+        showToast(summary.message || 'Failed to load marketing summary.');
+      } else {
+        renderKpis(summary);
+        renderMiniList('topZips', summary.topZips, 'zip');
+        renderMiniList('topCities', summary.topCities, 'city');
+        renderMiniList('ageBuckets', summary.ageBuckets, 'bucket');
+      }
+
+      if (!segRes.ok) {
+        showToast(segPayload.message || 'Failed to load segments.');
+      } else {
+        renderSegments(segPayload.segments);
+        if (!state.currentSegment && Array.isArray(segPayload.segments) && segPayload.segments.length) {
+          state.currentSegment = segPayload.segments[0].id;
+          state.offset = 0;
+          loadSegment();
+        } else if (state.currentSegment) {
+          loadSegment();
+        }
+      }
+    }
+
+    async function loadSegment() {
+      const segment = state.currentSegment;
+      if (!segment) return;
+      document.getElementById('segmentTitle').textContent = `Segment Preview: ${segment}`;
+
+      const url = `/admin/marketing/segments/${encodeURIComponent(segment)}?days=${state.days}&limit=${state.limit}&offset=${state.offset}`;
+      const res = await apiFetch(url);
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        renderSegmentTable([]);
+        showToast(payload.message || 'Failed to load segment.');
+        return;
+      }
+      renderSegmentTable(payload.customers);
+      showToast(`Loaded ${payload.count ?? (payload.customers?.length ?? 0)} record(s).`);
+    }
+
+    async function runSync(reset = false) {
+      showToast(reset ? 'Resetting cursor and syncing…' : 'Syncing customer profiles…');
+      const params = new URLSearchParams();
+      if (reset) params.set('reset', 'true');
+      const res = await apiFetch('/admin/marketing/sync?' + params.toString(), { method: 'POST' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(payload.message || 'Customer sync failed.');
+        return;
+      }
+      showToast(payload.done ? 'Sync complete.' : 'Sync chunk complete (more remaining). Run again if needed.');
+      setHealthPill(payload.health);
+      await loadSummaryAndSegments();
+    }
+
+    document.getElementById('daysSelect').addEventListener('change', (e) => {
+      state.days = Number(e.target.value) || 90;
+      state.offset = 0;
+      loadSummaryAndSegments();
+      if (state.currentSegment) loadSegment();
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      loadHealth();
+      loadSummaryAndSegments();
+      if (state.currentSegment) loadSegment();
+    });
+
+    document.getElementById('syncBtn').addEventListener('click', () => runSync(false));
+    document.getElementById('resetSyncBtn').addEventListener('click', () => runSync(true));
+
+    document.getElementById('saveTokenBtn').addEventListener('click', () => {
+      const token = document.getElementById('adminTokenInput').value.trim();
+      setAdminToken(token);
+      showToast(token ? 'Admin token saved.' : 'Admin token cleared.');
+      loadHealth();
+      loadSummaryAndSegments();
+      if (state.currentSegment) loadSegment();
+    });
+
+    document.getElementById('prevPageBtn').addEventListener('click', () => {
+      state.offset = Math.max(0, state.offset - state.limit);
+      loadSegment();
+    });
+
+    document.getElementById('nextPageBtn').addEventListener('click', () => {
+      state.offset += state.limit;
+      loadSegment();
+    });
+
+    document.getElementById('adminTokenInput').value = getAdminToken();
+
+    loadHealth();
+    loadSummaryAndSegments();
+  </script>
+</body>
+
+</html>

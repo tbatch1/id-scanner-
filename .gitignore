@@ -26,3 +26,9 @@ Thumbs.db
 coverage/
 
 .vercel
+
+# Local scratch
+.tmp_pdfs/
+.tmp_ls_v2.yml
+
+.tmp_ls_v2.yml

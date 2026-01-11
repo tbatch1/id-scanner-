@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Banned Customers - THC Club Admin</title>
+    <link rel="stylesheet" href="/frontend/admin-shared.css" />
     <style>
         :root {
             color-scheme: dark;
@@ -322,6 +323,9 @@
 </head>
 
 <body>
+    <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+        <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+    </a>
     <div class="header">
         <h1>Banned Customers</h1>
     </div>
@@ -330,33 +334,54 @@
         <div class="form-title">Add Banned Customer</div>
 
         <div class="form-row">
-            <input type="text" id="firstName" class="form-input" placeholder="First Name (required)" />
-            <input type="text" id="lastName" class="form-input" placeholder="Last Name (required)" />
+            <select id="documentType" class="form-input" style="min-width: 220px;">
+                <option value="drivers_license">Driver License</option>
+                <option value="id_card">ID Card</option>
+                <option value="passport">Passport</option>
+                <option value="mrz_id">MRZ ID</option>
+                <option value="routed_id">Routed ID (internal)</option>
+            </select>
+            <input type="text" id="documentNumber" class="form-input" placeholder="Document Number (scan or type)" />
         </div>
 
         <div class="form-row">
-            <input type="tel" id="phone" class="form-input" placeholder="Phone Number (optional)" />
-            <input type="email" id="email" class="form-input" placeholder="Email (optional)" />
+            <input type="text" id="issuingCountry" class="form-input" placeholder="Issuing Country (e.g., USA)" value="USA" />
+            <input type="date" id="dateOfBirth" class="form-input" placeholder="Date of Birth (optional)" />
         </div>
 
-        <input type="hidden" id="documentNumber" />
-        <input type="hidden" id="documentType" value="routed_id" />
+        <div class="form-row">
+            <input type="text" id="firstName" class="form-input" placeholder="First Name (optional)" />
+            <input type="text" id="lastName" class="form-input" placeholder="Last Name (optional)" />
+        </div>
+
+        <textarea id="notes" class="form-textarea" placeholder="Notes (optional)"></textarea>
 
         <button class="add-btn" onclick="addBanned()">Add to Banned List</button>
-        <button class="refresh-btn" onclick="loadBanned()">Refresh List</button>
+        <button class="refresh-btn" onclick="generateRoutedId()">Generate Routed ID</button>
+        <button class="refresh-btn" onclick="clearForm()">Clear</button>
     </div>
 
     <div class="table-container">
-        <div class="table-header">Banned Customer List</div>
+        <div class="table-header">
+            Banned Customer List
+            <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap:wrap;">
+                <input type="text" id="search" class="form-input" style="flex: 1; min-width: 240px;" placeholder="Search by doc #, name, or notes" />
+                <button class="refresh-btn" onclick="loadBanned()">Search</button>
+                <button class="refresh-btn" onclick="resetSearch()">Reset</button>
+            </div>
+            <div id="bannedMeta" style="margin-top: 10px; font-size: 13px; color: rgba(244, 246, 255, 0.65);"></div>
+        </div>
         <div id="bannedList" class="banned-list">
             <div class="loading">Loading...</div>
         </div>
     </div>
 
     <div class="nav-links">
-
-        <a href="admin-scans.html" class="nav-link">View All Scans</a>
-        <a href="admin-overrides.html" class="nav-link">Override History</a>
+        <a href="/admin/data-center.html" class="nav-link">Manager Dashboard</a>
+        <a href="/admin/marketing.html" class="nav-link">Marketing Analytics</a>
+        <a href="/admin/scans.html" class="nav-link">View All Scans</a>
+        <a href="/admin/audit.html" class="nav-link">Transaction Audit</a>
+        <a href="/admin/overrides.html" class="nav-link">Override History</a>
     </div>
 
     <div id="confirmModal" class="modal-overlay">
@@ -374,12 +399,50 @@
     </div>
 
     <script>
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function clearForm() {
+            document.getElementById('documentType').value = 'drivers_license';
+            document.getElementById('documentNumber').value = '';
+            document.getElementById('issuingCountry').value = 'USA';
+            document.getElementById('dateOfBirth').value = '';
+            document.getElementById('firstName').value = '';
+            document.getElementById('lastName').value = '';
+            document.getElementById('notes').value = '';
+        }
+
+        function generateRoutedId() {
+            const routedId = `RT-${Date.now()}-${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
+            document.getElementById('documentType').value = 'routed_id';
+            document.getElementById('documentNumber').value = routedId;
+            document.getElementById('issuingCountry').value = 'USA';
+        }
+
+        function resetSearch() {
+            document.getElementById('search').value = '';
+            loadBanned();
+        }
+
         async function loadBanned() {
             const listContainer = document.getElementById('bannedList');
+            const meta = document.getElementById('bannedMeta');
             listContainer.innerHTML = '<div class="loading">Loading...</div>';
+            meta.textContent = '';
 
             try {
-                const response = await fetch('/api/banned');
+                const q = document.getElementById('search').value.trim();
+                const url = new URL('/api/banned', window.location.origin);
+                if (q) url.searchParams.set('q', q);
+                url.searchParams.set('limit', '500');
+
+                const response = await fetch(url.toString());
                 const data = await response.json();
 
                 if (!response.ok) {
@@ -387,6 +450,7 @@
                 }
 
                 const banned = data.data || data.banned || [];
+                meta.textContent = `${banned.length} result(s)${q ? ` for "${q}"` : ''}`;
 
                 if (banned.length === 0) {
                     listContainer.innerHTML = '<div class="empty">No banned customers</div>';
@@ -395,16 +459,28 @@
 
                 const html = banned.map(item => {
                     const name = [item.firstName, item.lastName].filter(Boolean).join(' ') || 'Unknown';
-                    const created = new Date(item.createdAt).toLocaleDateString();
+                    const created = item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'n/a';
+                    const docType = item.documentType ? String(item.documentType).replace(/_/g, ' ') : 'unknown';
+                    const country = item.issuingCountry || '—';
+                    const dob = item.dateOfBirth ? new Date(item.dateOfBirth).toISOString().slice(0, 10) : null;
+                    const removeId = JSON.stringify(String(item.id));
+                    const removeName = JSON.stringify(name);
+                    const detailsParts = [
+                        `Doc: ${escapeHtml(docType)}`,
+                        `# ${escapeHtml(item.documentNumber)}`,
+                        `Country: ${escapeHtml(country)}`,
+                        dob ? `DOB: ${escapeHtml(dob)}` : null,
+                        `Added: ${escapeHtml(created)}`
+                    ].filter(Boolean);
 
                     return `
                         <div class="banned-item">
                             <div class="banned-info">
-                                <div class="banned-doc">${name}</div>
-                                <div class="banned-details">Routed ID: ${item.documentNumber} | Added: ${created}</div>
-                                ${item.notes ? `<div class="banned-note">${item.notes}</div>` : ''}
+                                <div class="banned-doc">${escapeHtml(name)}</div>
+                                <div class="banned-details">${detailsParts.join(' | ')}</div>
+                                ${item.notes ? `<div class="banned-note">${escapeHtml(item.notes)}</div>` : ''}
                             </div>
-                            <button class="remove-btn" onclick="showRemoveModal('${item.id}', '${name}')">Remove</button>
+                            <button class="remove-btn" onclick="showRemoveModal(${removeId}, ${removeName})">Remove</button>
                         </div>
                     `;
                 }).join('');
@@ -418,23 +494,23 @@
         }
 
         async function addBanned() {
-            const firstName = document.getElementById('firstName').value;
-            const lastName = document.getElementById('lastName').value;
-            const phone = document.getElementById('phone').value;
-            const email = document.getElementById('email').value;
+            const documentType = document.getElementById('documentType').value;
+            let documentNumber = document.getElementById('documentNumber').value.trim();
+            const issuingCountry = document.getElementById('issuingCountry').value.trim();
+            const dateOfBirth = document.getElementById('dateOfBirth').value;
+            const firstName = document.getElementById('firstName').value.trim();
+            const lastName = document.getElementById('lastName').value.trim();
+            const notes = document.getElementById('notes').value.trim();
 
-            if (!firstName || !lastName) {
-                alert('First name and last name are required');
-                return;
+            if (!documentNumber) {
+                if (documentType === 'routed_id') {
+                    generateRoutedId();
+                    documentNumber = document.getElementById('documentNumber').value.trim();
+                } else {
+                    alert('Document number is required');
+                    return;
+                }
             }
-
-            // Generate unique routed ID tracking number
-            const routedId = `RT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-
-            // Store in hidden field for reference
-            document.getElementById('documentNumber').value = routedId;
-
-            const notes = `Phone: ${phone || 'N/A'} | Email: ${email || 'N/A'} | Routed ID: ${routedId}`;
 
             try {
                 const response = await fetch('/api/banned', {
@@ -443,12 +519,13 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        documentType: 'routed_id',
-                        documentNumber: routedId,
-                        issuingCountry: 'USA',
-                        firstName,
-                        lastName,
-                        notes
+                        documentType,
+                        documentNumber,
+                        issuingCountry: issuingCountry || null,
+                        dateOfBirth: dateOfBirth || null,
+                        firstName: firstName || null,
+                        lastName: lastName || null,
+                        notes: notes || null
                     })
                 });
 
@@ -458,13 +535,8 @@
                     throw new Error(data.message || 'Failed to add banned customer');
                 }
 
-                alert(`Customer banned successfully!\nRouted ID: ${routedId}`);
-
-                // Clear form
-                document.getElementById('firstName').value = '';
-                document.getElementById('lastName').value = '';
-                document.getElementById('phone').value = '';
-                document.getElementById('email').value = '';
+                alert('Customer banned successfully!');
+                clearForm();
 
                 // Reload list
                 loadBanned();
@@ -527,6 +599,13 @@
         // Auto-load on page load
         window.addEventListener('load', () => {
             loadBanned();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'search') {
+                e.preventDefault();
+                loadBanned();
+            }
         });
     </script>
 </body>

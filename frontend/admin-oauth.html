@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OAuth Setup - THC Club Admin</title>
+  <link rel="stylesheet" href="/frontend/admin-shared.css" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --panel: rgba(17, 24, 39, 0.65);
+      --border: rgba(255, 255, 255, 0.10);
+      --text: #f4f6ff;
+      --muted: rgba(244, 246, 255, 0.65);
+      --blue: #60a5fa;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #fb7185;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at top, rgba(90, 84, 255, 0.22), transparent 55%),
+        radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.16), transparent 50%),
+        var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 18px 16px 28px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.02em;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      background: rgba(96, 165, 250, 0.14);
+      border: 1px solid rgba(96, 165, 250, 0.35);
+      color: #dbeafe;
+      white-space: nowrap;
+    }
+
+    .pill.warn {
+      background: rgba(251, 191, 36, 0.14);
+      border-color: rgba(251, 191, 36, 0.35);
+      color: #fef3c7;
+    }
+
+    .pill.bad {
+      background: rgba(251, 113, 133, 0.14);
+      border-color: rgba(251, 113, 133, 0.35);
+      color: #ffe4e6;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    button,
+    a.button {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      font-size: 14px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .primary {
+      border-color: rgba(52, 211, 153, 0.35);
+      background: rgba(52, 211, 153, 0.14);
+      font-weight: 650;
+    }
+
+    .secondary {
+      border-color: rgba(96, 165, 250, 0.35);
+      background: rgba(96, 165, 250, 0.14);
+      color: #dbeafe;
+    }
+
+    button:active {
+      transform: scale(0.99);
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    code {
+      background: rgba(0, 0, 0, 0.35);
+      padding: 2px 6px;
+      border-radius: 8px;
+      word-break: break-all;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    li {
+      margin: 6px 0;
+      color: var(--muted);
+    }
+
+    .nav-links {
+      margin-top: 18px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .nav-link {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 13px;
+    }
+  </style>
+</head>
+
+<body>
+  <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+    <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+  </a>
+
+  <div class="wrap">
+    <div class="header">
+      <h1>OAuth Setup</h1>
+      <div id="statusPill" class="pill">Checking OAuth status…</div>
+    </div>
+
+    <div class="controls">
+      <a class="button primary" href="/api/auth/login?redirect=/admin/oauth.html">Connect Lightspeed</a>
+      <button id="refreshBtn" class="secondary" type="button">Refresh Status</button>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <div class="muted">Redirect URI (set this exactly in the Lightspeed app settings):</div>
+          <div><code id="redirectUri">https://id-scanner-project.vercel.app/api/auth/callback</code></div>
+        </div>
+        <div class="muted">
+          Vercel env vars required:
+          <ul>
+            <li><code>LIGHTSPEED_CLIENT_ID</code></li>
+            <li><code>LIGHTSPEED_CLIENT_SECRET</code></li>
+            <li><code>LIGHTSPEED_REDIRECT_URI</code> (must match redirect URI)</li>
+            <li><code>LIGHTSPEED_OAUTH_SCOPES</code> (optional; defaults include sales/customers + webhooks)</li>
+          </ul>
+        </div>
+        <div class="muted" id="details"></div>
+      </div>
+    </div>
+
+    <div class="nav-links">
+      <a class="nav-link" href="/admin/data-center.html">Data Center</a>
+      <a class="nav-link" href="/admin/marketing.html">Marketing</a>
+      <a class="nav-link" href="/admin/audit.html">Audit</a>
+      <a class="nav-link" href="/admin/scans.html">Scans</a>
+      <a class="nav-link" href="/admin/banned.html">Banned</a>
+      <a class="nav-link" href="/admin/overrides.html">Overrides</a>
+    </div>
+  </div>
+
+  <script>
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function setPill(kind, text) {
+      const pill = document.getElementById('statusPill');
+      pill.className = 'pill' + (kind === 'warn' ? ' warn' : kind === 'bad' ? ' bad' : '');
+      pill.textContent = text;
+    }
+
+    async function loadStatus() {
+      setPill('ok', 'Checking OAuth status…');
+      const details = document.getElementById('details');
+      details.textContent = '';
+
+      const res = await fetch('/api/auth/status', { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPill('bad', 'OAuth status error');
+        details.innerHTML = `<div class="muted">Status endpoint failed: <code>${escapeHtml(data.error || 'unknown')}</code></div>`;
+        return;
+      }
+
+      if (data.status === 'connected') {
+        const exp = data.accessTokenExpiresAt ? new Date(data.accessTokenExpiresAt).toLocaleString() : 'unknown';
+        setPill('ok', `Connected • Access token expires: ${exp}`);
+        details.innerHTML = `<div class="muted">OAuth is connected. You can close this page and use the dashboard normally.</div>`;
+        return;
+      }
+
+      if (data.status === 'needs_login') {
+        setPill('warn', 'Configured • Needs login');
+        details.innerHTML = `<div class="muted">Config is present but no token is stored yet. Click <b>Connect Lightspeed</b>.</div>`;
+        return;
+      }
+
+      setPill('warn', 'Needs configuration');
+      details.innerHTML =
+        `<div class="muted">Missing OAuth config in Vercel env. After setting env vars, redeploy and refresh this page.</div>`;
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', loadStatus);
+    loadStatus();
+  </script>
+</body>
+
+</html>
+
