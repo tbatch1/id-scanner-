@@ -131,7 +131,8 @@ function updateVerification(saleId, {
   age = null,
   reason = null,
   registerId = null,
-  status = null
+  status = null,
+  updatedAt = null
 }) {
 
   const verification = verifications.get(saleId);
@@ -153,7 +154,12 @@ function updateVerification(saleId, {
   verification.age = age;
   verification.reason = reason;
   verification.registerId = registerId || verification.registerId;
-  verification.updatedAt = new Date();
+
+  let nextUpdatedAt = updatedAt ? new Date(updatedAt) : new Date();
+  if (Number.isNaN(nextUpdatedAt.getTime())) {
+    nextUpdatedAt = new Date();
+  }
+  verification.updatedAt = nextUpdatedAt;
 
   addSessionLog(saleId, `RESULT: Scan ${approved ? 'Approved' : 'Rejected'} (${reason || 'OK'})`, approved ? 'success' : 'error');
 

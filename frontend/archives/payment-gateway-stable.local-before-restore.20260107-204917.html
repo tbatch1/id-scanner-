@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -18,6 +18,12 @@
                 if (!verify) {
                     var v = String(p.get('verifyOnly') || p.get('verify') || '').trim().toLowerCase();
                     verify = v === '1' || v === 'true' || v === 'yes' || v === 'on';
+                }
+                // In the Lightspeed gateway iframe, params are sometimes dropped; treat embedded as verify-only.
+                try {
+                    if (window.self !== window.top) verify = true;
+                } catch (e) {
+                    verify = true;
                 }
                 if (verify) document.documentElement.classList.add('verify-only');
             } catch (e) { }
@@ -64,13 +70,15 @@
         /* Embedded/iframe mode: render as a compact popup over the POS. */
         html.embedded,
         html.embedded body {
-            background: transparent;
+            /* Fill the entire iframe with the dark overlay so the POS white doesn't show through. */
+            background: rgba(15, 20, 25, 0.98);
         }
 
         html.embedded body {
-            padding-top: 0;
-            min-height: 0;
+            padding: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-right, 0px) + 16px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 16px);
+            min-height: 100vh;
             overflow: hidden;
+            justify-content: center;
         }
 
         html.embedded .grid-bg {
@@ -78,24 +86,38 @@
         }
 
         html.embedded .scanner-wrap {
-            margin: 16px auto;
-            max-width: 560px;
-            max-height: calc(100vh - 32px);
+            margin: 0 auto;
+            width: min(92vw, 860px);
+            max-width: 860px;
+            max-height: calc(100vh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             background: rgba(15, 20, 25, 0.92);
             border-radius: 18px;
             box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
             border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 30px 26px;
         }
 
-        html.verify-only .tender-box {
-            display: none !important;
+        html.embedded .logo {
+            width: 170px;
         }
 
-        html.verify-only #btnScanNow {
-            display: none !important;
+        html.embedded .main-title {
+            font-size: clamp(34px, 4vw, 46px);
+            letter-spacing: 2px;
         }
+
+        html.embedded .subtitle {
+            font-size: clamp(16px, 2.2vw, 20px);
+        }
+
+        html.embedded #btnScanNow {
+            font-size: clamp(18px, 2.4vw, 22px);
+            padding: 20px 18px;
+        }
+
+        /* verify-only styling is controlled by JS so we can optionally show tender choices after scan. */
 
         /* Animated grid background */
         .grid-bg {
@@ -304,18 +326,26 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 2px;
-            height: 2px;
-            opacity: 0;
+            /* iOS/WKWebView can refuse focus/keystrokes for fully-hidden inputs.
+               Keep this technically "visible" (opacity 1) but effectively invisible (1px, transparent). */
+            width: 1px;
+            height: 1px;
+            opacity: 1;
+            background: transparent;
+            color: transparent;
+            caret-color: transparent;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 0 transparent;
+            border: 0;
+            padding: 0;
+            margin: 0;
             pointer-events: auto;
             z-index: 1;
         }
 
-        /* Verify-only mode: let a tap anywhere arm the scanner reliably on iPad webviews. */
-        html.verify-only #ghostInput {
-            width: 100vw;
-            height: 100vh;
-        }
+        /* Note: do NOT fullscreen the ghost input in verify-only mode.
+           iPad webviews are more reliable when arming scanning via an explicit user gesture (tap-to-scan button),
+           and a fullscreen invisible textarea can block UI interactions. */
 
         /* Hide raw keystrokes in normal mode (still captured in ghostInput). */
         #scanPreview {
@@ -542,6 +572,35 @@
             display: block;
         }
 
+        #debugFab {
+            display: none;
+            position: fixed;
+            bottom: 15px;
+            right: 15px;
+            width: 46px;
+            height: 46px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.55);
+            border: 1px solid rgba(0, 255, 255, 0.35);
+            color: #0ff;
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: 800;
+            z-index: 10001;
+            cursor: pointer;
+            opacity: 0.25;
+            pointer-events: auto;
+        }
+
+        html.embedded #debugFab,
+        body.embedded #debugFab {
+            display: block;
+        }
+
+        body.debug-ui #debugFab {
+            opacity: 0.95;
+        }
+
         .debug-btn {
             background: #222;
             color: #0ff;
@@ -567,12 +626,24 @@
 </head>
 
 <body class="embedded">
+    <button id="debugFab" type="button" aria-label="Toggle debug">DBG</button>
     <div id="debugPanel">
         <div style="font-weight: bold; border-bottom: 1px solid #0f0; margin-bottom: 5px;">REMOTE DIAGNOSTICS</div>
         <div>URL: <span id="debugUrl">...</span></div>
         <div>ID: <span id="debugSale">...</span></div>
+        <div>SaleSrc: <span id="debugSaleSource">...</span></div>
+        <div>Focus: <span id="debugFocus">...</span></div>
+        <div>GhostLen: <span id="debugGhostLen">0</span></div>
+        <div>BufLen: <span id="debugBufLen">0</span></div>
+        <div>State: <span id="debugState">...</span></div>
+        <div>Fields: <span id="debugFields">...</span></div>
         <div id="debugStatus">SYSTEM READY</div>
         <button class="debug-btn" onclick="testConnectivity(event)">TEST PING</button>
+        <div style="margin-top: 10px; font-size: 10px; color: #9ff; opacity: 0.95;">CLIENT LOGS</div>
+        <div id="debugClientLogs"
+            style="margin-top: 6px; font-size: 9px; max-height: 70px; overflow-y: auto; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 4px; font-family: monospace; border: 1px solid rgba(0,255,255,0.25);">
+            (waiting...)
+        </div>
         <div id="debugLogs"
             style="margin-top: 10px; font-size: 9px; max-height: 80px; overflow-y: auto; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 4px; font-family: monospace; border: 1px solid rgba(0,255,0,0.2);">
             (Waiting for scan...)
@@ -580,7 +651,7 @@
     </div>
     <div class="grid-bg"></div>
     <textarea id="ghostInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-        inputmode="none" autofocus></textarea>
+        inputmode="text" enterkeyhint="done"></textarea>
 
     <div class="scanner-wrap" id="mainWrap">
         <!-- Logo Area -->
@@ -734,10 +805,21 @@
             document.body.classList.add('embedded');
         }
 
+        // Stable gateway is used as a scan-only verifier: after success, return to POS and use native tender buttons.
+        // On iPad/Lightspeed webviews, query params may be dropped; in embedded mode default to verify-only.
         const verifyOnlyMode = (() => {
             const raw = String(urlParams.get('mode') || '').trim().toLowerCase();
             if (raw === 'verify' || raw === 'verify-only' || raw === 'verifyonly') return true;
-            return ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('verifyOnly') || urlParams.get('verify') || '').toLowerCase());
+            const explicit =
+                ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('verifyOnly') || urlParams.get('verify') || urlParams.get('scanOnly') || '').toLowerCase());
+            if (embeddedMode) return true;
+            return explicit;
+        })();
+
+        const postScanTenderChoice = (() => {
+            const raw = String(urlParams.get('postScan') || urlParams.get('afterScan') || '').trim().toLowerCase();
+            if (raw === 'tender' || raw === 'cashcard') return true;
+            return ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('postScanTender') || '').trim().toLowerCase());
         })();
 
         // Lightspeed Retail X-Series Payments API (gateway-in-iframe) uses postMessage JSON strings.
@@ -832,11 +914,25 @@
                 return false;
             }
         }
-        let saleId = urlParams.get('sale_id') ||
-            urlParams.get('saleId') ||
-            urlParams.get('transaction_id') ||
-            urlParams.get('reference') ||
-            urlParams.get('reference_id');
+        // NOTE: Lightspeed gateway iframes sometimes pass `reference_id` (payment ref) rather than the actual sale id.
+        // Always prefer the POS sale id from postMessage DATA when available.
+        let saleId = null;
+        let saleIdSource = null;
+        const saleIdCandidates = [
+            ['sale_id', urlParams.get('sale_id')],
+            ['saleId', urlParams.get('saleId')],
+            ['transaction_id', urlParams.get('transaction_id')],
+            ['reference', urlParams.get('reference')],
+            ['reference_id', urlParams.get('reference_id')]
+        ];
+        for (const [key, value] of saleIdCandidates) {
+            const v = String(value || '').trim();
+            if (!v) continue;
+            saleId = v;
+            saleIdSource = `query:${key}`;
+            break;
+        }
+        let paymentReferenceId = saleIdSource === 'query:reference' || saleIdSource === 'query:reference_id' ? saleId : null;
 
         const clerkIdParam =
             (urlParams.get('clerk_id') || urlParams.get('clerkId') || urlParams.get('user_id') || urlParams.get('userId') || '').trim();
@@ -845,6 +941,38 @@
 
         const rawAmount = urlParams.get('amount') || urlParams.get('total') || urlParams.get('sale_total') || '0';
         const saleAmount = parseFloat(rawAmount) > 100 ? parseFloat(rawAmount) / 100 : parseFloat(rawAmount);
+
+        // Dual-mode behavior (single URL):
+        // - Default: attempt to auto-arm scanning on load.
+        // - Fallback: if iOS blocks focus/key routing, staff can tap the Scan button to re-arm.
+        // You can force manual-only testing with `?tapToScan=1`.
+        const manualOnlyTapToScan = (() => {
+            const raw = String(urlParams.get('tapToScan') || urlParams.get('requireTap') || '').trim().toLowerCase();
+            if (['1', 'true', 'yes', 'on'].includes(raw)) return true;
+            if (['0', 'false', 'no', 'off'].includes(raw)) return false;
+            return false;
+        })();
+
+        const isIOSLike = (() => {
+            try {
+                const ua = String(navigator.userAgent || '');
+                const platform = String(navigator.platform || '');
+                const iOSDevice = /iPad|iPhone|iPod/i.test(ua);
+                const iPadOS = platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1;
+                return iOSDevice || iPadOS;
+            } catch (e) {
+                return false;
+            }
+        })();
+
+        const autoStartScan = (() => {
+            const raw = String(urlParams.get('autoStart') || '').trim().toLowerCase();
+            if (['1', 'true', 'yes', 'on'].includes(raw)) return true;
+            if (['0', 'false', 'no', 'off'].includes(raw)) return false;
+            // Default to tap-to-arm everywhere for consistency and to avoid iPad iframe key routing flakiness.
+            // Opt-in to auto-arm only via `?autoStart=1`.
+            return false;
+        })();
 
         // State
         let selectedTender = null;
@@ -856,8 +984,25 @@
         let scanHardTimer = null;
         let scanLocked = false;
         let receivedAmountStr = "";
-        const autoStartScan = verifyOnlyMode;
         let pendingVerifyPayload = null;
+        let pageOpenedAtMs = Date.now();
+        let scanArmedAtMs = null;
+        let lastUserGestureAtMs = null;
+
+        function clientLog(message, extra = null) {
+            try {
+                const el = document.getElementById('debugClientLogs');
+                if (!el) return;
+                const time = new Date().toISOString().slice(11, 19);
+                const line = document.createElement('div');
+                line.style.marginBottom = '2px';
+                const suffix = extra ? ` ${JSON.stringify(extra)}` : '';
+                line.textContent = `[${time}] ${message}${suffix}`;
+                if (el.textContent && el.textContent.trim() === '(waiting...)') el.textContent = '';
+                el.appendChild(line);
+                el.scrollTop = el.scrollHeight;
+            } catch (e) { }
+        }
 
         // Elements
         const mainWrap = document.getElementById('mainWrap');
@@ -873,6 +1018,31 @@
         const btnQuickNextDollar = document.getElementById('btnQuickNextDollar');
         const btnQuickNextFive = document.getElementById('btnQuickNextFive');
         const btnCompleteSale = document.getElementById('btnCompleteSale');
+        const debugFab = document.getElementById('debugFab');
+        const debugSale = document.getElementById('debugSale');
+        const debugFocus = document.getElementById('debugFocus');
+        const debugGhostLen = document.getElementById('debugGhostLen');
+        const debugBufLen = document.getElementById('debugBufLen');
+        const debugState = document.getElementById('debugState');
+        const debugFields = document.getElementById('debugFields');
+        const debugSaleSource = document.getElementById('debugSaleSource');
+
+        try {
+            // Some iOS webviews are more reliable when the focused element is a normal text field.
+            ghostInput.setAttribute('inputmode', 'text');
+            ghostInput.setAttribute('enterkeyhint', 'done');
+            ghostInput.setAttribute('autocomplete', 'off');
+            ghostInput.setAttribute('autocorrect', 'off');
+            ghostInput.setAttribute('autocapitalize', 'off');
+            ghostInput.setAttribute('spellcheck', 'false');
+        } catch (e) { }
+
+        // iOS/iPadOS: keep a normal text inputmode for HID scanners.
+        // We suppress the on-screen keyboard using the "readonly focus hack" inside `focusGhostInput()`.
+        if (verifyOnlyMode && embeddedMode) {
+            try { ghostInput.removeAttribute('readonly'); ghostInput.readOnly = false; } catch (e) { }
+            try { ghostInput.setAttribute('inputmode', 'text'); } catch (e) { }
+        }
 
         // When loaded as a Lightspeed gateway (iframe), remove the close button to prevent premature exits.
         if (embeddedMode) {
@@ -881,6 +1051,91 @@
             // (2) capture register_sale/payment ids if present.
             lsData();
         }
+
+        function toggleDebug() {
+            document.body.classList.toggle('debug-ui');
+            document.body.classList.toggle('show-keys');
+            clientLog('debug toggled', { debugUi: document.body.classList.contains('debug-ui'), showKeys: document.body.classList.contains('show-keys') });
+        }
+
+        if (debugFab) {
+            debugFab.addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleDebug();
+            });
+        }
+
+        function focusGhostInput(reason = 'focus') {
+            try {
+                if (!ghostInput) return false;
+
+                if (isIOSLike) {
+                    try { ghostInput.setAttribute('inputmode', 'none'); } catch (e) { }
+                }
+
+                const shouldNoKbHack =
+                    isIOSLike &&
+                    (reason.includes('btnScanNow') || reason.includes('touch') || reason.includes('gesture') || reason.includes('pointer'));
+
+                if (shouldNoKbHack) {
+                    try { ghostInput.readOnly = true; ghostInput.setAttribute('readonly', ''); } catch (e) { }
+                    try { ghostInput.click(); } catch (e) { }
+                    ghostInput.focus({ preventScroll: true });
+                    setTimeout(() => {
+                        try { ghostInput.readOnly = false; ghostInput.removeAttribute('readonly'); } catch (e) { }
+                    }, 0);
+                } else {
+                    try { ghostInput.click(); } catch (e) { }
+                    ghostInput.focus({ preventScroll: true });
+                }
+
+                // Some webviews won’t accept keystrokes unless there is an active caret/selection.
+                try {
+                    const len = String(ghostInput.value || '').length;
+                    ghostInput.setSelectionRange(len, len);
+                } catch (e) { }
+
+                clientLog('focusGhostInput', { reason, active: document.activeElement === ghostInput });
+                return true;
+            } catch (e) {
+                clientLog('focusGhostInput failed', { reason });
+                return false;
+            }
+        }
+
+        ghostInput.addEventListener('blur', () => {
+            if (!isScanning) return;
+            setTimeout(() => focusGhostInput('blur'), 50);
+        });
+
+        // Long-press the logo to toggle debug (works even when query params are stripped by the iframe host).
+        (function installLogoDebugHold() {
+            const logoRoot = document.getElementById('visualRoot');
+            if (!logoRoot) return;
+            let timer = null;
+            const clear = () => { if (timer) clearTimeout(timer); timer = null; };
+            const start = () => {
+                clear();
+                timer = setTimeout(() => {
+                    toggleDebug();
+                    clear();
+                }, 900);
+            };
+            logoRoot.addEventListener('pointerdown', start);
+            logoRoot.addEventListener('pointerup', clear);
+            logoRoot.addEventListener('pointercancel', clear);
+            logoRoot.addEventListener('pointerleave', clear);
+        })();
+
+        // iPad/WKWebView quirk: bluetooth HID keystrokes may not route into the iframe until the user has
+        // performed at least one gesture *inside the iframe*. The TEST PING button was unintentionally acting
+        // as that gesture. Track any pointerdown and opportunistically re-focus the ghost input while scanning.
+        document.addEventListener('pointerdown', () => {
+            lastUserGestureAtMs = Date.now();
+            if (isScanning) {
+                focusGhostInput('pointerdown');
+            }
+        }, { capture: true });
 
         window.addEventListener('message', (event) => {
             if (!event || typeof event.data !== 'string') return;
@@ -898,8 +1153,40 @@
             if (data && data.step === 'DATA') {
                 const maybeSaleId = data?.register_sale?.id || data?.register_sale?.client_sale_id || null;
                 const maybeRefId = data?.payment?.reference_id || null;
-                if (!saleId && (maybeSaleId || maybeRefId)) {
-                    saleId = maybeSaleId || maybeRefId;
+                if (maybeRefId && !paymentReferenceId) {
+                    paymentReferenceId = maybeRefId;
+                }
+                if (maybeSaleId) {
+                    const nextSaleId = String(maybeSaleId || '').trim();
+                    const currentSaleId = String(saleId || '').trim();
+
+                    const shouldUpdateFromData =
+                        !currentSaleId ||
+                        saleIdSource === 'query:reference' ||
+                        saleIdSource === 'query:reference_id' ||
+                        saleIdSource === 'query:transaction_id' ||
+                        (currentSaleId && nextSaleId && currentSaleId !== nextSaleId);
+
+                    if (shouldUpdateFromData) {
+                        const priorSaleId = currentSaleId || null;
+                        saleId = maybeSaleId;
+                        saleIdSource = 'DATA:register_sale.id';
+                        pageOpenedAtMs = Date.now();
+                        scanArmedAtMs = null;
+                        latestVerificationId = null;
+                        pendingVerifyPayload = null;
+                        scanLocked = false;
+                        isProcessingScan = false;
+                        // If the iframe is reused across sales, ensure we reset overlays and buffers.
+                        try { resetUI(); } catch (e) { }
+                        clientLog('saleId set from DATA', { saleId, priorSaleId });
+                        if (debugSale) debugSale.textContent = saleId || 'MISSING';
+                    }
+                } else if (!saleId && maybeRefId) {
+                    saleId = maybeRefId;
+                    saleIdSource = 'DATA:payment.reference_id';
+                    clientLog('saleId set from DATA ref', { saleId });
+                    if (debugSale) debugSale.textContent = saleId || 'MISSING';
                 }
 
                 if (saleId && pendingVerifyPayload && isScanning && !isProcessingScan) {
@@ -926,9 +1213,14 @@
             const title = document.getElementById('mainTitle');
             const subtitle = document.getElementById('mainSubtitle');
             if (title) title.textContent = 'Verify Age';
-            if (subtitle) subtitle.textContent = 'Focus on the barcode until it confirms.';
+            if (subtitle) subtitle.textContent = autoStartScan ? 'Focus on the barcode until it confirms.' : 'Tap to start scanning.';
             if (tenderBox) tenderBox.style.display = 'none';
+            if (cashWrap) cashWrap.style.display = 'none';
             selectTender('card');
+            setIdleScanButtonText();
+            clientLog('verifyOnlyMode enabled', { embeddedMode: embeddedMode });
+        } else {
+            setIdleScanButtonText();
         }
 
         function normalizeScanText(text) {
@@ -944,6 +1236,18 @@
             return re.test(normalized);
         }
 
+        function getVerifyProgress(text) {
+            const normalized = normalizeScanText(text);
+            const hasDob = /DBB[^0-9]*([0-9]{8}|[0-9]{2}\/[0-9]{2}\/[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})/i.test(normalized);
+            const hasId = hasAamvaField(normalized, 'DAQ') || (hasAamvaField(normalized, 'DCS') && hasAamvaField(normalized, 'DAC'));
+            const hasAddr =
+                hasAamvaField(normalized, 'DAG') ||
+                hasAamvaField(normalized, 'DAI') ||
+                hasAamvaField(normalized, 'DAJ') ||
+                hasAamvaField(normalized, 'DAK');
+            return { hasDob, hasId, hasAddr, normalized };
+        }
+
         function extractLikelyScanSegment(text) {
             const raw = String(text || '');
             const idxAnsi = raw.lastIndexOf('@ANSI');
@@ -954,17 +1258,28 @@
         }
 
         function isScanSatisfied(text) {
-            const normalized = normalizeScanText(text);
-            const hasDob = /DBB[^0-9]*([0-9]{8}|[0-9]{2}\/[0-9]{2}\/[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})/i.test(normalized);
-            const hasId = hasAamvaField(normalized, 'DAQ');
-            return hasDob && hasId && normalized.length >= 60;
+            const { hasDob, hasId, normalized } = getVerifyProgress(text);
+            // DBB (DOB) + DAQ (ID#) is enough to compute age; don't require a full payload length.
+            if (hasDob && hasId && normalized.length >= 20) return true;
+
+            // Fallback: some HID/iPad webview combos intermittently lose separators or early tokens,
+            // but still deliver a long PDF417/AAMVA payload. Allow submission once it "looks like" AAMVA
+            // and is long enough; backend parsing remains the source of truth.
+            const looksLikeAamva =
+                normalized.includes('@ANSI') ||
+                normalized.includes('ANSI ') ||
+                normalized.includes('AAMVA') ||
+                /DAQ/i.test(normalized) ||
+                /DBB/i.test(normalized);
+            return looksLikeAamva && normalized.length >= 120;
         }
 
         const SCAN_HARD_TIMEOUT_MS = 30000;
         const SCAN_IDLE_TIMEOUT_MS = 900;
         // In verify-only mode, use the same proven "timer-delimited buffer" approach from the older gateway:
         // keep buffering characters until there's a quiet period, then submit.
-        const SCAN_TIMEOUT_MS = 1000;
+        // Slightly longer than the original to reduce premature flush on scanners that pause mid-payload.
+        const SCAN_TIMEOUT_MS = 1500;
         let scanTimer = null;
         const subtitleEl = document.getElementById('mainSubtitle');
         const defaultSubtitleText = subtitleEl ? subtitleEl.textContent : '';
@@ -996,6 +1311,19 @@
             btnScanNow.innerHTML = '<span class="scan-dot"></span> Focus on barcode until verified';
         }
 
+        function setTapToStartText() {
+            btnScanNow.innerHTML = '<span class="scan-dot"></span> Tap to start scanning';
+        }
+
+        function setIdleScanButtonText() {
+            if (verifyOnlyMode) {
+                if (autoStartScan) setScanCtaText();
+                else setTapToStartText();
+                return;
+            }
+            btnScanNow.innerHTML = '<span class="scan-dot"></span> Scan Now';
+        }
+
         function scheduleIdleCheck() {
             if (scanIdleTimer) clearTimeout(scanIdleTimer);
             scanIdleTimer = setTimeout(() => {
@@ -1008,12 +1336,29 @@
                     /DAQ/i.test(trimmed) ||
                     /DBB/i.test(trimmed);
 
-                if (isScanSatisfied(trimmed) || (looksLikePdf417 && trimmed.length >= 40) || trimmed.length >= 140) {
-                    finalizeScan(trimmed);
-                    return;
+                // Verify-only: treat the scan as satisfied only when required fields are present.
+                // Other modes can still use heuristics to finalize partial payloads.
+                if (verifyOnlyMode) {
+                    if (isScanSatisfied(trimmed)) {
+                        finalizeScan(trimmed);
+                        return;
+                    }
+                    const progress = getVerifyProgress(trimmed);
+                    if (debugStatus) {
+                        debugStatus.textContent = `LISTENING: DOB ${progress.hasDob ? '✓' : '✗'}  ID ${progress.hasId ? '✓' : '✗'}  ADDR ${progress.hasAddr ? '✓' : '✗'} — keep scanning`;
+                    }
+                } else {
+                    if (isScanSatisfied(trimmed) || (looksLikePdf417 && trimmed.length >= 40) || trimmed.length >= 140) {
+                        finalizeScan(trimmed);
+                        return;
+                    }
                 }
 
-                if (debugStatus) debugStatus.textContent = 'WAITING: Scan again (tap once to arm if needed)';
+                if (debugStatus) {
+                    debugStatus.textContent = verifyOnlyMode
+                        ? 'LISTENING: Focus on the barcode…'
+                        : 'WAITING: Scan again (tap once to arm if needed)';
+                }
             }, SCAN_IDLE_TIMEOUT_MS);
         }
 
@@ -1021,10 +1366,15 @@
             if (scanHardTimer) return;
             scanHardTimer = setTimeout(() => {
                 if (!isScanning || scanLocked) return;
+                if (verifyOnlyMode) {
+                    resumeListening('TIMEOUT: Scan again.');
+                    return;
+                }
+
                 showError('Scan timed out. Keep the scanner on the barcode and try again.');
                 isScanning = false;
                 visualRoot.classList.remove('scanning');
-                btnScanNow.innerHTML = '<span class="scan-dot"></span> Scan Now';
+                setIdleScanButtonText();
                 resetScanCaptureState();
             }, SCAN_HARD_TIMEOUT_MS);
         }
@@ -1041,16 +1391,35 @@
         }
 
         // Scan Activation
+        // iPad/Lightspeed iframe: focusing must happen synchronously within a trusted user gesture.
+        // Doing this on pointerdown (not just click) makes arming much more reliable.
+        btnScanNow.addEventListener('pointerdown', () => {
+            lastUserGestureAtMs = Date.now();
+            scanArmedAtMs = Date.now();
+            focusGhostInput('btnScanNow-pointerdown');
+        }, { capture: true });
+
         btnScanNow.onclick = () => {
             if (!selectedTender) return;
+            scanArmedAtMs = Date.now();
+            // If already armed, don't clear buffer accidentally; just refocus.
+            if (isScanning && !isProcessingScan && !scanLocked) {
+                const quietForMs = lastKeyAt ? (Date.now() - lastKeyAt) : Number.POSITIVE_INFINITY;
+                if (quietForMs > 500) resetScanCaptureState({ keepPreview: false });
+                focusGhostInput('btnScanNow-rearm');
+                setScanCtaText();
+                if (subtitleEl && verifyOnlyMode) subtitleEl.textContent = defaultSubtitleText || 'Focus on the barcode until it confirms.';
+                return;
+            }
             isScanning = true;
             isProcessingScan = false;
             visualRoot.classList.add('scanning');
             setScanCtaText();
-            if (debugStatus) debugStatus.textContent = 'LISTENING: Focus on barcode (need DBB + DAQ)';
+            if (debugStatus) debugStatus.textContent = verifyOnlyMode ? 'LISTENING: Focus on the barcode…' : 'LISTENING: Scan ID…';
             if (subtitleEl && verifyOnlyMode) subtitleEl.textContent = defaultSubtitleText || 'Focus on the barcode until it confirms.';
             resetScanCaptureState();
-            ghostInput.focus({ preventScroll: true });
+            focusGhostInput('btnScanNow');
+            clientLog('scan armed', { verifyOnlyMode, saleId: saleId || null });
         };
 
         if (autoStartScan) {
@@ -1059,16 +1428,42 @@
             setTimeout(() => {
                 try {
                     btnScanNow.onclick();
+                    clientLog('autoStartScan fired');
                 } catch (e) { }
             }, 50);
         }
 
+        // If iOS/Lightspeed refuses to focus a hidden input, staff can tap the Scan button again to re-arm.
+
         // Ghost Focus Loop
         setInterval(() => {
             if (isScanning && document.activeElement !== ghostInput) {
-                ghostInput.focus({ preventScroll: true });
+                focusGhostInput('interval');
             }
         }, 500);
+
+        // Extra focus attempts right after load: iOS/Lightspeed webviews can ignore the first focus call.
+        (function focusBurst() {
+            let attempts = 0;
+            const maxAttempts = 16; // ~2s at 125ms intervals
+            const tick = () => {
+                attempts += 1;
+                if (attempts > maxAttempts) return;
+                if (!isScanning) return;
+                if (document.activeElement === ghostInput) return;
+                focusGhostInput(`burst-${attempts}`);
+                setTimeout(tick, 125);
+            };
+            setTimeout(tick, 125);
+        })();
+
+        window.addEventListener('focus', () => {
+            if (isScanning) focusGhostInput('window-focus');
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && isScanning) focusGhostInput('visibility');
+        });
 
         function handleBufferChanged() {
             barcodeBuffer = String(ghostInput.value || '');
@@ -1096,6 +1491,19 @@
             scheduleIdleCheck();
         }
 
+        function resumeListening(statusText = null) {
+            isScanning = true;
+            isProcessingScan = false;
+            scanLocked = false;
+            visualRoot.classList.add('scanning');
+            setScanCtaText();
+            btnScanNow.style.opacity = "1";
+            btnScanNow.style.pointerEvents = "auto";
+            resetScanCaptureState();
+            focusGhostInput('resumeListening');
+            if (debugStatus && statusText) debugStatus.textContent = statusText;
+        }
+
         function handleKeyBuffered(key) {
             if (!isScanning || scanLocked) return;
             startHardTimeout();
@@ -1108,13 +1516,29 @@
             }
 
             if (scanTimer) clearTimeout(scanTimer);
-            scanTimer = setTimeout(() => {
-                if (!isScanning || scanLocked) return;
-                if (barcodeBuffer.trim().length > 10) {
-                    finalizeScan(barcodeBuffer);
-                } else {
-                    barcodeBuffer = '';
+                scanTimer = setTimeout(() => {
+                    if (!isScanning || scanLocked) return;
+                    const candidate = extractLikelyScanSegment(barcodeBuffer);
+                    const trimmed = String(candidate || '').trim();
+                    if (verifyOnlyMode) {
+                        if (isScanSatisfied(trimmed)) {
+                            finalizeScan(trimmed);
+                            return;
+                        }
+                        const progress = getVerifyProgress(trimmed);
+                        if (debugStatus) {
+                            debugStatus.textContent = `LISTENING: DOB ${progress.hasDob ? '✓' : '✗'}  ID ${progress.hasId ? '✓' : '✗'}  ADDR ${progress.hasAddr ? '✓' : '✗'} — keep scanning`;
+                        }
+                        // Keep buffering; scanners can be noisy/partial.
+                        return;
+                    }
+
+                if (trimmed.length >= 40) {
+                    finalizeScan(trimmed);
+                    return;
                 }
+
+                barcodeBuffer = '';
             }, SCAN_TIMEOUT_MS);
         }
 
@@ -1135,23 +1559,47 @@
             const active = document.activeElement === ghostInput;
             const quietForMs = lastKeyAt ? (Date.now() - lastKeyAt) : Number.POSITIVE_INFINITY;
 
-            if (!active && quietForMs > 2500 && !hasShownArmHint) {
-                subtitleEl.textContent = 'Tap once to arm the scanner, then scan the barcode.';
-                hasShownArmHint = true;
-                return;
-            }
-
-            if (active && hasShownArmHint) {
-                subtitleEl.textContent = defaultSubtitleText || 'Focus on the barcode until it confirms.';
-                hasShownArmHint = false;
+            // Dual-mode UX: try auto; if focus/key routing doesn't work, prompt to tap the Scan button.
+            if (embeddedMode && autoStartScan && !manualOnlyTapToScan) {
+                if (!active && quietForMs > 2500) {
+                    setTapToStartText();
+                } else {
+                    setScanCtaText();
+                }
             }
         }
 
         setInterval(updateArmHint, 400);
 
         document.addEventListener('touchstart', () => {
-            try { ghostInput.focus({ preventScroll: true }); } catch (e) { }
+            if (!isScanning) return;
+            focusGhostInput('touchstart');
         }, { passive: true });
+
+        // iPad/Lightspeed WKWebView: a user gesture dramatically improves HID key routing.
+        // Treat the first tap anywhere as an explicit "arm" action for focus.
+        document.addEventListener('pointerdown', () => {
+            if (!isScanning) return;
+            focusGhostInput('pointerdown-gesture');
+        }, { capture: true, passive: true });
+
+        function keyToScanChar(e) {
+            try {
+                if (!e) return null;
+                const key = e.key;
+                if (key === 'Enter' || key === 'Tab') return '\n';
+                if (key && key.length === 1) return key;
+
+                const code = Number(e.which || e.keyCode || 0);
+                if (code === 13 || code === 9) return '\n';
+                if (code >= 32 && code <= 126) {
+                    return String.fromCharCode(code);
+                }
+                return null;
+            } catch (err) {
+                return null;
+            }
+        }
 
         if (!verifyOnlyMode) {
             // Barcode listener: wait until required AAMVA fields are present (DBB + DAQ).
@@ -1179,30 +1627,32 @@
                 if (!isScanning || scanLocked) return;
                 if (document.activeElement === ghostInput) return;
 
-                const key = e.key;
-                const isPrintable = key && key.length === 1;
-                const isDelimiter = key === 'Enter' || key === 'Tab';
-                if (!isPrintable && !isDelimiter) return;
+                const ch = keyToScanChar(e);
+                if (!ch) return;
 
                 e.preventDefault();
-                appendScanText(isDelimiter ? '\n' : key);
+                appendScanText(ch);
             }, true);
         } else {
             // Verify-only: use the older gateway's proven, timer-delimited approach (no DBB/DAQ gating).
             document.addEventListener('keydown', (e) => {
                 if (scanLocked) return;
-                const key = e.key;
-                const isPrintable = key && key.length === 1;
-                if (!isPrintable && key !== 'Enter') return;
+                const ch = keyToScanChar(e);
+                if (!ch) return;
 
+                if (!isScanning) return;
                 verifyOnlyKeyCaptureSeen = true;
-                if (!isScanning) {
-                    try { btnScanNow.onclick(); } catch (err) { }
-                }
+                lastKeyAt = Date.now();
+                hasShownArmHint = false;
 
                 e.preventDefault();
                 e.stopPropagation();
-                handleKeyBuffered(key === 'Enter' ? '\n' : key);
+                if (ch === '\n') {
+                    clientLog('keydown', { key: 'Enter', len: barcodeBuffer.length, active: document.activeElement === ghostInput });
+                } else if (barcodeBuffer.length % 25 === 0) {
+                    clientLog('keydown', { key: '(char)', len: barcodeBuffer.length, active: document.activeElement === ghostInput });
+                }
+                handleKeyBuffered(ch);
             }, true);
 
             ghostInput.addEventListener('input', () => {
@@ -1216,11 +1666,26 @@
                 if (scanTimer) clearTimeout(scanTimer);
                 scanTimer = setTimeout(() => {
                     if (!isScanning || scanLocked) return;
-                    if (barcodeBuffer.trim().length > 10) {
-                        finalizeScan(barcodeBuffer);
-                    } else {
-                        barcodeBuffer = '';
+                    const candidate = extractLikelyScanSegment(barcodeBuffer);
+                    const trimmed = String(candidate || '').trim();
+                    if (verifyOnlyMode) {
+                        if (isScanSatisfied(trimmed)) {
+                            finalizeScan(trimmed);
+                            return;
+                        }
+                        const progress = getVerifyProgress(trimmed);
+                        if (debugStatus) {
+                            debugStatus.textContent = `LISTENING: DOB ${progress.hasDob ? '✓' : '✗'}  ID ${progress.hasId ? '✓' : '✗'}  ADDR ${progress.hasAddr ? '✓' : '✗'} — keep scanning`;
+                        }
+                        return;
                     }
+
+                    if (trimmed.length >= 40) {
+                        finalizeScan(trimmed);
+                        return;
+                    }
+
+                    barcodeBuffer = '';
                 }, SCAN_TIMEOUT_MS);
             });
         }
@@ -1228,6 +1693,23 @@
         // Initialize debug info
         document.getElementById('debugUrl').textContent = window.location.pathname + window.location.search;
         document.getElementById('debugSale').textContent = saleId || 'MISSING';
+        if (debugSaleSource) debugSaleSource.textContent = saleIdSource || 'unknown';
+
+        setInterval(() => {
+            try {
+                if (debugSale) debugSale.textContent = saleId || 'MISSING';
+                if (debugFocus) debugFocus.textContent = (document.activeElement === ghostInput) ? 'ghostInput' : (document.activeElement ? document.activeElement.tagName : 'none');
+                if (debugGhostLen) debugGhostLen.textContent = String((ghostInput.value || '').length);
+                if (debugBufLen) debugBufLen.textContent = String((barcodeBuffer || '').length);
+                if (debugState) debugState.textContent = `scan=${isScanning ? 'ON' : 'OFF'} proc=${isProcessingScan ? '1' : '0'} lock=${scanLocked ? '1' : '0'}`;
+                if (debugFields) {
+                    const probe = String(barcodeBuffer || ghostInput.value || '');
+                    const progress = getVerifyProgress(probe);
+                    debugFields.textContent = `DBB ${progress.hasDob ? '✓' : '✗'} | ID ${progress.hasId ? '✓' : '✗'}`;
+                }
+                if (debugSaleSource) debugSaleSource.textContent = saleIdSource || 'unknown';
+            } catch (e) { }
+        }, 250);
 
         // Polling for updates (for resilience and diagnostic logs)
         let pollInterval = null;
@@ -1256,8 +1738,28 @@
 
                     // Auto-advance if verified by another device or background
                     if (data.status === 'approved' || data.status === 'approved_override') {
-                        showSuccess(data);
-                        clearInterval(pollInterval);
+                        const updatedAtMs = Number(data.updatedAtMs || 0);
+                        const minFreshMs = (scanArmedAtMs ?? pageOpenedAtMs);
+                        if (updatedAtMs && updatedAtMs >= minFreshMs) {
+                            clientLog('status approved (fresh)', { updatedAtMs, minFreshMs });
+                            showSuccess(data);
+                            clearInterval(pollInterval);
+                            pollInterval = null;
+                        } else {
+                            // "Resume verified" for the SAME live sale: if we have high confidence the sale id came from
+                            // Lightspeed DATA (register_sale.id), then a previously-approved verification should auto-pass.
+                            const fromLightspeedData = String(saleIdSource || '').startsWith('DATA:register_sale.id');
+                            if (fromLightspeedData) {
+                                clientLog('status approved (resume)', { updatedAtMs, minFreshMs, saleIdSource });
+                                showSuccess(data);
+                                clearInterval(pollInterval);
+                                pollInterval = null;
+                            } else {
+                                // Otherwise, treat it as stale to avoid false approvals from a wrong/stale identifier.
+                                clientLog('status approved but stale', { updatedAtMs, minFreshMs, saleIdSource });
+                                try { lsData(); } catch (e) { }
+                            }
+                        }
                     }
                 } catch (e) { }
             }, 2000);
@@ -1289,6 +1791,7 @@
                 pendingVerifyPayload = rawData;
                 try { lsData(); } catch (e) { }
                 if (debugStatus) debugStatus.textContent = 'WAITING: Linking to POS sale...';
+                clientLog('missing saleId; requesting DATA', { len: String(rawData || '').length });
                 scanLocked = false;
                 isProcessingScan = false;
                 isScanning = true;
@@ -1297,6 +1800,7 @@
             }
 
             if (!isScanning || isProcessingScan) return; // Guard against double calls
+            if (!scanArmedAtMs) scanArmedAtMs = Date.now();
 
             const isTerminalRejection = (reason) => {
                 const r = String(reason || '').toLowerCase();
@@ -1308,6 +1812,7 @@
             btnScanNow.style.opacity = "0.7";
             btnScanNow.style.pointerEvents = "none";
             if (debugStatus) debugStatus.textContent = 'PROCESSING: Checking ID...';
+            clientLog('submitting verify', { saleId, len: String(rawData || '').length });
 
             try {
                 const response = await fetch(`/api/sales/${encodeURIComponent(saleId)}/verify-bluetooth`, {
@@ -1324,6 +1829,14 @@
                     const errorJson = await response.json().catch(() => ({}));
                     const errorMsg = errorJson.technical || errorJson.message || response.statusText;
                     reportRemoteError('HTTP_ERROR', { status: response.status, statusText: response.statusText, response: errorJson });
+
+                    // Scan-only mode should be resilient: treat most server errors as transient and keep listening.
+                    // 401/403 usually indicate a configuration/auth issue; surface those as terminal.
+                    if (verifyOnlyMode && response.status !== 401 && response.status !== 403) {
+                        resumeListening(`SERVER ${response.status}: ${errorMsg}. Scan again.`);
+                        return;
+                    }
+
                     isScanning = false;
                     isProcessingScan = false;
                     showError(`Server Error (${response.status}): ${errorMsg}`);
@@ -1331,6 +1844,15 @@
                 }
 
                 const data = await response.json();
+                clientLog('verify response', {
+                    success: data.success,
+                    approved: data.approved,
+                    noteUpdated: data.noteUpdated,
+                    saleFetchOk: data.saleFetchOk,
+                    saleCustomerId: data.saleCustomerId ? 'present' : 'none',
+                    customerUpdated: data.customerUpdated,
+                    customerUpdateSkipped: data.customerUpdateSkipped || null
+                });
 
                 if (data.success && data.approved) {
                     latestVerificationId = data.verificationId || data.verification_id || latestVerificationId;
@@ -1351,17 +1873,14 @@
                 }
 
                 // Non-terminal: keep listening. Barcode scanners can stream partial/overlapping payloads.
-                isProcessingScan = false;
-                scanLocked = false;
-                visualRoot.classList.add('scanning');
-                setScanCtaText();
-                btnScanNow.style.opacity = "1";
-                btnScanNow.style.pointerEvents = "auto";
-                resetScanCaptureState();
-                ghostInput.focus({ preventScroll: true });
-                if (debugStatus) debugStatus.textContent = 'LISTENING: Scan again (need DBB + DAQ)';
+                resumeListening(verifyOnlyMode ? 'LISTENING: Focus on the barcode…' : 'LISTENING: Scan again (need DBB + DAQ)');
             } catch (e) {
                 reportRemoteError('FETCH_EXCEPTION', { message: e.message, stack: e.stack });
+                if (verifyOnlyMode) {
+                    resumeListening(`NETWORK: ${e.message}. Scan again.`);
+                    return;
+                }
+
                 isScanning = false;
                 isProcessingScan = false;
                 showError(`Network Error: ${e.message}`);
@@ -1390,11 +1909,96 @@
             }
         }
 
+        function showTenderChoiceAfterScan() {
+            // Hide scan UI (still keep debug/preview visible for now).
+            try { btnScanNow.style.display = 'none'; } catch (e) { }
+
+            // Show tender selection.
+            if (tenderBox) tenderBox.style.display = 'block';
+            const title = document.getElementById('mainTitle');
+            const subtitle = document.getElementById('mainSubtitle');
+            if (title) title.textContent = 'Choose Tender';
+            if (subtitle) subtitle.textContent = 'Tap Cash or Card, then return to POS.';
+
+            // Make buttons just return to POS (no cash calculator, no sale closing).
+            btnCash.onclick = () => {
+                clientLog('postScan tender selected', { tender: 'cash' });
+                closeGateway();
+            };
+            btnCard.onclick = () => {
+                clientLog('postScan tender selected', { tender: 'card' });
+                closeGateway();
+            };
+        }
+
         function showSuccess(data) {
+            try {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+            } catch (e) { }
+
             document.getElementById('successOverlay').classList.add('active');
             latestVerificationId = data.verificationId || data.verification_id || latestVerificationId;
             document.getElementById('successMsg').textContent = `Age: ${data.age ?? '??'}`;
-            document.getElementById('successDetails').textContent = '';
+            const detailsEl = document.getElementById('successDetails');
+            const isDebugUi = document.body.classList.contains('debug-ui');
+
+            // Make it obvious whether the scan actually saved anything to Lightspeed (without showing PII).
+            // Use a 0ms timeout so this runs after any existing debug formatting below.
+            const applyCustomerSaveHint = () => {
+                if (!detailsEl) return;
+
+                if (isDebugUi) {
+                    detailsEl.style.display = 'block';
+                    return;
+                }
+
+                let msg = '';
+                if (!data.saleCustomerId) {
+                    msg = 'Customer not linked — attach loyalty customer first (phone number), then scan.';
+                } else if (data.customerUpdated) {
+                    msg = 'Customer profile saved in Lightspeed.';
+                } else if (data.customerUpdateSkipped === 'no_blank_fields') {
+                    msg = 'Customer already has info on file.';
+                } else if (data.customerUpdateSkipped === 'writes_disabled') {
+                    msg = 'Customer save disabled (server config).';
+                } else if (data.customerUpdateSkipped) {
+                    const code = data.customerUpdateStatus ? ` (${data.customerUpdateStatus})` : '';
+                    msg = `Customer save failed${code}.`;
+                }
+
+                if (msg) {
+                    detailsEl.style.display = 'block';
+                    detailsEl.style.marginTop = '8px';
+                    detailsEl.style.opacity = '0.8';
+                    detailsEl.style.fontSize = '12px';
+                    detailsEl.textContent = msg;
+                } else {
+                    detailsEl.style.display = 'none';
+                    detailsEl.textContent = '';
+                }
+            };
+            setTimeout(applyCustomerSaveHint, 0);
+            if (detailsEl) {
+                if (isDebugUi) {
+                    const customerHint = data.saleCustomerId ? 'customer=attached' : 'customer=none';
+                    const syncHint = data.customerUpdated
+                        ? `synced=${Array.isArray(data.customerUpdatedFields) ? data.customerUpdatedFields.length : 1}`
+                        : `synced=0 (${data.customerUpdateSkipped || 'n/a'})`;
+                    detailsEl.textContent = `${customerHint} • ${syncHint} • note=${data.noteUpdated ? 'yes' : 'no'}`;
+                } else {
+                    detailsEl.textContent = '';
+                }
+            }
+            clientLog('success', {
+                age: data.age ?? null,
+                noteUpdated: Boolean(data.noteUpdated),
+                saleCustomerId: data.saleCustomerId ? 'present' : 'none',
+                customerUpdated: Boolean(data.customerUpdated),
+                customerUpdateSkipped: data.customerUpdateSkipped || null
+            });
 
             document.getElementById('btnContinue').onclick = () => {
                 if (verifyOnlyMode) {
@@ -1411,14 +2015,24 @@
             };
 
             if (verifyOnlyMode) {
+                // Stop any scanning/focus loops once verified.
+                isScanning = false;
+                isProcessingScan = false;
+                scanLocked = true;
+                try { visualRoot.classList.remove('scanning'); } catch (e) { }
+
                 const btn = document.getElementById('btnContinue');
-                if (btn) {
-                    btn.textContent = 'Returning to POS…';
-                    btn.disabled = true;
+                if (btn) btn.style.display = 'none';
+
+                if (postScanTenderChoice) {
+                    document.getElementById('successOverlay').classList.remove('active');
+                    showTenderChoiceAfterScan();
+                    return;
                 }
+
                 setTimeout(() => {
                     closeGateway();
-                }, 1200);
+                }, 250);
             }
         }
 
@@ -1436,7 +2050,7 @@
             // Reset scan button
             isScanning = false;
             visualRoot.classList.remove('scanning');
-            btnScanNow.innerHTML = '<span class="scan-dot"></span> Scan Now';
+            setIdleScanButtonText();
             btnScanNow.style.opacity = "1";
             btnScanNow.style.pointerEvents = "auto";
             resetScanCaptureState();
@@ -1618,9 +2232,8 @@
         function finishCardFlow() {
             // Signal for card tender: exit/close so POS can take over
             // For Lightspeed Payments API, prefer EXIT (closes modal) over DECLINE (returns to pay screen with a decline state).
-            const didClose = lsCloseMode === 'decline'
-                ? lsDecline({ print: false })
-                : lsExit();
+            // This stable gateway is intended to *not* close the sale; always return to the pay screen.
+            const didClose = lsDecline({ print: false });
 
             if (!didClose) {
                 window.parent.postMessage('CLOSE', '*');
@@ -1636,18 +2249,17 @@
                 if (overlay) overlay.classList.add('active');
             }, 900);
 
-            const didClose = lsCloseMode === 'decline'
-                ? lsDecline({ print: false })
-                : lsExit();
+            // Scan-only: close the gateway dialog and return to the sell/pay screen without marking the payment declined.
+            // Using DECLINE shows a red "payment declined" state in POS; EXIT is the clean close/unbind step.
+            const didClose = lsExit();
+
+            // In embedded (Lightspeed) mode, do not attempt browser navigation/window close; it can break the webview.
+            if (embeddedMode) return;
 
             if (!didClose) {
-                window.parent.postMessage('CLOSE', '*');
-                window.parent.postMessage('EXIT', '*');
-                window.parent.postMessage('DECLINE', '*');
+                tryCloseWindow();
+                try { window.history.back(); } catch (e) { }
             }
-
-            tryCloseWindow();
-            try { window.history.back(); } catch (e) { }
         }
 
         // Auto-detect refund
@@ -1659,4 +2271,3 @@
 </body>
 
 </html>
-

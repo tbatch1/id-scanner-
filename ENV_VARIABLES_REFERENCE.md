@@ -35,6 +35,25 @@ Copy and paste these into Vercel Dashboard → Settings → Environment Variable
 |--------------|-------------|---------|
 | `CRON_SECRET` | Cron job protection | `7a8b9c0d1e2f...` (64 chars) |
 | `ALLOWED_ORIGINS` | CORS whitelist | `https://your-app.vercel.app` |
+| `OPENAI_API_KEY` | Enables manager AI chat | `sk-...` |
+| `OPENAI_MODEL` | AI model name (default `gpt-5-nano`) | `gpt-5-nano` |
+| `OPENAI_FALLBACK_MODELS` | Comma-separated fallback models | `gpt-4.1-nano,gpt-4o-mini` |
+| `OPENAI_MAX_OUTPUT_TOKENS` | Cap AI response length | `1024` |
+| `LIGHTSPEED_CLIENT_ID` | OAuth app client id (recommended for production) | `ls_...` |
+| `LIGHTSPEED_CLIENT_SECRET` | OAuth app client secret | `...` |
+| `LIGHTSPEED_REDIRECT_URI` | OAuth callback URL (must match exactly in Lightspeed app settings) | `https://id-scanner-project.vercel.app/api/auth/callback` |
+| `LIGHTSPEED_OAUTH_SCOPES` | OAuth scopes (space-delimited) | `sales:read sales:write customers:read customers:write webhooks` |
+| `LIGHTSPEED_WEBHOOK_STORE_RAW_BODY` | Store raw webhook bodies in DB for debugging (`true`/`false`) | `false` |
+| `CRON_DAILY_TIMEZONE` | Timezone for daily heavy tasks (retention/snapshots) | `America/Chicago` |
+| `CRON_DAILY_HOUR` | Daily heavy tasks hour (local) | `23` |
+| `CRON_DAILY_MINUTE` | Daily heavy tasks minute (local) | `30` |
+| `CRON_RUN_SNAPSHOTS` | Run nightly BI snapshots | `true` |
+| `CRON_SNAPSHOT_MODE` | Snapshot mode run nightly | `sales` |
+| `CRON_RUN_CUSTOMER_SYNC` | Run customer profile sync during the nightly cron tick | `true` |
+| `CRON_CUSTOMER_SYNC_MAX_DURATION_MS` | Max time per polling tick | `8000` |
+| `SNAPSHOT_DAY_CUTOFF_HOUR` | Local cutoff (hour) for “business day” | `6` |
+| `SNAPSHOT_CUSTOMER_LOOKUP_LIMIT` | Max customer lookups per run | `2000` |
+| `SNAPSHOT_CUSTOMER_LOOKUP_CONCURRENCY` | Parallel customer lookups | `6` |
 
 ### Already Configured (from .env.example)
 
@@ -130,11 +149,18 @@ curl https://your-app.vercel.app/api/health
 - Check header name: `X-Admin-Token` (case-sensitive)
 - Check browser console for errors
 
+### OAuth Login Not Working
+- Set `LIGHTSPEED_CLIENT_ID`, `LIGHTSPEED_CLIENT_SECRET`, `LIGHTSPEED_REDIRECT_URI`
+- Ensure `LIGHTSPEED_REDIRECT_URI` matches exactly in the Lightspeed developer app
+- Start the flow from `https://your-app.vercel.app/api/auth/login`
+
 ### Cron Job Not Running
 - Verify CRON_SECRET is set (optional)
 - Check Vercel Dashboard → Cron Jobs
 - View cron execution logs
-- Endpoint: `/api/cron/retention`
+- Endpoint: `/api/cron/retention` (runs once/day at 11:30pm CST)
+- Marketing customer sync endpoint: `/api/cron/customers` (manual trigger; polling runs via `/api/cron/retention` when `CRON_RUN_CUSTOMER_SYNC=true`)
+- For near-real-time polling on Vercel Hobby: use `.github/workflows/customer-sync.yml` to call `/api/cron/customers` every 15 minutes.
 
 ---
 

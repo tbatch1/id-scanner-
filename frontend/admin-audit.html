@@ -5,6 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Manager Dashboard - Transaction Audit</title>
+  <link rel="stylesheet" href="/frontend/admin-shared.css" />
   <style>
     body {
       margin: 0;
@@ -40,6 +41,11 @@
     .pill.bad {
       background: rgba(239, 68, 68, 0.18);
       border-color: rgba(239, 68, 68, 0.35);
+    }
+
+    .pill.warn {
+      background: rgba(245, 158, 11, 0.18);
+      border-color: rgba(245, 158, 11, 0.35);
     }
 
     .controls {
@@ -155,6 +161,9 @@
 </head>
 
 <body>
+  <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+    <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+  </a>
   <div class="header">
     <h1>Transaction Audit</h1>
     <div id="summaryPill" class="pill">Loading…</div>
@@ -179,7 +188,7 @@
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
       <div>
         <div style="font-weight:700;">Notification Center</div>
-        <div class="muted">Flags transactions missing an "ID Check ..." note.</div>
+        <div class="muted">Shows only transactions needing attention (missing "Age: 31" note or note couldn't be checked).</div>
       </div>
       <div class="muted" id="lastUpdated">—</div>
     </div>
@@ -192,7 +201,7 @@
         <th>Sale</th>
         <th>Status</th>
         <th>Total</th>
-        <th>ID Note</th>
+        <th>Age Note</th>
         <th>Verification</th>
         <th>Updated</th>
       </tr>
@@ -205,9 +214,11 @@
   </table>
 
   <div class="nav-links">
-    <a href="admin-scans.html" class="nav-link">All Scans</a>
-    <a href="admin-banned.html" class="nav-link">Banned Customers</a>
-    <a href="admin-overrides.html" class="nav-link">Override History</a>
+    <a href="/admin/data-center.html" class="nav-link">Manager Dashboard</a>
+    <a href="/admin/marketing.html" class="nav-link">Marketing Analytics</a>
+    <a href="/admin/scans.html" class="nav-link">All Scans</a>
+    <a href="/admin/banned.html" class="nav-link">Banned Customers</a>
+    <a href="/admin/overrides.html" class="nav-link">Override History</a>
   </div>
 
   <script>
@@ -246,6 +257,7 @@
       try {
         const params = new URLSearchParams({ limit });
         if (status && status !== 'ALL') params.set('status', status);
+        params.set('missingOnly', 'true');
         const res = await fetch(`/admin/transactions?${params}`, { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.message || 'Failed to load transactions');
@@ -256,8 +268,32 @@
 
         lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
 
-        if (missing.length > 0) {
-          summaryPill.textContent = `${missing.length} missing ID note${fetchErrors ? ` • ${fetchErrors} sale fetch errors` : ''}`;
+        const missingCount = Number(data.missingNoteCount) || missing.length;
+        if (missingCount > 0) {
+          summaryPill.textContent = `Missing age notes: ${missingCount}`;
+          summaryPill.className = 'pill bad';
+        } else if (fetchErrors > 0) {
+          summaryPill.textContent = `System warning: ${fetchErrors} note checks failed`;
+          summaryPill.className = 'pill warn';
+        } else {
+          summaryPill.textContent = 'All good (no missing notes)';
+          summaryPill.className = 'pill';
+        }
+
+        if (fetchErrors > 0) {
+          missingList.innerHTML = `<span class="badge warn">WARN</span> Note checks failed for ${fetchErrors} sale(s) (Lightspeed returned SALE_NOT_FOUND). These are not clerk mistakes—fix system/config/test data.`;
+        } else if (missingCount > 0) {
+          const preview = items.slice(0, 10).map(x => x.sale_id).join(', ');
+          missingList.innerHTML = preview
+            ? `<span class="badge bad">Missing notes</span> ${preview}${items.length > 10 ? '...' : ''}`
+            : `<span class="badge bad">Missing notes</span>`;
+        } else {
+          missingList.innerHTML = `<span class="badge ok">OK</span> Only sales missing an "Age: ##" note will appear here.`;
+        }
+
+        /*
+        if (false) {
+          summaryPill.textContent = `${missing.length} missing age note${fetchErrors ? ` • ${fetchErrors} sale fetch errors` : ''}`;
           summaryPill.className = 'pill bad';
           const preview = missing.slice(0, 10).map(x => x.sale_id).join(', ');
           missingList.innerHTML = `<span class="badge bad">Missing notes</span> ${preview}${missing.length > 10 ? '…' : ''}`;
@@ -269,8 +305,9 @@
             : `<span class="badge ok">OK</span> No missing notes in this list.`;
         }
 
+        */
         if (items.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="6" class="muted">No transactions returned.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" class="muted">No transactions need attention.</td></tr>`;
           return;
         }
 

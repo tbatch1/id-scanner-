@@ -5,7 +5,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Manager Dashboard - Data Center</title>
+  <link rel="stylesheet" href="/frontend/admin-shared.css" />
   <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1220;
+      --panel: rgba(17, 24, 39, 0.65);
+      --border: rgba(255, 255, 255, 0.10);
+      --text: #f4f6ff;
+      --muted: rgba(244, 246, 255, 0.65);
+      --blue: #60a5fa;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #fb7185;
+    }
+
     * {
       box-sizing: border-box;
     }
@@ -13,87 +27,64 @@
     body {
       margin: 0;
       padding: 0;
-      background: #0f172a;
-      color: #f4f6ff;
-      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-      display: flex;
-      height: 100vh;
-      overflow: hidden;
+      background: radial-gradient(circle at top, rgba(90, 84, 255, 0.22), transparent 55%),
+        radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.16), transparent 50%),
+        var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
-    .main-content {
-      flex: 1;
-      padding: 20px;
-      overflow-y: auto;
-      transition: margin-right 0.3s ease;
-    }
-
-    .main-content.chat-open {
-      margin-right: 380px;
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 18px 16px 28px;
     }
 
     .header {
       display: flex;
+      align-items: center;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-
-    .header h1 {
-      margin: 0;
-      font-size: 24px;
-    }
-
-    .header-right {
-      display: flex;
-      align-items: center;
       gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.02em;
     }
 
     .pill {
       display: inline-flex;
-      gap: 8px;
       align-items: center;
+      gap: 8px;
       padding: 8px 12px;
       border-radius: 999px;
       font-size: 13px;
-      background: rgba(59, 130, 246, 0.18);
-      border: 1px solid rgba(59, 130, 246, 0.35);
-    }
-
-    .pill.bad {
-      background: rgba(239, 68, 68, 0.18);
-      border-color: rgba(239, 68, 68, 0.35);
+      background: rgba(96, 165, 250, 0.14);
+      border: 1px solid rgba(96, 165, 250, 0.35);
+      color: #dbeafe;
+      white-space: nowrap;
     }
 
     .pill.warn {
-      background: rgba(245, 158, 11, 0.18);
-      border-color: rgba(245, 158, 11, 0.35);
+      background: rgba(251, 191, 36, 0.14);
+      border-color: rgba(251, 191, 36, 0.35);
+      color: #fef3c7;
     }
 
-    .chat-toggle {
-      padding: 8px 14px;
-      border-radius: 10px;
-      border: 1px solid rgba(139, 92, 246, 0.4);
-      background: rgba(139, 92, 246, 0.2);
-      color: #c4b5fd;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .chat-toggle:hover {
-      background: rgba(139, 92, 246, 0.3);
+    .pill.bad {
+      background: rgba(251, 113, 133, 0.14);
+      border-color: rgba(251, 113, 133, 0.35);
+      color: #ffe4e6;
     }
 
     .controls {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
     select,
@@ -102,751 +93,517 @@
       border-radius: 10px;
       border: 1px solid rgba(255, 255, 255, 0.12);
       background: rgba(255, 255, 255, 0.06);
-      color: #f4f6ff;
+      color: var(--text);
       font-size: 14px;
     }
 
     button {
       cursor: pointer;
-      background: rgba(46, 167, 80, 0.25);
-      border-color: rgba(46, 167, 80, 0.35);
-      font-weight: 600;
+      border-color: rgba(52, 211, 153, 0.35);
+      background: rgba(52, 211, 153, 0.14);
+      font-weight: 650;
+    }
+
+    button.secondary {
+      border-color: rgba(96, 165, 250, 0.35);
+      background: rgba(96, 165, 250, 0.14);
+      color: #dbeafe;
     }
 
     button:active {
       transform: scale(0.99);
     }
 
-    label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.06);
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    label input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-    }
-
-    .card {
-      background: rgba(30, 41, 59, 0.55);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      border-radius: 14px;
-      padding: 14px;
-      margin-bottom: 14px;
-    }
-
     .muted {
-      color: rgba(244, 246, 255, 0.65);
+      color: var(--muted);
       font-size: 12px;
     }
 
-    .stats-row {
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    @media (max-width: 1100px) {
+      .grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 12px 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .kpi {
       display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      margin-top: 10px;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
     }
 
-    .stat-box {
-      padding: 10px 14px;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .stat-box .value {
+    .kpi .value {
       font-size: 20px;
-      font-weight: 700;
+      font-weight: 800;
+      letter-spacing: 0.01em;
     }
 
-    .stat-box .label {
+    .kpi .label {
       font-size: 11px;
-      color: rgba(244, 246, 255, 0.65);
+      color: var(--muted);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.08em;
     }
 
-    .stat-box.bad .value {
-      color: #f87171;
+    .kpi .delta {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
     }
 
-    .stat-box.warn .value {
-      color: #fbbf24;
+    .section-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 16px 0 8px;
+      flex-wrap: wrap;
     }
 
-    .stat-box.ok .value {
-      color: #4ade80;
+    .section-title h2 {
+      margin: 0;
+      font-size: 15px;
+      color: #e5e7eb;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
 
-    .table-container {
+    .table-wrap {
       overflow-x: auto;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
     }
 
-    .table {
+    table {
       width: 100%;
       border-collapse: collapse;
-      overflow: hidden;
-      border-radius: 14px;
-      background: rgba(30, 41, 59, 0.55);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      min-width: 900px;
+      min-width: 720px;
     }
 
     th,
     td {
-      text-align: left;
       padding: 12px 10px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       font-size: 13px;
+      text-align: left;
       vertical-align: top;
       word-break: break-word;
     }
 
     th {
-      font-size: 12px;
-      color: rgba(244, 246, 255, 0.65);
+      font-size: 11px;
+      color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      background: rgba(15, 23, 42, 0.6);
-    }
-
-    tr.missing-note td {
-      background: rgba(239, 68, 68, 0.08);
-    }
-
-    tr.missing-verification td {
-      background: rgba(245, 158, 11, 0.08);
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.06);
-    }
-
-    .badge.ok {
-      background: rgba(46, 167, 80, 0.22);
-      border-color: rgba(46, 167, 80, 0.35);
-    }
-
-    .badge.warn {
-      background: rgba(245, 158, 11, 0.18);
-      border-color: rgba(245, 158, 11, 0.35);
-    }
-
-    .badge.bad {
-      background: rgba(239, 68, 68, 0.18);
-      border-color: rgba(239, 68, 68, 0.35);
+      background: rgba(15, 23, 42, 0.55);
+      position: sticky;
+      top: 0;
     }
 
     .nav-links {
-      margin-top: 14px;
+      margin-top: 18px;
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
     }
 
     .nav-link {
-      color: #93c5fd;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 13px;
-    }
-
-    .nav-link:hover {
-      text-decoration: underline;
-    }
-
-    /* Chat Sidebar */
-    .chat-sidebar {
-      position: fixed;
-      top: 0;
-      right: -380px;
-      width: 380px;
-      height: 100vh;
-      background: #1e293b;
-      border-left: 1px solid rgba(255, 255, 255, 0.1);
-      display: flex;
-      flex-direction: column;
-      transition: right 0.3s ease;
-      z-index: 100;
-    }
-
-    .chat-sidebar.open {
-      right: 0;
-    }
-
-    .chat-header {
-      padding: 16px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .chat-header h3 {
-      margin: 0;
-      font-size: 16px;
-      color: #c4b5fd;
-    }
-
-    .chat-close {
-      background: none;
-      border: none;
-      color: rgba(255, 255, 255, 0.6);
-      cursor: pointer;
-      font-size: 20px;
-      padding: 4px 8px;
-    }
-
-    .chat-messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .chat-message {
-      padding: 10px 14px;
-      border-radius: 12px;
-      max-width: 90%;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    .chat-message.user {
-      background: rgba(59, 130, 246, 0.25);
-      align-self: flex-end;
-      border-bottom-right-radius: 4px;
-    }
-
-    .chat-message.assistant {
-      background: rgba(255, 255, 255, 0.08);
-      align-self: flex-start;
-      border-bottom-left-radius: 4px;
-    }
-
-    .chat-message.error {
-      background: rgba(239, 68, 68, 0.2);
-      color: #fca5a5;
-    }
-
-    .chat-message pre {
-      margin: 8px 0 0;
-      padding: 8px;
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 6px;
-      overflow-x: auto;
-      font-size: 12px;
-    }
-
-    .chat-input-area {
-      padding: 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .chat-suggestions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .chat-suggestion {
-      padding: 6px 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(139, 92, 246, 0.3);
-      background: rgba(139, 92, 246, 0.1);
-      color: #c4b5fd;
-      font-size: 12px;
-      cursor: pointer;
-    }
-
-    .chat-suggestion:hover {
-      background: rgba(139, 92, 246, 0.2);
-    }
-
-    .chat-input-row {
-      display: flex;
-      gap: 8px;
-    }
-
-    .chat-input {
-      flex: 1;
-      padding: 12px 14px;
+      padding: 10px 12px;
       border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       background: rgba(255, 255, 255, 0.06);
-      color: #f4f6ff;
-      font-size: 14px;
-      resize: none;
-    }
-
-    .chat-input:focus {
-      outline: none;
-      border-color: rgba(139, 92, 246, 0.5);
-    }
-
-    .chat-send {
-      padding: 12px 16px;
-      border-radius: 10px;
-      border: none;
-      background: rgba(139, 92, 246, 0.6);
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .chat-send:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .chat-send:hover:not(:disabled) {
-      background: rgba(139, 92, 246, 0.8);
-    }
-
-    .chat-loading {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 14px;
-    }
-
-    .chat-loading::before {
-      content: '';
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(139, 92, 246, 0.3);
-      border-top-color: #8b5cf6;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    .chat-not-configured {
-      padding: 20px;
-      text-align: center;
-      color: rgba(255, 255, 255, 0.6);
-    }
-
-    .chat-not-configured code {
-      display: block;
-      margin-top: 8px;
-      padding: 8px;
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 6px;
-      font-size: 12px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 650;
     }
   </style>
 </head>
 
 <body>
-  <div class="main-content" id="mainContent">
+  <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+    <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+  </a>
+  <div class="wrap">
     <div class="header">
       <h1>Data Center</h1>
-      <div class="header-right">
-        <div id="summaryPill" class="pill">Loading...</div>
-        <button class="chat-toggle" onclick="toggleChat()">
-          <span>AI Assistant</span>
-        </button>
-      </div>
+      <div class="pill" id="snapshotPill">Loading snapshots…</div>
     </div>
 
     <div class="controls">
+      <select id="daysSelect">
+        <option value="7">Last 7 days</option>
+        <option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="365">Last 365 days</option>
+      </select>
+
       <select id="outletSelect">
         <option value="">All Outlets</option>
       </select>
-      <select id="statusSelect">
-        <option value="" selected>ALL</option>
-        <option value="CLOSED">CLOSED</option>
-        <option value="OPEN">OPEN</option>
-      </select>
-      <select id="limitSelect">
-        <option value="25">25</option>
-        <option value="50" selected>50</option>
-        <option value="100">100</option>
-        <option value="200">200</option>
-      </select>
-      <label>
-        <input type="checkbox" id="missingOnlyCheck" />
-        Only Missing
-      </label>
-      <button onclick="loadSales()">Refresh</button>
+
+      <button class="secondary" id="refreshBtn">Refresh Now</button>
     </div>
 
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-        <div>
-          <div style="font-weight:700;">Sales Overview</div>
-          <div class="muted">Recent sales from Lightspeed with ID verification coverage.</div>
+    <div class="muted" id="lastUpdated">—</div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="kpi">
+          <div>
+            <div class="label">Revenue</div>
+            <div class="value" id="kpiRevenue">—</div>
+          </div>
+          <div class="delta" id="kpiRevenueMeta">—</div>
         </div>
-        <div class="muted" id="lastUpdated">-</div>
       </div>
-      <div class="stats-row">
-        <div class="stat-box" id="statTotal">
-          <div class="value">-</div>
-          <div class="label">Total Sales</div>
+      <div class="card">
+        <div class="kpi">
+          <div>
+            <div class="label">Transactions</div>
+            <div class="value" id="kpiTransactions">—</div>
+          </div>
+          <div class="delta" id="kpiTransactionsMeta">—</div>
         </div>
-        <div class="stat-box bad" id="statMissingNote">
-          <div class="value">-</div>
-          <div class="label">Missing Note</div>
+      </div>
+      <div class="card">
+        <div class="kpi">
+          <div>
+            <div class="label">Avg Ticket</div>
+            <div class="value" id="kpiAvgTicket">—</div>
+          </div>
+          <div class="delta" id="kpiAvgTicketMeta">—</div>
         </div>
-        <div class="stat-box warn" id="statMissingVerification">
-          <div class="value">-</div>
-          <div class="label">Missing Verification</div>
+      </div>
+      <div class="card">
+        <div class="kpi">
+          <div>
+            <div class="label">Items Sold</div>
+            <div class="value" id="kpiItemsSold">—</div>
+          </div>
+          <div class="delta" id="kpiItemsSoldMeta">—</div>
         </div>
-        <div class="stat-box ok" id="statCovered">
-          <div class="value">-</div>
-          <div class="label">Fully Covered</div>
+      </div>
+      <div class="card">
+        <div class="kpi">
+          <div>
+            <div class="label">Unique Customers</div>
+            <div class="value" id="kpiCustomers">—</div>
+          </div>
+          <div class="delta" id="kpiCustomersMeta">—</div>
         </div>
       </div>
     </div>
 
-    <div class="table-container">
-      <table class="table">
+    <div class="section-title">
+      <h2>Top Products</h2>
+      <div class="muted" id="topProductsMeta">—</div>
+    </div>
+    <div class="table-wrap">
+      <table>
         <thead>
           <tr>
-            <th>Sale</th>
-            <th>Status</th>
-            <th>Total</th>
-            <th>Outlet / User</th>
-            <th>Customer</th>
-            <th>ID Note</th>
-            <th>Verification</th>
-            <th>Updated</th>
+            <th>Product</th>
+            <th>SKU</th>
+            <th>Qty</th>
+            <th>Revenue</th>
+            <th>Txns</th>
           </tr>
         </thead>
-        <tbody id="tbody">
+        <tbody id="topProductsBody">
           <tr>
-            <td colspan="8" class="muted">Loading...</td>
+            <td colspan="5" class="muted">Loading…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-title">
+      <h2>Low Stock</h2>
+      <div class="muted" id="lowStockMeta">—</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Outlet</th>
+            <th>Product</th>
+            <th>SKU</th>
+            <th>On Hand</th>
+            <th>Reorder Pt</th>
+          </tr>
+        </thead>
+        <tbody id="lowStockBody">
+          <tr>
+            <td colspan="5" class="muted">Loading…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-title">
+      <h2>Top Customers</h2>
+      <div class="muted" id="topCustomersMeta">—</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Email</th>
+            <th>Txns</th>
+            <th>Spend</th>
+            <th>Avg Ticket</th>
+          </tr>
+        </thead>
+        <tbody id="topCustomersBody">
+          <tr>
+            <td colspan="5" class="muted">Loading…</td>
           </tr>
         </tbody>
       </table>
     </div>
 
     <div class="nav-links">
-      <a href="admin-scans.html" class="nav-link">All Scans</a>
-      <a href="admin-banned.html" class="nav-link">Banned Customers</a>
-      <a href="admin-overrides.html" class="nav-link">Override History</a>
-      <a href="admin-audit.html" class="nav-link">Transaction Audit</a>
-    </div>
-  </div>
-
-  <!-- Chat Sidebar -->
-  <div class="chat-sidebar" id="chatSidebar">
-    <div class="chat-header">
-      <h3>AI Assistant</h3>
-      <button class="chat-close" onclick="toggleChat()">&times;</button>
-    </div>
-    <div class="chat-messages" id="chatMessages">
-      <!-- Messages will be added here -->
-    </div>
-    <div class="chat-input-area">
-      <div class="chat-suggestions">
-        <button class="chat-suggestion" onclick="askQuestion('What\\'s selling best this week?')">Top products</button>
-        <button class="chat-suggestion" onclick="askQuestion('What items are low on stock?')">Low stock</button>
-        <button class="chat-suggestion" onclick="askQuestion('Who are my top customers?')">Top customers</button>
-        <button class="chat-suggestion" onclick="askQuestion('Compare outlet performance')">Compare outlets</button>
-      </div>
-      <div class="chat-input-row">
-        <textarea class="chat-input" id="chatInput" placeholder="Ask about sales, inventory, customers..." rows="1" onkeydown="handleChatKeydown(event)"></textarea>
-        <button class="chat-send" id="chatSend" onclick="sendMessage()">Send</button>
-      </div>
+      <a href="/admin/marketing.html" class="nav-link">Marketing Analytics</a>
+      <a href="/admin/scans.html" class="nav-link">All Scans</a>
+      <a href="/admin/banned.html" class="nav-link">Banned Customers</a>
+      <a href="/admin/overrides.html" class="nav-link">Override History</a>
+      <a href="/admin/audit.html" class="nav-link">Transaction Audit</a>
     </div>
   </div>
 
   <script>
-    // Chat state
-    let chatOpen = false;
-    let chatConfigured = false;
-    let chatHistory = [];
-    let isLoading = false;
-
-    // Check chat status on load
-    async function checkChatStatus() {
-      try {
-        const res = await fetch('/admin/chat/status');
-        const data = await res.json();
-        chatConfigured = data.configured;
-
-        if (!chatConfigured) {
-          document.getElementById('chatMessages').innerHTML = `
-            <div class="chat-not-configured">
-              <p>AI Assistant is not configured.</p>
-              <p>Set the environment variable:</p>
-              <code>ANTHROPIC_API_KEY=your_key</code>
-            </div>
-          `;
-        } else {
-          addMessage('assistant', 'Hello! I can help you understand your sales, inventory, and customer data. Ask me anything!');
-        }
-      } catch (e) {
-        console.error('Failed to check chat status:', e);
-      }
-    }
-
-    function toggleChat() {
-      chatOpen = !chatOpen;
-      document.getElementById('chatSidebar').classList.toggle('open', chatOpen);
-      document.getElementById('mainContent').classList.toggle('chat-open', chatOpen);
-
-      if (chatOpen) {
-        document.getElementById('chatInput').focus();
-      }
-    }
-
-    function addMessage(role, content) {
-      const messagesDiv = document.getElementById('chatMessages');
-      const msgDiv = document.createElement('div');
-      msgDiv.className = `chat-message ${role}`;
-      msgDiv.innerHTML = formatMessage(content);
-      messagesDiv.appendChild(msgDiv);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-
-    function formatMessage(text) {
-      // Basic markdown-like formatting
-      return text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\n/g, '<br>')
-        .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
-    }
-
-    function showLoading() {
-      const messagesDiv = document.getElementById('chatMessages');
-      const loadingDiv = document.createElement('div');
-      loadingDiv.className = 'chat-loading';
-      loadingDiv.id = 'chatLoading';
-      loadingDiv.textContent = 'Thinking...';
-      messagesDiv.appendChild(loadingDiv);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-
-    function hideLoading() {
-      const loadingDiv = document.getElementById('chatLoading');
-      if (loadingDiv) loadingDiv.remove();
-    }
-
-    async function sendMessage() {
-      if (isLoading || !chatConfigured) return;
-
-      const input = document.getElementById('chatInput');
-      const message = input.value.trim();
-      if (!message) return;
-
-      input.value = '';
-      addMessage('user', message);
-
-      isLoading = true;
-      document.getElementById('chatSend').disabled = true;
-      showLoading();
-
-      try {
-        const res = await fetch('/admin/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message,
-            history: chatHistory.slice(-10) // Keep last 10 messages for context
-          })
-        });
-
-        const data = await res.json();
-        hideLoading();
-
-        if (data.success) {
-          addMessage('assistant', data.response);
-          chatHistory.push({ role: 'user', content: message });
-          chatHistory.push({ role: 'assistant', content: data.response });
-        } else {
-          addMessage('error', data.message || 'An error occurred');
-        }
-      } catch (e) {
-        hideLoading();
-        addMessage('error', 'Failed to connect to AI assistant');
-      }
-
-      isLoading = false;
-      document.getElementById('chatSend').disabled = false;
-    }
-
-    function askQuestion(question) {
-      document.getElementById('chatInput').value = question;
-      sendMessage();
-    }
-
-    function handleChatKeydown(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    }
-
-    // Data Center functions
     function fmtMoney(value) {
-      const num = Number(value);
-      if (!Number.isFinite(num)) return '-';
-      return `$${num.toFixed(2)}`;
+      const n = Number(value || 0);
+      return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
     }
 
-    function fmtDate(value) {
-      if (!value) return '-';
-      const d = new Date(value);
-      if (Number.isNaN(d.getTime())) return '-';
-      return d.toLocaleString();
+    function fmtInt(value) {
+      const n = Number(value || 0);
+      return Number.isFinite(n) ? n.toLocaleString() : '0';
     }
 
-    function makeSaleLink(id) {
-      if (!id) return '-';
-      const href = `https://retail.lightspeed.app/sales/${encodeURIComponent(id)}?platform=ios&action=view`;
-      return `<a href="${href}" target="_blank" rel="noreferrer" class="nav-link" style="color:#93c5fd;">${id}</a>`;
-    }
-
-    function makeCustomerLink(id) {
-      if (!id) return '<span class="muted">-</span>';
-      const href = `https://retail.lightspeed.app/customers/${encodeURIComponent(id)}`;
-      return `<a href="${href}" target="_blank" rel="noreferrer" class="nav-link" style="color:#93c5fd;">View</a>`;
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     }
 
     async function loadOutlets() {
       try {
         const res = await fetch('/admin/outlets', { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.outlets) return;
-
+        if (!res.ok) return;
         const select = document.getElementById('outletSelect');
         const current = select.value;
         select.innerHTML = '<option value="">All Outlets</option>';
-        for (const outlet of data.outlets) {
+        for (const outlet of data.outlets || []) {
           const opt = document.createElement('option');
           opt.value = outlet.outletId;
-          opt.textContent = outlet.label || outlet.name || outlet.outletId;
+          opt.textContent = outlet.label || outlet.code || outlet.outletId;
           select.appendChild(opt);
         }
-        if (current) select.value = current;
-      } catch (e) {
-        console.error('Failed to load outlets:', e);
-      }
+        select.value = current;
+      } catch { }
     }
 
-    async function loadSales() {
-      const outlet = document.getElementById('outletSelect').value;
-      const status = document.getElementById('statusSelect').value;
-      const limit = document.getElementById('limitSelect').value;
-      const missingOnly = document.getElementById('missingOnlyCheck').checked;
-      const tbody = document.getElementById('tbody');
-      const summaryPill = document.getElementById('summaryPill');
-      const lastUpdated = document.getElementById('lastUpdated');
-
-      tbody.innerHTML = `<tr><td colspan="8" class="muted">Loading...</td></tr>`;
-      summaryPill.textContent = 'Loading...';
-      summaryPill.className = 'pill';
-
+    async function loadSnapshotHealth() {
+      const pill = document.getElementById('snapshotPill');
       try {
-        const params = new URLSearchParams({ limit });
-        if (outlet) params.set('outlet', outlet);
-        if (status) params.set('status', status);
-        if (missingOnly) params.set('missingOnly', 'true');
-
-        const res = await fetch(`/admin/sales?${params}`, { cache: 'no-store' });
+        const res = await fetch('/admin/bi/snapshot-health', { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.message || 'Failed to load sales');
+        if (!res.ok) throw new Error(data.message || 'Snapshot health unavailable');
 
-        const items = data.sales || [];
-        const missingNoteCount = data.missingNoteCount || 0;
-        const missingVerificationCount = data.missingVerificationCount || 0;
-        const fullyCovered = items.filter(s => !s.missingNote && !s.missingVerification).length;
+        const latest = data.latest || {};
+        const best = latest.outlets || latest.sales || latest.inventory || latest.customers || null;
 
-        lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
-
-        // Update stats
-        document.querySelector('#statTotal .value').textContent = items.length;
-        document.querySelector('#statMissingNote .value').textContent = missingNoteCount;
-        document.querySelector('#statMissingVerification .value').textContent = missingVerificationCount;
-        document.querySelector('#statCovered .value').textContent = fullyCovered;
-
-        // Update summary pill
-        if (missingNoteCount > 0 || missingVerificationCount > 0) {
-          const parts = [];
-          if (missingNoteCount > 0) parts.push(`${missingNoteCount} missing note`);
-          if (missingVerificationCount > 0) parts.push(`${missingVerificationCount} missing verification`);
-          summaryPill.textContent = parts.join(' | ');
-          summaryPill.className = missingNoteCount > 0 ? 'pill bad' : 'pill warn';
-        } else {
-          summaryPill.textContent = `All ${items.length} sales covered`;
-          summaryPill.className = 'pill';
-        }
-
-        if (items.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="8" class="muted">No sales returned.</td></tr>`;
+        if (!best) {
+          pill.textContent = 'No snapshots yet';
+          pill.className = 'pill bad';
           return;
         }
 
-        tbody.innerHTML = items.map((s) => {
-          const noteBadge = s.hasIdNote
-            ? `<span class="badge ok">${s.noteStatus || 'ID NOTE'}</span> ${s.noteAge ? `Age ${s.noteAge}` : ''} ${s.noteDobYear ? `DOB ${s.noteDobYear}` : ''}`
-            : `<span class="badge bad">MISSING</span>`;
+        const ageMs = Date.now() - new Date(best).getTime();
+        const daysOld = Math.floor(ageMs / (24 * 60 * 60 * 1000));
 
-          const isOverride = String(s.verification_status || '') === 'approved_override';
-          const verAgeText = isOverride ? 'Override' : (s.verification_age ? `Age ${s.verification_age}` : '');
-          const verBadge = s.hasVerification
-            ? `<span class="badge ${String(s.verification_status || '').startsWith('approved') ? 'ok' : 'warn'}">${s.verification_status}</span> ${verAgeText}`
-            : `<span class="badge warn">NO DB</span>`;
-
-          let rowClass = '';
-          if (s.missingNote) rowClass = 'missing-note';
-          else if (s.missingVerification) rowClass = 'missing-verification';
-
-          const outletUser = [s.outlet_name, s.user_name].filter(Boolean).join(' / ') || '-';
-
-          return `
-            <tr class="${rowClass}">
-              <td>${makeSaleLink(s.sale_id)}</td>
-              <td>${s.status || '-'}</td>
-              <td>${fmtMoney(s.total)}</td>
-              <td>${outletUser}</td>
-              <td>${makeCustomerLink(s.customer_id)}</td>
-              <td>${noteBadge}</td>
-              <td>${verBadge}</td>
-              <td>${fmtDate(s.updated_at || s.created_at)}</td>
-            </tr>
-          `;
-        }).join('');
-
+        pill.textContent = daysOld <= 1 ? `Snapshots current (as of ${best})` : `Snapshots stale (${best})`;
+        pill.className = daysOld <= 1 ? 'pill' : (daysOld <= 3 ? 'pill warn' : 'pill bad');
       } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="8" class="muted">Error: ${e.message}</td></tr>`;
-        summaryPill.textContent = 'Error';
-        summaryPill.className = 'pill bad';
+        pill.textContent = 'Snapshot health error';
+        pill.className = 'pill bad';
       }
     }
 
-    // Initial load
-    loadOutlets();
-    loadSales();
-    checkChatStatus();
+    function buildParams(extra = {}) {
+      const days = document.getElementById('daysSelect').value;
+      const outletId = document.getElementById('outletSelect').value;
+      const params = new URLSearchParams({ days });
+      if (outletId) params.set('outletId', outletId);
+      for (const [k, v] of Object.entries(extra)) {
+        if (v !== undefined && v !== null && String(v).length) params.set(k, String(v));
+      }
+      return params.toString();
+    }
 
-    // Auto-refresh sales every 30s
-    setInterval(loadSales, 30000);
+    async function loadSummary() {
+      const days = document.getElementById('daysSelect').value;
+      const outletId = document.getElementById('outletSelect').value || null;
+
+      const res = await fetch(`/admin/bi/summary?${buildParams()}`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Summary unavailable');
+
+      const totals = data.totals || {};
+      const range = data.range || {};
+
+      document.getElementById('kpiRevenue').textContent = fmtMoney(totals.totalRevenue);
+      document.getElementById('kpiTransactions').textContent = fmtInt(totals.totalTransactions);
+      document.getElementById('kpiAvgTicket').textContent = fmtMoney(totals.avgTransactionValue);
+      document.getElementById('kpiItemsSold').textContent = fmtInt(totals.itemsSold);
+      document.getElementById('kpiCustomers').textContent = totals.uniqueCustomers === null ? '—' : fmtInt(totals.uniqueCustomers);
+
+      const scope = outletId ? 'Outlet' : 'All outlets';
+      const windowText = range.start && range.end ? `${range.start} → ${range.end}` : `Last ${days} days`;
+      document.getElementById('kpiRevenueMeta').textContent = `${scope} • ${windowText}`;
+      document.getElementById('kpiTransactionsMeta').textContent = `${scope} • ${windowText}`;
+      document.getElementById('kpiAvgTicketMeta').textContent = `${scope} • ${windowText}`;
+      document.getElementById('kpiItemsSoldMeta').textContent = `${scope} • ${windowText}`;
+      document.getElementById('kpiCustomersMeta').textContent = `${scope} • ${windowText}`;
+    }
+
+    async function loadTopProducts() {
+      const body = document.getElementById('topProductsBody');
+      const meta = document.getElementById('topProductsMeta');
+      body.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
+
+      const res = await fetch(`/admin/bi/top-products?${buildParams({ limit: 10, sortBy: 'revenue' })}`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Top products unavailable');
+
+      const items = data.products || [];
+      meta.textContent = items.length ? `${items.length} products • ${data.range?.start} → ${data.range?.end}` : '—';
+
+      if (!items.length) {
+        body.innerHTML = `<tr><td colspan="5" class="muted">No snapshot rows.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = items.map((p) => `
+        <tr>
+          <td>${escapeHtml(p.productName || p.productId)}</td>
+          <td>${escapeHtml(p.sku || '—')}</td>
+          <td>${fmtInt(p.quantitySold)}</td>
+          <td>${fmtMoney(p.revenue)}</td>
+          <td>${fmtInt(p.transactionCount)}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadLowStock() {
+      const body = document.getElementById('lowStockBody');
+      const meta = document.getElementById('lowStockMeta');
+      body.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
+
+      const res = await fetch(`/admin/bi/low-stock?${buildParams({ limit: 25 })}`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        meta.textContent = '—';
+        body.innerHTML = `<tr><td colspan="5" class="muted">${escapeHtml(data.message || 'Low stock unavailable')}</td></tr>`;
+        return;
+      }
+
+      const items = data.items || [];
+      meta.textContent = data.snapshotDate ? `Snapshot: ${data.snapshotDate}` : '—';
+
+      if (!items.length) {
+        body.innerHTML = `<tr><td colspan="5" class="muted">No low stock items returned.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = items.map((it) => `
+        <tr>
+          <td>${escapeHtml(it.outletName || it.outletId || '—')}</td>
+          <td>${escapeHtml(it.productName || it.productId)}</td>
+          <td>${escapeHtml(it.sku || '—')}</td>
+          <td>${fmtInt(it.currentAmount)}</td>
+          <td>${it.reorderPoint === null || it.reorderPoint === undefined ? '—' : fmtInt(it.reorderPoint)}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadTopCustomers() {
+      const body = document.getElementById('topCustomersBody');
+      const meta = document.getElementById('topCustomersMeta');
+      body.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
+
+      const res = await fetch(`/admin/bi/top-customers?${buildParams({ limit: 10 })}`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Top customers unavailable');
+
+      const items = data.customers || [];
+      meta.textContent = items.length ? `${items.length} customers • ${data.range?.start} → ${data.range?.end}` : '—';
+
+      if (!items.length) {
+        body.innerHTML = `<tr><td colspan="5" class="muted">No snapshot rows.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = items.map((c) => `
+        <tr>
+          <td>${escapeHtml(c.customerName || c.customerId)}</td>
+          <td>${escapeHtml(c.customerEmail || '—')}</td>
+          <td>${fmtInt(c.transactionCount)}</td>
+          <td>${fmtMoney(c.totalSpend)}</td>
+          <td>${fmtMoney(c.avgTransactionValue)}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function refreshAll() {
+      const lastUpdated = document.getElementById('lastUpdated');
+      lastUpdated.textContent = 'Refreshing…';
+      try {
+        await loadSnapshotHealth();
+        await Promise.all([loadSummary(), loadTopProducts(), loadLowStock(), loadTopCustomers()]);
+        lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+      } catch (e) {
+        lastUpdated.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', refreshAll);
+    document.getElementById('daysSelect').addEventListener('change', refreshAll);
+    document.getElementById('outletSelect').addEventListener('change', refreshAll);
+
+    loadOutlets().then(refreshAll);
+    setInterval(refreshAll, 60000);
   </script>
 </body>
 

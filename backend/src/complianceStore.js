@@ -335,7 +335,7 @@ async function findBannedCustomer({ documentType, documentNumber, issuingCountry
       FROM banned_customers
       WHERE document_type = $1
         AND document_number = $2
-        AND issuing_country = $3
+        AND ($3 = '' OR issuing_country = $3 OR issuing_country = '')
       LIMIT 1
     `,
     [documentType, documentNumber, normalizedCountry]
@@ -395,7 +395,11 @@ async function addBannedCustomer(entry) {
   return rows[0];
 }
 
-async function listBannedCustomers() {
+async function listBannedCustomers({ query: search, limit = 500, offset = 0 } = {}) {
+  const normalizedSearch = search ? sanitizeNote(search).trim() : null;
+  const normalizedLimit = Math.min(Math.max(parseInt(limit, 10) || 500, 1), 2000);
+  const normalizedOffset = Math.max(parseInt(offset, 10) || 0, 0);
+
   const { rows } = await query(
     `
       SELECT
@@ -410,8 +414,16 @@ async function listBannedCustomers() {
         created_at AS "createdAt",
         updated_at AS "updatedAt"
       FROM banned_customers
+      WHERE ($1::text IS NULL)
+        OR (document_number ILIKE '%' || $1 || '%')
+        OR (first_name ILIKE '%' || $1 || '%')
+        OR (last_name ILIKE '%' || $1 || '%')
+        OR (notes ILIKE '%' || $1 || '%')
       ORDER BY created_at DESC
+      LIMIT $2 OFFSET $3
     `
+    ,
+    [normalizedSearch && normalizedSearch.length ? normalizedSearch : null, normalizedLimit, normalizedOffset]
   );
 
   return rows;

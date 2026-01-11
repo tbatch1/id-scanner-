@@ -1,6 +1,7 @@
 // Mock Lightspeed Client - Used when API credentials are not configured
 
 const config = require('./config');
+const { appendAgeNote } = require('./ageNote');
 
 const saleStore = new Map();
 const verificationStore = new Map();
@@ -17,6 +18,7 @@ function seedSales() {
       reference: 'Walk-in',
       total: 12.99,
       currency: 'USD',
+      note: '',
       items: [
         {
           saleLineID: 'LINE-1',
@@ -38,6 +40,7 @@ function seedSales() {
       reference: 'Curbside Pickup',
       total: 87.48,
       currency: 'USD',
+      note: '',
       items: [
         {
           saleLineID: 'LINE-1',
@@ -140,6 +143,7 @@ function getSaleById(saleId) {
     reference: sale.reference,
     total: sale.total,
     currency: sale.currency,
+    note: sale.note || null,
     items: sale.items,
     verification,
     completed: sale.status === 'completed',
@@ -194,11 +198,16 @@ function recordVerification({ saleId, clerkId, verificationData, sale: saleConte
 
   storedSale.lastVerificationId = verificationId;
   storedSale.status = verificationData.approved ? 'verified' : 'awaiting_verification';
+  let noteUpdated = false;
+  if (verificationData.approved) {
+    storedSale.note = appendAgeNote(storedSale.note || '', verificationData.age);
+    noteUpdated = true;
+  }
   storedSale.updatedAt = timestamp;
 
   saleStore.set(saleId, storedSale);
 
-  return record;
+  return { ...record, noteUpdated };
 }
 
 function completeSale({ saleId, verificationId, paymentType, sale: saleContext, locationId }) {
@@ -346,9 +355,51 @@ const mockInventory = [
 ];
 
 const mockCustomers = [
-  { customerId: 'CUST-001', name: 'Alex Rivera', firstName: 'Alex', lastName: 'Rivera', email: 'alex@example.com', yearToDate: 1250.00, loyaltyBalance: 125 },
-  { customerId: 'CUST-002', name: 'Jordan Lee', firstName: 'Jordan', lastName: 'Lee', email: 'jordan@example.com', yearToDate: 890.50, loyaltyBalance: 89 },
-  { customerId: 'CUST-003', name: 'Sam Chen', firstName: 'Sam', lastName: 'Chen', email: 'sam@example.com', yearToDate: 2100.00, loyaltyBalance: 210 }
+  {
+    customerId: 'CUST-001',
+    name: 'Alex Rivera',
+    firstName: 'Alex',
+    lastName: 'Rivera',
+    email: 'alex@example.com',
+    yearToDate: 1250.0,
+    loyaltyBalance: 125,
+    version: 10,
+    dateOfBirth: '1990-06-15',
+    sex: 'M',
+    physical_postcode: '78701',
+    physical_city: 'Austin',
+    enable_loyalty: true
+  },
+  {
+    customerId: 'CUST-002',
+    name: 'Jordan Lee',
+    firstName: 'Jordan',
+    lastName: 'Lee',
+    email: 'jordan@example.com',
+    yearToDate: 890.5,
+    loyaltyBalance: 89,
+    version: 11,
+    dateOfBirth: '1987-12-02',
+    sex: 'F',
+    physical_postcode: '78702',
+    physical_city: 'Austin',
+    enable_loyalty: true
+  },
+  {
+    customerId: 'CUST-003',
+    name: 'Sam Chen',
+    firstName: 'Sam',
+    lastName: 'Chen',
+    email: 'sam@example.com',
+    yearToDate: 2100.0,
+    loyaltyBalance: 210,
+    version: 12,
+    dateOfBirth: '2001-01-10',
+    sex: 'X',
+    physical_postcode: '75001',
+    physical_city: 'Dallas',
+    enable_loyalty: false
+  }
 ];
 
 const mockUsers = [
@@ -368,6 +419,21 @@ function listProducts({ limit = 200, active = true } = {}) {
   return products.slice(0, limit);
 }
 
+function getProductById(productId) {
+  const id = String(productId || '').trim();
+  if (!id) return null;
+  const product = mockProducts.find((p) => p.productId === id) || null;
+  if (!product) return null;
+  return {
+    productId: product.productId,
+    name: product.name || null,
+    sku: product.sku || null,
+    categoryName: product.categoryName || null,
+    active: product.active ?? true,
+    price: parseFloat(product.price || 0)
+  };
+}
+
 function listInventory({ outletId = null, limit = 200 } = {}) {
   let inventory = mockInventory;
   if (outletId) {
@@ -378,6 +444,49 @@ function listInventory({ outletId = null, limit = 200 } = {}) {
 
 function listCustomers({ limit = 200 } = {}) {
   return mockCustomers.slice(0, limit);
+}
+
+function listCustomersRaw({ after = null, pageSize = 200 } = {}) {
+  const normalizedAfter = after === null || after === undefined ? null : Number(after);
+  const normalizedPageSize = Math.max(1, Math.min(Number.parseInt(pageSize, 10) || 200, 200));
+
+  const filtered = normalizedAfter === null
+    ? mockCustomers
+    : mockCustomers.filter((c) => Number(c.version || 0) > normalizedAfter);
+
+  return filtered.slice(0, normalizedPageSize).map((c) => ({
+    id: c.customerId,
+    name: c.name,
+    first_name: c.firstName,
+    last_name: c.lastName,
+    email: c.email,
+    enable_loyalty: c.enable_loyalty ?? null,
+    date_of_birth: c.dateOfBirth ?? null,
+    sex: c.sex ?? null,
+    physical_postcode: c.physical_postcode ?? null,
+    physical_city: c.physical_city ?? null,
+    loyalty_balance: c.loyaltyBalance ?? null,
+    year_to_date: c.yearToDate ?? null,
+    version: c.version ?? null,
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+    updated_at: new Date().toISOString()
+  }));
+}
+
+function getCustomerById(customerId) {
+  const id = String(customerId || '').trim();
+  if (!id) return null;
+  const found = mockCustomers.find((c) => String(c.customerId) === id) || null;
+  return found || { customerId: id, name: `Customer ${id}`, email: null };
+}
+
+function updateCustomerById(customerId, updates = {}, { fillBlanksOnly = true } = {}) {
+  return {
+    updated: false,
+    customerId: customerId ? String(customerId) : null,
+    fields: Object.keys(updates || {}),
+    skipped: 'mock_client'
+  };
 }
 
 function listUsers() {
@@ -429,6 +538,25 @@ function listSalesWithLineItems({ status = 'CLOSED', limit = 200, outletId = nul
   return mockSalesData.slice(0, limit);
 }
 
+function searchSalesWithLineItems({ outletId = null } = {}) {
+  return listSalesWithLineItems({ status: 'CLOSED', limit: 200, outletId });
+}
+
+function searchSalesRaw({ outletId = null, limit = 10 } = {}) {
+  const sales = listSalesWithLineItems({ status: 'CLOSED', limit: 200, outletId });
+  return sales.slice(0, limit).map((s) => ({
+    id: s.saleId,
+    outlet_id: s.outletId,
+    status: s.status,
+    total_price: s.total,
+    line_items: (s.lineItems || []).map((li) => ({
+      product_id: li.productId,
+      quantity: li.quantity,
+      total: li.lineTotal
+    }))
+  }));
+}
+
 function getUserById(userId) {
   return mockUsers.find(u => u.userId === userId) || null;
 }
@@ -443,13 +571,19 @@ module.exports = {
   completeSale,
   listSales,
   listSalesWithLineItems,
+  searchSalesWithLineItems,
+  searchSalesRaw,
   listVerifications,
   getComplianceReport,
   getAuthState,
   listOutlets,
   listProducts,
+  getProductById,
   listInventory,
   listCustomers,
+  listCustomersRaw,
+  getCustomerById,
+  updateCustomerById,
   listUsers,
   listCategories,
   getUserById,

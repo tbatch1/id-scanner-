@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/retention",
-      "schedule": "0 4 * * *"
+      "schedule": "30 5 * * *"
     }
   ],
   "rewrites": [
@@ -11,11 +11,63 @@
       "destination": "/api"
     },
     {
-      "source": "/admin/(pending|scans|status|refresh|transactions)",
+      "source": "/admin/marketing.html",
+      "destination": "/frontend/admin-marketing.html"
+    },
+    {
+      "source": "/admin/oauth.html",
+      "destination": "/frontend/admin-oauth.html"
+    },
+    {
+      "source": "/admin/status",
       "destination": "/api"
     },
     {
-      "source": "/admin/(pending|scans)/(.*)",
+      "source": "/admin/outlets",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/refresh",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/scans",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/pending/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/transactions",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/sales",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/chat/status",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/chat",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/bi/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/marketing/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/marketing",
+      "destination": "/api"
+    },
+    {
+      "source": "/admin/webhooks/(.*)",
       "destination": "/api"
     },
     {
@@ -56,7 +108,7 @@
     },
     {
       "source": "/admin/pending.html",
-      "destination": "/frontend/admin-pending.html"
+      "destination": "/frontend/admin-data-center.html"
     },
     {
       "source": "/admin/scans.html",
@@ -73,12 +125,16 @@
     {
       "source": "/admin/audit.html",
       "destination": "/frontend/admin-audit.html"
+    },
+    {
+      "source": "/admin/data-center.html",
+      "destination": "/frontend/admin-data-center.html"
     }
   ],
   "redirects": [
     {
       "source": "/",
-      "destination": "/admin/pending.html"
+      "destination": "/admin/data-center.html"
     }
   ],
   "headers": [
