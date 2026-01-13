@@ -635,33 +635,32 @@
             display: block;
         }
 
-        #debugFab {
-            display: none;
+        /* Production: debug UI is opt-in (query params / long-press logo), no floating debug toggle. */
+
+        #backFab {
             position: fixed;
-            bottom: 15px;
-            right: 15px;
-            width: 46px;
-            height: 46px;
+            top: 14px;
+            left: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 44px;
+            padding: 0 14px;
             border-radius: 999px;
             background: rgba(0, 0, 0, 0.55);
-            border: 1px solid rgba(0, 255, 255, 0.35);
-            color: #0ff;
-            font-family: monospace;
-            font-size: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.95);
             font-weight: 800;
-            z-index: 10001;
+            letter-spacing: 0.5px;
             cursor: pointer;
-            opacity: 0.25;
-            pointer-events: auto;
+            z-index: 10002;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            backdrop-filter: blur(8px);
         }
 
-        html.embedded #debugFab,
-        body.embedded #debugFab {
-            display: block;
-        }
-
-        body.debug-ui #debugFab {
-            opacity: 0.95;
+        #backFab:active {
+            transform: scale(0.97);
         }
 
         .debug-btn {
@@ -689,7 +688,7 @@
 </head>
 
 <body class="embedded">
-    <button id="debugFab" type="button" aria-label="Toggle debug">DBG</button>
+    <button id="backFab" type="button" aria-label="Return to POS">Back</button>
     <div id="debugPanel">
         <div style="font-weight: bold; border-bottom: 1px solid #0f0; margin-bottom: 5px;">REMOTE DIAGNOSTICS</div>
         <div>URL: <span id="debugUrl">...</span></div>
@@ -1136,7 +1135,7 @@
         const btnQuickNextDollar = document.getElementById('btnQuickNextDollar');
         const btnQuickNextFive = document.getElementById('btnQuickNextFive');
         const btnCompleteSale = document.getElementById('btnCompleteSale');
-        const debugFab = document.getElementById('debugFab');
+        const backFab = document.getElementById('backFab');
         const debugSale = document.getElementById('debugSale');
         const debugFocus = document.getElementById('debugFocus');
         const debugGhostLen = document.getElementById('debugGhostLen');
@@ -1180,10 +1179,18 @@
             clientLog('debug toggled', { debugUi: document.body.classList.contains('debug-ui'), showKeys: document.body.classList.contains('show-keys') });
         }
 
-        if (debugFab) {
-            debugFab.addEventListener('click', (e) => {
+        if (backFab) {
+            backFab.addEventListener('click', (e) => {
                 e.preventDefault();
-                toggleDebug();
+                try {
+                    // Stop any active scan loops/timers immediately before returning to POS.
+                    isScanning = false;
+                    isProcessingScan = false;
+                    scanLocked = true;
+                    clearScanTimers();
+                    if (ghostInput) ghostInput.blur();
+                } catch (err) { }
+                closeGateway();
             });
         }
 
