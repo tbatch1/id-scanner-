@@ -330,6 +330,13 @@
         <h1>Banned Customers</h1>
     </div>
 
+    <div class="filters" style="max-width: 1200px; margin: 0 auto 18px; padding: 0 16px;">
+        <div class="form-row" style="align-items: center;">
+            <input id="adminTokenInput" type="text" class="form-input" placeholder="Admin token (optional)" style="flex: 1; min-width: 240px;" />
+            <button class="refresh-btn" id="saveTokenBtn" type="button">Save Token</button>
+        </div>
+    </div>
+
     <div class="add-section">
         <div class="form-title">Add Banned Customer</div>
 
@@ -399,6 +406,30 @@
     </div>
 
     <script>
+        function getAdminToken() {
+            try {
+                return (localStorage.getItem('ADMIN_TOKEN') || '').trim();
+            } catch {
+                return '';
+            }
+        }
+
+        function setAdminToken(token) {
+            try {
+                if (!token) {
+                    localStorage.removeItem('ADMIN_TOKEN');
+                } else {
+                    localStorage.setItem('ADMIN_TOKEN', token);
+                }
+            } catch { }
+        }
+
+        async function apiFetch(path, options = {}) {
+            const headers = new Headers(options.headers || {});
+            const token = getAdminToken();
+            if (token) headers.set('x-admin-token', token);
+            return fetch(path, { ...options, headers });
+        }
         function escapeHtml(value) {
             return String(value || '')
                 .replace(/&/g, '&amp;')
@@ -442,7 +473,7 @@
                 if (q) url.searchParams.set('q', q);
                 url.searchParams.set('limit', '500');
 
-                const response = await fetch(url.toString());
+                const response = await apiFetch(url.toString());
                 const data = await response.json();
 
                 if (!response.ok) {
@@ -513,7 +544,7 @@
             }
 
             try {
-                const response = await fetch('/api/banned', {
+                const response = await apiFetch('/api/banned', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -563,7 +594,7 @@
             if (!currentRemoveId) return;
 
             try {
-                const response = await fetch(`/api/banned/${currentRemoveId}`, {
+                const response = await apiFetch(`/api/banned/${currentRemoveId}`, {
                     method: 'DELETE'
                 });
 
@@ -598,6 +629,11 @@
 
         // Auto-load on page load
         window.addEventListener('load', () => {
+            document.getElementById('adminTokenInput').value = getAdminToken();
+            document.getElementById('saveTokenBtn').addEventListener('click', () => {
+                const token = String(document.getElementById('adminTokenInput').value || '').trim();
+                setAdminToken(token);
+            });
             loadBanned();
         });
 

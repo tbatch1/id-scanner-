@@ -305,11 +305,12 @@ async function completeSale({ saleId, verificationId, paymentType, sale: saleCon
   }
 }
 
-async function listSales({ status = 'OPEN', limit = 10, outletId = null } = {}) {
+async function listSales({ status = 'OPEN', limit = 10, outletId = null, registerId = null } = {}) {
   try {
     const params = {
       page_size: Math.max(1, Math.min(Number.parseInt(limit, 10) || 10, 200)),
-      ...(outletId ? { outlet_id: outletId } : {})
+      ...(outletId ? { outlet_id: outletId } : {}),
+      ...(registerId ? { register_id: registerId } : {})
     };
 
     if (status) {

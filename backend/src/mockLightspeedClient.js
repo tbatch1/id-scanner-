@@ -253,7 +253,7 @@ function completeSale({ saleId, verificationId, paymentType, sale: saleContext, 
   };
 }
 
-function listSales({ status, limit = 50 } = {}) {
+function listSales({ status, limit = 50, outletId = null, registerId = null } = {}) {
   const normalizedLimit = Math.max(1, Math.min(Number.parseInt(limit, 10) || 50, 200));
   const rows = Array.from(saleStore.values())
     .filter((sale) => {
@@ -263,6 +263,8 @@ function listSales({ status, limit = 50 } = {}) {
       if (normalizedStatus === 'CLOSED') return sale.status === 'completed';
       return true;
     })
+    .filter((sale) => (outletId ? String(sale.outletId || '').trim() === String(outletId).trim() : true))
+    .filter((sale) => (registerId ? String(sale.registerId || '').trim() === String(registerId).trim() : true))
     .slice(0, normalizedLimit)
     .map((sale) => getSaleById(sale.saleID));
 

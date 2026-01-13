@@ -210,6 +210,9 @@
             </select>
 
             <button class="load-btn" onclick="loadOverrides()">Load Overrides</button>
+            <input id="adminTokenInput" class="filter-select" placeholder="Admin token (optional)"
+                style="flex: 1; min-width: 240px; max-width: 420px;" />
+            <button class="load-btn" id="saveTokenBtn" type="button" style="background: rgba(96,165,250,0.14); border-color: rgba(96,165,250,0.35);">Save Token</button>
         </div>
     </div>
 
@@ -225,6 +228,31 @@
     </div>
 
     <script>
+        function getAdminToken() {
+            try {
+                return (localStorage.getItem('ADMIN_TOKEN') || '').trim();
+            } catch {
+                return '';
+            }
+        }
+
+        function setAdminToken(token) {
+            try {
+                if (!token) {
+                    localStorage.removeItem('ADMIN_TOKEN');
+                } else {
+                    localStorage.setItem('ADMIN_TOKEN', token);
+                }
+            } catch { }
+        }
+
+        async function apiFetch(path, options = {}) {
+            const headers = new Headers(options.headers || {});
+            const token = getAdminToken();
+            if (token) headers.set('x-admin-token', token);
+            return fetch(path, { ...options, headers });
+        }
+
         async function loadOverrides() {
             const days = document.getElementById('daysFilter').value;
             const limit = document.getElementById('limitFilter').value;
@@ -233,7 +261,7 @@
             listContainer.innerHTML = '<div class="loading">Loading...</div>';
 
             try {
-                const response = await fetch(`/api/reports/overrides?days=${days}&limit=${limit}`);
+                const response = await apiFetch(`/api/reports/overrides?days=${days}&limit=${limit}`);
                 const result = await response.json();
 
                 if (!response.ok) {
@@ -276,6 +304,11 @@
 
         // Auto-load on page load
         window.addEventListener('load', () => {
+            document.getElementById('adminTokenInput').value = getAdminToken();
+            document.getElementById('saveTokenBtn').addEventListener('click', () => {
+                const token = String(document.getElementById('adminTokenInput').value || '').trim();
+                setAdminToken(token);
+            });
             loadOverrides();
         });
     </script>

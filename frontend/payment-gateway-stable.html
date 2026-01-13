@@ -1284,7 +1284,11 @@
             }
 
             if (data && data.step === 'DATA') {
-                const maybeSaleId = data?.register_sale?.id || data?.register_sale?.client_sale_id || null;
+                // Lightspeed gateway DATA includes both:
+                // - register_sale.id (gateway/register context id)
+                // - register_sale.client_sale_id (the actual Lightspeed /sales/{id} identifier)
+                // For API updates (sale note + customer updates), we must prefer client_sale_id when present.
+                const maybeSaleId = data?.register_sale?.client_sale_id || data?.register_sale?.id || null;
                 const maybeRefId = data?.payment?.reference_id || null;
                 if (maybeRefId && !paymentReferenceId) {
                     paymentReferenceId = maybeRefId;
@@ -1303,7 +1307,7 @@
                     if (shouldUpdateFromData) {
                         const priorSaleId = currentSaleId || null;
                         saleId = maybeSaleId;
-                        saleIdSource = 'DATA:register_sale.id';
+                        saleIdSource = data?.register_sale?.client_sale_id ? 'DATA:register_sale.client_sale_id' : 'DATA:register_sale.id';
                         pageOpenedAtMs = Date.now();
                         scanArmedAtMs = null;
                         latestVerificationId = null;
@@ -1368,7 +1372,8 @@
             return String(text || '')
                 .replace(/\r\n/g, '\n')
                 .replace(/[\r\n]/g, '\n')
-                .replace(/[\x1c-\x1f]/g, '\n');
+                .replace(/[\x1c-\x1f]/g, '\n')
+                .replace(/[\x00-\x08\x0b\x0c\x0e-\x1b]/g, '');
         }
 
         function hasAamvaField(text, field) {
@@ -1692,8 +1697,36 @@
                 if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
             } catch (e) { }
 
-            const raw = String(barcodeBuffer || ((ghostInput && ghostInput.value) || ''));
+            // Prefer the live input value over the buffered copy: on iPad/WKWebView the final characters
+            // (especially the terminator) can land in `ghostInput.value` slightly after our `barcodeBuffer`
+            // snapshot, which caused a "full-looking" scan to be treated as incomplete and cleared.
+            const raw = String(((ghostInput && ghostInput.value) || barcodeBuffer || ''));
             const trimmed = raw.trim();
+
+            // First, try to verify directly from this single scan buffer.
+            // This avoids forcing a second scan when the first scan already includes the required AAMVA fields.
+            try {
+                const progressDirect = getVerifyProgress(trimmed);
+                if (progressDirect.hasDob && progressDirect.hasId && trimmed.length >= 40) {
+                    if (debugStatus) debugStatus.textContent = 'VERIFYING: Checking ID...';
+                    finalizeScan(trimmed);
+                    return true;
+                }
+            } catch (e) { }
+
+            // If direct parsing fails (due to separators/control chars) but the scan clearly contains the core
+            // AAMVA tokens, submit it anyway and let the backend do the authoritative parsing/banned check.
+            try {
+                const normalized = normalizeScanText(trimmed);
+                const hasCoreTokens = /DBB/i.test(normalized) && /DAQ/i.test(normalized);
+                if (hasCoreTokens && trimmed.length >= 120) {
+                    if (debugStatus) debugStatus.textContent = 'VERIFYING: Checking ID...';
+                    finalizeScan(trimmed);
+                    return true;
+                }
+            } catch (e) { }
+
+            // Otherwise, fall back to the multi-scan collector (handles partial/overlapping scans).
             const result = ingestScanAttempt(trimmed);
 
             try {
@@ -1846,13 +1879,12 @@
                     /DBB/i.test(trimmed);
 
                 if (verifyOnlyMode) {
-                    flushVerifyOnlyAttempt('idle');
                     return;
-                } else {
-                    if (isScanSatisfied(trimmed) || (looksLikePdf417 && trimmed.length >= 40) || trimmed.length >= 140) {
-                        finalizeScan(trimmed);
-                        return;
-                    }
+                }
+
+                if (isScanSatisfied(trimmed) || (looksLikePdf417 && trimmed.length >= 40) || trimmed.length >= 140) {
+                    finalizeScan(trimmed);
+                    return;
                 }
 
                 if (debugStatus) {
@@ -2262,7 +2294,8 @@
                     }
 
                     // Otherwise, let the browser insert the character into the input (most reliable).
-                    if (ch === '\n') setTimeout(() => flushVerifyOnlyAttempt('enter'), 0);
+                    // Give iPad/WKWebView a tiny window to commit the final characters to `.value` before we flush.
+                    if (ch === '\n') setTimeout(() => flushVerifyOnlyAttempt('enter'), 40);
                 }, true);
 
                 ghostInput.addEventListener('input', () => {
@@ -2423,7 +2456,8 @@
                     body: JSON.stringify({
                         barcodeData: rawData,
                         clerkId: clerkIdParam,
-                        registerId: registerIdParam
+                        registerId: registerIdParam,
+                        saleTotal: saleAmount
                     })
                 });
 
@@ -2446,6 +2480,19 @@
                 }
 
                 const data = await response.json();
+
+                // Backend may resolve the POS gateway/register_sale id to the actual Retail sale id.
+                // Use the resolved id for polling and any follow-up API calls.
+                try {
+                    const returnedSaleId = String(data.saleId || data.resolvedSaleId || '').trim();
+                    if (returnedSaleId && returnedSaleId !== saleId) {
+                        clientLog('saleId resolved', { from: saleId, to: returnedSaleId });
+                        saleId = returnedSaleId;
+                        const debugSaleEl = document.getElementById('debugSale');
+                        if (debugSaleEl) debugSaleEl.textContent = saleId;
+                    }
+                } catch (e) { }
+
                 clientLog('verify response', {
                     success: data.success,
                     approved: data.approved,

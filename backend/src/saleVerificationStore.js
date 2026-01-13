@@ -22,7 +22,7 @@ const logger = require('./logger');
 const verifications = new Map();
 
 // Auto-cleanup expired verifications every 5 minutes
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
   const now = new Date();
   let expiredCount = 0;
 
@@ -48,6 +48,8 @@ setInterval(() => {
     }, `Cleaned up ${expiredCount} expired verifications`);
   }
 }, 5 * 60 * 1000);
+// Do not keep Node.js alive solely for this maintenance timer (helps tests exit cleanly).
+cleanupInterval.unref?.();
 
 /**
  * Create a new pending verification

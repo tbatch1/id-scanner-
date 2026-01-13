@@ -568,11 +568,19 @@ async function runSnapshotJob({ mode = 'all', date = null } = {}) {
 
 // Vercel serverless handler
 module.exports = async (req, res) => {
-  // Verify this is a cron request (Vercel sets this header)
-  const authHeader = req.headers['authorization'];
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}` && process.env.NODE_ENV === 'production') {
-    // In production, require CRON_SECRET; in dev, allow all
-    if (process.env.CRON_SECRET) {
+  const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
+  const cronSecret = String(process.env.CRON_SECRET || '').trim();
+  const authHeader = String(req.headers['authorization'] || '').trim();
+  const vercelCronHeader = req.headers['x-vercel-cron'];
+  const isVercelCron = Boolean(vercelCronHeader) && String(vercelCronHeader) !== '0' && String(vercelCronHeader).toLowerCase() !== 'false';
+
+  // In production, only allow Vercel Cron requests or an explicit bearer token (for manual runs).
+  if (nodeEnv === 'production') {
+    if (cronSecret) {
+      if (authHeader !== `Bearer ${cronSecret}` && !isVercelCron) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    } else if (!isVercelCron) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
   }

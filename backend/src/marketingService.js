@@ -181,6 +181,11 @@ function mapCustomerProfile(customer) {
   const id = toTrimmedString(customer.id || customer.customer_id || customer.customerId, 64);
   if (!id) return null;
 
+  const physicalAddress1 = customer.physical_address_1 ?? customer.physical_address1 ?? null;
+  const physicalAddress2 = customer.physical_address_2 ?? customer.physical_address2 ?? null;
+  const postalAddress1 = customer.postal_address_1 ?? customer.postal_address1 ?? null;
+  const postalAddress2 = customer.postal_address_2 ?? customer.postal_address2 ?? null;
+
   return {
     customer_id: id,
     name:
@@ -195,7 +200,7 @@ function mapCustomerProfile(customer) {
     company_name: toTrimmedString(customer.company_name, 255),
     note: toNullableText(customer.note, 6000),
     date_of_birth: toNullableDate(customer.date_of_birth || customer.dateOfBirth),
-    sex: toTrimmedString(customer.sex || customer.gender, 20),
+    sex: toTrimmedString(customer.gender || customer.sex, 20),
     website: toTrimmedString(customer.website, 255),
     twitter: toTrimmedString(customer.twitter, 255),
     enable_loyalty: toNullableBoolean(customer.enable_loyalty),
@@ -203,15 +208,15 @@ function mapCustomerProfile(customer) {
     year_to_date: toNullableNumber(customer.year_to_date),
     balance: toNullableNumber(customer.balance),
     customer_group_id: toTrimmedString(customer.customer_group_id, 64),
-    physical_address1: toTrimmedString(customer.physical_address1, 255),
-    physical_address2: toTrimmedString(customer.physical_address2, 255),
+    physical_address1: toTrimmedString(physicalAddress1, 255),
+    physical_address2: toTrimmedString(physicalAddress2, 255),
     physical_suburb: toTrimmedString(customer.physical_suburb, 255),
     physical_city: toTrimmedString(customer.physical_city, 255),
     physical_state: toTrimmedString(customer.physical_state, 255),
     physical_postcode: toTrimmedString(customer.physical_postcode, 40),
     physical_country: toTrimmedString(customer.physical_country, 80),
-    postal_address1: toTrimmedString(customer.postal_address1, 255),
-    postal_address2: toTrimmedString(customer.postal_address2, 255),
+    postal_address1: toTrimmedString(postalAddress1, 255),
+    postal_address2: toTrimmedString(postalAddress2, 255),
     postal_suburb: toTrimmedString(customer.postal_suburb, 255),
     postal_city: toTrimmedString(customer.postal_city, 255),
     postal_state: toTrimmedString(customer.postal_state, 255),

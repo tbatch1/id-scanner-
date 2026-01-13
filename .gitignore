@@ -31,4 +31,7 @@ coverage/
 .tmp_pdfs/
 .tmp_ls_v2.yml
 
+# Local secrets (do not commit)
+.secrets.local*
+
 .tmp_ls_v2.yml

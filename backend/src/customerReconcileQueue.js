@@ -10,12 +10,16 @@ async function ensureTables() {
       CREATE TABLE IF NOT EXISTS customer_reconcile_jobs (
         id BIGSERIAL PRIMARY KEY,
         sale_id TEXT UNIQUE NOT NULL,
+        resolved_sale_id TEXT,
         verification_id TEXT,
         status TEXT NOT NULL DEFAULT 'pending',
         attempts INTEGER NOT NULL DEFAULT 0,
         next_attempt_at TIMESTAMP NOT NULL DEFAULT NOW(),
         last_error TEXT,
         fields JSONB,
+        register_id TEXT,
+        outlet_id TEXT,
+        sale_total NUMERIC,
         last_customer_id TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -23,6 +27,11 @@ async function ensureTables() {
       )
     `
   );
+  // Backward-compatible: add columns if the table already existed.
+  await db.query('ALTER TABLE customer_reconcile_jobs ADD COLUMN IF NOT EXISTS resolved_sale_id TEXT');
+  await db.query('ALTER TABLE customer_reconcile_jobs ADD COLUMN IF NOT EXISTS register_id TEXT');
+  await db.query('ALTER TABLE customer_reconcile_jobs ADD COLUMN IF NOT EXISTS outlet_id TEXT');
+  await db.query('ALTER TABLE customer_reconcile_jobs ADD COLUMN IF NOT EXISTS sale_total NUMERIC');
   await db.query(
     'CREATE INDEX IF NOT EXISTS idx_customer_reconcile_due ON customer_reconcile_jobs (status, next_attempt_at)'
   );
@@ -38,8 +47,12 @@ function computeBackoffMs(attempts) {
 
 async function enqueueJob({
   saleId,
+  resolvedSaleId = null,
   verificationId = null,
   fields = null,
+  registerId = null,
+  outletId = null,
+  saleTotal = null,
   delayMs = 5000
 }) {
   if (!db.pool) return { queued: false, reason: 'db_disabled' };
@@ -48,15 +61,21 @@ async function enqueueJob({
   const id = String(saleId || '').trim();
   if (!id) return { queued: false, reason: 'missing_sale_id' };
 
+  const resolved = String(resolvedSaleId || '').trim() || null;
+  const rid = String(registerId || '').trim() || null;
+  const oid = String(outletId || '').trim() || null;
+  const total = Number.isFinite(Number(saleTotal)) ? Math.round(Number(saleTotal) * 100) / 100 : null;
+
   const nextAttemptAt = new Date(Date.now() + Math.max(0, Number(delayMs) || 0));
   const payload = fields ? JSON.stringify(fields) : null;
 
   await db.query(
     `
-      INSERT INTO customer_reconcile_jobs (sale_id, verification_id, status, next_attempt_at, fields)
-      VALUES ($1, $2, 'pending', $3, $4)
+      INSERT INTO customer_reconcile_jobs (sale_id, resolved_sale_id, verification_id, status, next_attempt_at, fields, register_id, outlet_id, sale_total)
+      VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, $8)
       ON CONFLICT (sale_id)
       DO UPDATE SET
+        resolved_sale_id = COALESCE(EXCLUDED.resolved_sale_id, customer_reconcile_jobs.resolved_sale_id),
         verification_id = COALESCE(EXCLUDED.verification_id, customer_reconcile_jobs.verification_id),
         status = CASE
           WHEN customer_reconcile_jobs.status = 'done' THEN 'pending'
@@ -65,9 +84,12 @@ async function enqueueJob({
         END,
         next_attempt_at = LEAST(EXCLUDED.next_attempt_at, customer_reconcile_jobs.next_attempt_at),
         fields = COALESCE(EXCLUDED.fields, customer_reconcile_jobs.fields),
+        register_id = COALESCE(EXCLUDED.register_id, customer_reconcile_jobs.register_id),
+        outlet_id = COALESCE(EXCLUDED.outlet_id, customer_reconcile_jobs.outlet_id),
+        sale_total = COALESCE(EXCLUDED.sale_total, customer_reconcile_jobs.sale_total),
         updated_at = NOW()
     `,
-    [id, verificationId, nextAttemptAt, payload]
+    [id, resolved, verificationId, nextAttemptAt, payload, rid, oid, total]
   );
 
   return { queued: true, saleId: id, nextAttemptAt: nextAttemptAt.toISOString() };
@@ -83,7 +105,7 @@ async function claimDueJobs(limit = 100) {
     await client.query('BEGIN');
     const { rows } = await client.query(
       `
-        SELECT id, sale_id, verification_id, attempts, fields
+        SELECT id, sale_id, resolved_sale_id, verification_id, attempts, fields, register_id, outlet_id, sale_total
         FROM customer_reconcile_jobs
         WHERE status = 'pending'
           AND next_attempt_at <= NOW()
@@ -108,9 +130,13 @@ async function claimDueJobs(limit = 100) {
     return rows.map((r) => ({
       id: r.id,
       saleId: r.sale_id,
+      resolvedSaleId: r.resolved_sale_id || null,
       verificationId: r.verification_id || null,
       attempts: Number(r.attempts || 0),
-      fields: r.fields || null
+      fields: r.fields || null,
+      registerId: r.register_id || null,
+      outletId: r.outlet_id || null,
+      saleTotal: r.sale_total !== null && r.sale_total !== undefined ? Number(r.sale_total) : null
     }));
   } catch (error) {
     await client.query('ROLLBACK');
@@ -134,6 +160,20 @@ async function rescheduleJob(id, attempts, errorMessage) {
       WHERE id = $1
     `,
     [id, nextAttemptAt, String(errorMessage || 'pending')]
+  );
+}
+
+async function setResolvedSaleId(id, resolvedSaleId) {
+  if (!db.pool) return;
+  const rid = String(resolvedSaleId || '').trim();
+  if (!rid) return;
+  await db.query(
+    `
+      UPDATE customer_reconcile_jobs
+      SET resolved_sale_id = $2, updated_at = NOW()
+      WHERE id = $1
+    `,
+    [id, rid]
   );
 }
 
@@ -178,6 +218,29 @@ function safeParseJson(value) {
   }
 }
 
+function chooseBestSaleCandidate(candidates, { saleTotal = null } = {}) {
+  const list = Array.isArray(candidates) ? candidates.slice() : [];
+  if (!list.length) return null;
+
+  const normalizedTotal = Number.isFinite(Number(saleTotal)) ? Math.round(Number(saleTotal) * 100) / 100 : null;
+
+  let filtered = list;
+  if (normalizedTotal !== null) {
+    // Prefer candidates with matching totals (tolerance for rounding).
+    const tolerance = 0.02;
+    const matches = list.filter((s) => Number.isFinite(Number(s.total)) && Math.abs(Number(s.total) - normalizedTotal) <= tolerance);
+    if (matches.length) filtered = matches;
+  }
+
+  filtered.sort((a, b) => {
+    const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
+
+  return filtered[0] || null;
+}
+
 async function processDueJobs({ limit = 100, maxDurationMs = 8000 } = {}) {
   if (!db.pool) return { ok: false, reason: 'db_disabled', processed: 0, pending: 0, failed: 0 };
 
@@ -204,11 +267,56 @@ async function processDueJobs({ limit = 100, maxDurationMs = 8000 } = {}) {
         continue;
       }
 
+      const registerId = String(job.registerId || '').trim();
+      const outletId = String(job.outletId || '').trim();
+      const saleTotal = Number.isFinite(Number(job.saleTotal)) ? Number(job.saleTotal) : null;
+
       let sale = null;
-      try {
-        sale = await lightspeed.getSaleById(job.saleId);
-      } catch (e) {
-        await rescheduleJob(job.id, attempts, `sale_fetch_failed:${e.message}`);
+      let effectiveSaleId = String(job.resolvedSaleId || job.saleId || '').trim();
+
+      const tryFetchSaleById = async (id) => {
+        const sid = String(id || '').trim();
+        if (!sid) return null;
+        try {
+          const fetched = await lightspeed.getSaleById(sid);
+          if (fetched?.saleId && fetched.saleId !== job.resolvedSaleId) {
+            await setResolvedSaleId(job.id, fetched.saleId);
+          }
+          return fetched;
+        } catch (e) {
+          if (String(e?.message || '').toUpperCase() === 'SALE_NOT_FOUND') return null;
+          throw e;
+        }
+      };
+
+      // 1) If we already have a resolved Retail sale id, fetch it directly.
+      if (job.resolvedSaleId) {
+        sale = await tryFetchSaleById(job.resolvedSaleId);
+      }
+
+      // 2) Try fetching by the original id (sometimes it *is* a Retail sale id).
+      if (!sale && job.saleId) {
+        sale = await tryFetchSaleById(job.saleId);
+      }
+
+      // 3) Fallback: resolve via register_id (common when iframe provides a gateway/register_sale id).
+      if (!sale && registerId && typeof lightspeed.listSales === 'function') {
+        const candidates = await lightspeed.listSales({
+          status: 'OPEN',
+          limit: 50,
+          registerId,
+          outletId: outletId || null
+        });
+        const best = chooseBestSaleCandidate(candidates, { saleTotal });
+        if (best?.saleId) {
+          effectiveSaleId = String(best.saleId).trim();
+          await setResolvedSaleId(job.id, effectiveSaleId);
+          sale = best;
+        }
+      }
+
+      if (!sale) {
+        await rescheduleJob(job.id, attempts, 'sale_unresolved');
         pending += 1;
         continue;
       }

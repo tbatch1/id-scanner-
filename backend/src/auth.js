@@ -14,8 +14,8 @@ const config = require('./config');
  */
 
 function authenticateRequest(req, res, next) {
-  const apiKey = req.headers['x-api-key'];
-  const expectedKey = process.env.API_SECRET_KEY;
+  const apiKey = String(req.headers['x-api-key'] || '').trim();
+  const expectedKey = String(process.env.API_SECRET_KEY || '').trim();
 
   // In development without API key configured, allow requests but warn
   if (config.env === 'development' && !expectedKey) {
@@ -98,8 +98,8 @@ function optionalAuth(req, res, next) {
  * - Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
  */
 function adminAuth(req, res, next) {
-  const token = req.headers['x-admin-token'];
-  const expectedToken = process.env.ADMIN_TOKEN;
+  const token = String(req.headers['x-admin-token'] || '').trim();
+  const expectedToken = String(process.env.ADMIN_TOKEN || '').trim();
 
   // If no admin token is configured, allow access but warn
   if (!expectedToken) {

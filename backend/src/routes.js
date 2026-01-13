@@ -8,8 +8,14 @@ const saleVerificationStore = require('./saleVerificationStore');
 const { validateVerification, validateCompletion, validateBannedCreate, validateBannedId, validateOverride, validateSaleId, sanitizeString } = require('./validation');
 const lightspeedWebhookQueue = require('./lightspeedWebhookQueue');
 const customerReconcileQueue = require('./customerReconcileQueue');
+const { adminAuth } = require('./auth');
+const { buildCustomerUpdatePayload } = require('./lightspeedCustomerFields');
 
 const router = express.Router();
+
+// Protect sensitive reporting + banned customer management behind the same admin token used by /admin/* routes.
+// If ADMIN_TOKEN is not configured, this middleware will warn but allow access (useful during setup).
+router.use(['/reports', '/banned'], adminAuth);
 
 const millisecondsPerMinute = 60 * 1000;
 const lightspeedMode = process.env.LIGHTSPEED_USE_MOCK === 'true' ? 'mock' : 'live';
@@ -531,7 +537,8 @@ router.post('/test-scan', (req, res) => {
 });
 
 router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
-  const saleId = (req.params.saleId || '').trim();
+  const requestedSaleId = (req.params.saleId || '').trim();
+  let effectiveSaleId = requestedSaleId;
   const barcodeData = (req.body.barcodeData || '').trim();
   const registerId = (req.body.registerId || '').trim();
   const clerkId = (req.body.clerkId || '').trim();
@@ -540,14 +547,14 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
   // Fire-and-forget diagnostic so it never blocks or crashes the main flow
   complianceStore.logDiagnostic({
     type: 'SCAN_ATTEMPT',
-    saleId,
+    saleId: requestedSaleId,
     details: { registerId, clerkId, barcodeLength: barcodeData.length }
   }).catch(err => logger.error({ err }, 'Fire-and-forget logDiagnostic failed'));
 
   console.log('===========================================');
   console.log('🔫 BLUETOOTH SCANNER SCAN RECEIVED');
   console.log('===========================================');
-  console.log('Sale ID:', saleId);
+  console.log('Sale ID:', requestedSaleId);
   console.log('Barcode Length:', barcodeData.length);
   console.log('===========================================');
 
@@ -556,31 +563,227 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
   }
 
   try {
+    // FAST VERIFY PATH:
+    // Keep scanning snappy by doing only: parse -> underage -> banned -> persist -> respond.
+    // Customer profile population is handled asynchronously via customer reconcile jobs (cron) so it never blocks the scan UI.
+    const fastVerifyStartedAt = Date.now();
+    const locationIdFast = determineLocationId(req, null);
+    const saleTotalFast =
+      req.body.saleTotal !== undefined
+        ? Number(req.body.saleTotal)
+        : req.body.amount !== undefined
+          ? Number(req.body.amount)
+          : req.body.saleAmount !== undefined
+            ? Number(req.body.saleAmount)
+            : null;
+
+    saleVerificationStore.addSessionLog(requestedSaleId, `FAST_VERIFY: starting (register: ${registerId || 'MISSING'})`, 'info');
+
+    let parsedFast = parseAAMVA(barcodeData);
+    console.log('📊 PARSE RESULT (FAST):', JSON.stringify(parsedFast, null, 2));
+
+    if (!parsedFast || !parsedFast.age) {
+      parsedFast = {
+        firstName: 'Unknown',
+        lastName: 'Customer',
+        age: null,
+        documentNumber: 'RAW-' + barcodeData.substring(0, 10),
+        issuingCountry: 'Unknown'
+      };
+    }
+
+    let approvedFast = false;
+    let reasonFast = null;
+
+    if (parsedFast.age !== null) {
+      if (parsedFast.age >= 21) {
+        approvedFast = true;
+      } else {
+        approvedFast = false;
+        reasonFast = `Underage (${parsedFast.age})`;
+      }
+    } else {
+      approvedFast = false;
+      reasonFast = 'Could not read DOB';
+    }
+
+    if (approvedFast && db.pool && parsedFast.documentNumber) {
+      try {
+        const bannedRecord = await complianceStore.findBannedCustomer({
+          documentType: 'drivers_license',
+          documentNumber: parsedFast.documentNumber,
+          issuingCountry: parsedFast.issuingCountry
+        });
+        if (bannedRecord) {
+          approvedFast = false;
+          reasonFast = bannedRecord.notes || 'BANNED_CUSTOMER';
+          logger.logSecurity('banned_customer_attempt_bluetooth', {
+            saleId: requestedSaleId,
+            documentNumber: parsedFast.documentNumber,
+            bannedId: bannedRecord.id
+          });
+        }
+      } catch (e) {
+        logger.error('Banned check failed', e);
+      }
+    }
+
+    const verificationIdFast = `V-${requestedSaleId || 'SCAN'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    let dbSavedFast = false;
+
+    if (db.pool) {
+      try {
+        const safeIso = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString() : null;
+        await complianceStore.saveVerification(
+          {
+            verificationId: verificationIdFast,
+            saleId: requestedSaleId,
+            clerkId: clerkId || 'BLUETOOTH_DEVICE',
+            status: approvedFast ? 'approved' : 'rejected',
+            reason: reasonFast,
+            firstName: parsedFast.firstName,
+            lastName: parsedFast.lastName,
+            dob: safeIso(parsedFast.dob),
+            age: parsedFast.age,
+            documentType: 'drivers_license',
+            documentNumber: parsedFast.documentNumber,
+            issuingCountry: parsedFast.issuingCountry,
+            nationality: parsedFast.issuingCountry,
+            sex: parsedFast.sex,
+            source: 'bluetooth_gun'
+          },
+          {
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+            locationId: locationIdFast
+          }
+        );
+        dbSavedFast = true;
+      } catch (dbError) {
+        saleVerificationStore.addSessionLog(requestedSaleId, `DB save failed: ${dbError.message}`, 'warn');
+        logger.error({ event: 'bluetooth_db_save_failed', saleId: requestedSaleId }, 'Failed to save bluetooth verification to DB');
+      }
+    }
+
+    let customerReconcileQueuedFast = false;
+    let customerReconcileReasonFast = null;
+    if (approvedFast && db.pool && typeof lightspeed.updateCustomerById === 'function') {
+      let fieldsFast = null;
+      try {
+        fieldsFast = buildCustomerUpdatePayload(parsedFast);
+      } catch (e) {
+        fieldsFast = null;
+      }
+
+      if (fieldsFast) {
+        customerReconcileReasonFast = 'populate_customer_fields_async';
+        try {
+          await customerReconcileQueue.enqueueJob({
+            saleId: requestedSaleId,
+            verificationId: verificationIdFast,
+            fields: fieldsFast,
+            delayMs: 0,
+            registerId: registerId || null,
+            outletId: locationIdFast || null,
+            saleTotal: Number.isFinite(saleTotalFast) ? saleTotalFast : null
+          });
+          customerReconcileQueuedFast = true;
+        } catch (e) {
+          logger.warn({ event: 'customer_reconcile_enqueue_failed', saleId: requestedSaleId, error: e.message }, 'Failed to enqueue customer reconcile job');
+        }
+      }
+    }
+
+    try {
+      saleVerificationStore.updateVerification(requestedSaleId, {
+        approved: approvedFast,
+        customerId: parsedFast.documentNumber,
+        customerName: `${parsedFast.firstName || ''} ${parsedFast.lastName || ''}`.trim() || 'Customer',
+        age: parsedFast.age,
+        reason: reasonFast,
+        registerId: registerId || 'BLUETOOTH-SCANNER',
+        saleId: requestedSaleId
+      });
+    } catch (e) {
+      // ignore
+    }
+
+    return res.json({
+      success: true,
+      approved: approvedFast,
+      verificationId: verificationIdFast,
+      requestedSaleId,
+      saleId: requestedSaleId,
+      resolvedSaleId: null,
+      customerName: `${parsedFast.firstName || ''} ${parsedFast.lastName || ''}`.trim() || 'Customer',
+      age: parsedFast.age,
+      dob: parsedFast.dob && !isNaN(parsedFast.dob.getTime()) ? parsedFast.dob.toISOString().slice(0, 10) : null,
+      reason: reasonFast,
+      dbSaved: dbSavedFast,
+      customerReconcileQueued: customerReconcileQueuedFast,
+      customerReconcileReason: customerReconcileReasonFast,
+      processingMs: Date.now() - fastVerifyStartedAt
+    });
+
     // 1. Get Sale Context
-    saleVerificationStore.addSessionLog(saleId, `Starting Bluetooth scan (register: ${registerId})`, 'info');
+    saleVerificationStore.addSessionLog(requestedSaleId, `Starting Bluetooth scan (register: ${registerId})`, 'info');
 
     let sale = null;
     let locationId = determineLocationId(req, null);
     let saleFetchAttempts = 0;
     let saleFetchError = null;
+    let resolvedSaleId = null;
+
+    async function resolveSaleViaRegisterId() {
+      const rid = String(registerId || '').trim();
+      if (!rid || typeof lightspeed.listSales !== 'function') return null;
+      try {
+        const candidates = await lightspeed.listSales({ status: 'OPEN', limit: 25, registerId: rid });
+        const list = Array.isArray(candidates) ? candidates : [];
+        if (!list.length) return null;
+        list.sort((a, b) => {
+          const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+        });
+        return list[0] || null;
+      } catch (e) {
+        saleFetchError = saleFetchError || e?.message || 'resolve_failed';
+        return null;
+      }
+    }
     try {
-      saleVerificationStore.addSessionLog(saleId, 'Checking Lightspeed sale context...', 'info');
+      saleVerificationStore.addSessionLog(requestedSaleId, 'Checking Lightspeed sale context...', 'info');
       saleFetchAttempts += 1;
-      sale = await lightspeed.getSaleById(saleId);
+      sale = await lightspeed.getSaleById(effectiveSaleId);
       locationId = determineLocationId(req, sale);
-      saleVerificationStore.addSessionLog(saleId, `Sale context OK (${sale.items.length} items)`, 'info');
+      saleVerificationStore.addSessionLog(requestedSaleId, `Sale context OK (${sale.items.length} items)`, 'info');
     } catch (e) {
       saleFetchError = e.message;
-      saleVerificationStore.addSessionLog(saleId, `Sale context failed: ${e.message}`, 'warn');
-      console.warn('Sale lookup failed during bluetooth scan, proceeding with defaults');
+      saleVerificationStore.addSessionLog(requestedSaleId, `Sale context failed: ${e.message}`, 'warn');
+
+      if (String(e.message || '').toUpperCase() === 'SALE_NOT_FOUND') {
+        const resolved = await resolveSaleViaRegisterId();
+        if (resolved?.saleId) {
+          resolvedSaleId = String(resolved.saleId).trim();
+          effectiveSaleId = resolvedSaleId;
+          sale = resolved;
+          locationId = determineLocationId(req, sale);
+          saleVerificationStore.addSessionLog(requestedSaleId, `Resolved Retail sale id: ${resolvedSaleId}`, 'info');
+        } else {
+          console.warn('Sale lookup failed during bluetooth scan (unresolved), proceeding with defaults');
+        }
+      } else {
+        console.warn('Sale lookup failed during bluetooth scan, proceeding with defaults');
+      }
     }
 
     // 2. Parse the Barcode
-    saleVerificationStore.addSessionLog(saleId, `Parsing barcode (${barcodeData.length} chars)...`, 'info');
+    saleVerificationStore.addSessionLog(requestedSaleId, `Parsing barcode (${barcodeData.length} chars)...`, 'info');
     let parsed = parseAAMVA(barcodeData);
 
     if (parsed) {
-      saleVerificationStore.addSessionLog(saleId, `Parsed ID: ${parsed.firstName} ${parsed.lastName}`, 'info');
+      saleVerificationStore.addSessionLog(requestedSaleId, `Parsed ID: ${parsed.firstName} ${parsed.lastName}`, 'info');
     }
 
     // Log parse result
@@ -625,13 +828,13 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
         try {
           await new Promise((r) => setTimeout(r, delayMs));
           saleFetchAttempts += 1;
-          const refreshed = await lightspeed.getSaleById(saleId);
+          const refreshed = await lightspeed.getSaleById(effectiveSaleId);
           if (refreshed) {
             sale = refreshed;
             locationId = determineLocationId(req, sale);
           }
           if (sale?.customerId) {
-            saleVerificationStore.addSessionLog(saleId, `Customer attached detected after ${saleFetchAttempts} sale fetch(es)`, 'info');
+            saleVerificationStore.addSessionLog(requestedSaleId, `Customer attached detected after ${saleFetchAttempts} sale fetch(es)`, 'info');
             break;
           }
         } catch (e) {
@@ -644,19 +847,19 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     let bannedRecord = null;
     if (db.pool && parsed.documentNumber) {
       try {
-        saleVerificationStore.addSessionLog(saleId, 'Checking banned customers...', 'info');
+        saleVerificationStore.addSessionLog(requestedSaleId, 'Checking banned customers...', 'info');
         bannedRecord = await complianceStore.findBannedCustomer({
           documentType: 'drivers_license',
           documentNumber: parsed.documentNumber,
           issuingCountry: parsed.issuingCountry
         });
-        saleVerificationStore.addSessionLog(saleId, `Banned list check finished (banned: ${!!bannedRecord})`, 'info');
+        saleVerificationStore.addSessionLog(requestedSaleId, `Banned list check finished (banned: ${!!bannedRecord})`, 'info');
 
         if (bannedRecord) {
           approved = false;
           reason = bannedRecord.notes || 'BANNED_CUSTOMER';
           logger.logSecurity('banned_customer_attempt_bluetooth', {
-            saleId,
+            saleId: effectiveSaleId,
             documentNumber: parsed.documentNumber,
             bannedId: bannedRecord.id
           });
@@ -673,7 +876,8 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       customerName: `${parsed.firstName || ''} ${parsed.lastName || ''}`.trim() || 'Customer',
       age: parsed.age,
       reason,
-      registerId: registerId || 'BLUETOOTH-SCANNER'
+      registerId: registerId || 'BLUETOOTH-SCANNER',
+      saleId: effectiveSaleId
     };
 
     // 4.25 "Seen before" signal (helps when customer isn't in rewards).
@@ -700,23 +904,23 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
         lastSeenAt = rows?.[0]?.last_seen_at ?? null;
         seenBefore = Number(priorVerificationCount || 0) > 0;
         saleVerificationStore.addSessionLog(
-          saleId,
+          requestedSaleId,
           seenBefore ? `Seen before (${priorVerificationCount})` : 'First-time ID (no prior verifications)',
           'info'
         );
       } catch (e) {
-        logger.warn({ event: 'seen_before_query_failed', saleId }, 'Seen-before lookup failed');
+        logger.warn({ event: 'seen_before_query_failed', saleId: effectiveSaleId }, 'Seen-before lookup failed');
       }
     }
 
     // 4.5 Write an audit note back to Lightspeed (best-effort, never blocks checkout)
     let noteUpdated = false;
     try {
-      saleVerificationStore.addSessionLog(saleId, 'Updating Lightspeed sale note...', 'info');
+      saleVerificationStore.addSessionLog(requestedSaleId, 'Updating Lightspeed sale note...', 'info');
       const safeDate = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString().slice(0, 10) : null;
 
       const verification = await lightspeed.recordVerification({
-        saleId,
+        saleId: effectiveSaleId,
         clerkId: clerkId || 'BLUETOOTH_DEVICE',
         verificationData: {
           approved,
@@ -738,13 +942,13 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       });
       noteUpdated = Boolean(verification?.noteUpdated);
       saleVerificationStore.addSessionLog(
-        saleId,
+        requestedSaleId,
         noteUpdated ? 'Lightspeed note recorded' : approved ? 'Lightspeed note not written' : 'Lightspeed note not written (rejected)',
         noteUpdated ? 'info' : 'warn'
       );
     } catch (e) {
-      saleVerificationStore.addSessionLog(saleId, `Lightspeed note failed: ${e.message}`, 'warn');
-      logger.warn({ event: 'bluetooth_note_update_failed', saleId }, 'Failed to update Lightspeed note for bluetooth scan');
+      saleVerificationStore.addSessionLog(requestedSaleId, `Lightspeed note failed: ${e.message}`, 'warn');
+      logger.warn({ event: 'bluetooth_note_update_failed', saleId: effectiveSaleId }, 'Failed to update Lightspeed note for bluetooth scan');
     }
 
     // 4.6 Optionally update the Lightspeed customer profile (when a customer was selected via phone/loyalty)
@@ -755,29 +959,9 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     let customerUpdatesPayload = null;
     if (approved && sale?.customerId && typeof lightspeed.updateCustomerById === 'function') {
       try {
-        saleVerificationStore.addSessionLog(saleId, `Updating customer profile (${sale.customerId})...`, 'info');
-        const safeDate = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString().slice(0, 10) : null;
+        saleVerificationStore.addSessionLog(requestedSaleId, `Updating customer profile (${sale.customerId})...`, 'info');
 
-        const updates = {
-          first_name: parsed.firstName,
-          last_name: parsed.lastName,
-          date_of_birth: safeDate(parsed.dob),
-          // Lightspeed customer field is `sex` (commonly "M"/"F" in their API payloads).
-          sex: parsed.sex,
-          // Lightspeed customer fields use ...address1/...address2 (no extra underscore before the number).
-          physical_address1: parsed.address1,
-          physical_address2: parsed.address2,
-          physical_suburb: parsed.suburb,
-          physical_city: parsed.city,
-          physical_state: parsed.state,
-          physical_postcode: parsed.postalCode,
-          postal_address1: parsed.address1,
-          postal_address2: parsed.address2,
-          postal_suburb: parsed.suburb,
-          postal_city: parsed.city,
-          postal_state: parsed.state,
-          postal_postcode: parsed.postalCode
-        };
+        const updates = buildCustomerUpdatePayload(parsed);
         customerUpdatesPayload = updates;
 
         const result = await lightspeed.updateCustomerById(sale.customerId, updates, { fillBlanksOnly: true });
@@ -786,37 +970,19 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
         customerUpdateSkipped = result?.skipped || null;
         customerUpdateStatus = result?.status || null;
         saleVerificationStore.addSessionLog(
-          saleId,
+          requestedSaleId,
           customerUpdated ? `Customer updated (${customerUpdatedFields.length} fields)` : `Customer update skipped (${customerUpdateSkipped || 'no_changes'})`,
           customerUpdated ? 'info' : 'warn'
         );
       } catch (e) {
         customerUpdateSkipped = e?.message || 'update_failed';
-        saleVerificationStore.addSessionLog(saleId, `Customer update failed: ${customerUpdateSkipped}`, 'warn');
-        logger.warn({ event: 'customer_update_failed_from_scan', saleId, customerId: sale.customerId }, 'Failed to update customer from scan');
+        saleVerificationStore.addSessionLog(requestedSaleId, `Customer update failed: ${customerUpdateSkipped}`, 'warn');
+        logger.warn({ event: 'customer_update_failed_from_scan', saleId: effectiveSaleId, customerId: sale.customerId }, 'Failed to update customer from scan');
       }
     } else if (approved && !sale?.customerId) {
       customerUpdateSkipped = 'no_customer_on_sale';
       try {
-        const safeDate = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString().slice(0, 10) : null;
-        customerUpdatesPayload = {
-          first_name: parsed.firstName,
-          last_name: parsed.lastName,
-          date_of_birth: safeDate(parsed.dob),
-          sex: parsed.sex,
-          physical_address1: parsed.address1,
-          physical_address2: parsed.address2,
-          physical_suburb: parsed.suburb,
-          physical_city: parsed.city,
-          physical_state: parsed.state,
-          physical_postcode: parsed.postalCode,
-          postal_address1: parsed.address1,
-          postal_address2: parsed.address2,
-          postal_suburb: parsed.suburb,
-          postal_city: parsed.city,
-          postal_state: parsed.state,
-          postal_postcode: parsed.postalCode
-        };
+        customerUpdatesPayload = buildCustomerUpdatePayload(parsed);
       } catch (e) {
         customerUpdatesPayload = null;
       }
@@ -824,17 +990,17 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
 
     // 5. Persist to Database FIRST (Dashboard Integration - CRITICAL)
     // Database save must succeed before in-memory update to ensure data integrity
-    const verificationId = `V-${saleId || 'SCAN'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const verificationId = `V-${effectiveSaleId || 'SCAN'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     let dbSaved = false;
     if (db.pool) {
       try {
-        saleVerificationStore.addSessionLog(saleId, 'Saving to compliance database...', 'info');
+        saleVerificationStore.addSessionLog(requestedSaleId, 'Saving to compliance database...', 'info');
         // Construct verification object for DB
         const safeIso = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString() : null;
 
         const dbVerification = {
           verificationId,
-          saleId,
+          saleId: effectiveSaleId,
           clerkId: clerkId || 'BLUETOOTH_DEVICE',
           status: approved ? 'approved' : 'rejected',
           reason,
@@ -856,15 +1022,23 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
           locationId
         });
         dbSaved = true;
-        saleVerificationStore.addSessionLog(saleId, 'Compliance database OK', 'info');
+        saleVerificationStore.addSessionLog(requestedSaleId, 'Compliance database OK', 'info');
       } catch (dbError) {
-        saleVerificationStore.addSessionLog(saleId, `DB save failed: ${dbError.message}`, 'warn');
-        logger.error({ event: 'bluetooth_db_save_failed', saleId }, 'Failed to save bluetooth verification to DB');
+        saleVerificationStore.addSessionLog(requestedSaleId, `DB save failed: ${dbError.message}`, 'warn');
+        logger.error({ event: 'bluetooth_db_save_failed', saleId: effectiveSaleId }, 'Failed to save bluetooth verification to DB');
       }
     }
 
     // 6. Update In-Memory Store (for Polling) - ONLY after DB save succeeds
-    saleVerificationStore.updateVerification(saleId, verificationResult);
+    saleVerificationStore.updateVerification(requestedSaleId, verificationResult);
+    if (effectiveSaleId && effectiveSaleId !== requestedSaleId) {
+      try {
+        saleVerificationStore.updateVerification(effectiveSaleId, { ...verificationResult, saleId: effectiveSaleId });
+        saleVerificationStore.addSessionLog(requestedSaleId, `Mirrored verification under Retail sale id: ${effectiveSaleId}`, 'info');
+      } catch (e) {
+        // Best-effort only; never block checkout
+      }
+    }
 
     // 6.5 Queue a customer reconcile job so fields get filled even if loyalty customer attaches a few seconds later.
     let customerReconcileQueued = false;
@@ -881,7 +1055,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
 
       if (missingCustomer || transientUpdateFailure) {
         const queued = await customerReconcileQueue.enqueueJob({
-          saleId,
+          saleId: effectiveSaleId,
           verificationId,
           fields: customerUpdatesPayload,
           delayMs: 5000
@@ -889,13 +1063,13 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
         customerReconcileQueued = Boolean(queued?.queued);
         customerReconcileReason = missingCustomer ? 'no_customer_on_sale' : 'transient_customer_update_failure';
         saleVerificationStore.addSessionLog(
-          saleId,
+          requestedSaleId,
           customerReconcileQueued ? 'Queued customer reconcile job' : `Customer reconcile not queued (${queued?.reason || 'unknown'})`,
           customerReconcileQueued ? 'info' : 'warn'
         );
       }
     } catch (e) {
-      logger.warn({ event: 'customer_reconcile_enqueue_failed', saleId, error: e.message }, 'Failed to enqueue customer reconcile job');
+      logger.warn({ event: 'customer_reconcile_enqueue_failed', saleId: effectiveSaleId, error: e.message }, 'Failed to enqueue customer reconcile job');
     }
 
     // Final success logging
@@ -911,6 +1085,9 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       success: true,
       approved,
       verificationId,
+      requestedSaleId,
+      saleId: effectiveSaleId,
+      resolvedSaleId: resolvedSaleId && resolvedSaleId !== requestedSaleId ? resolvedSaleId : null,
       customerName: verificationResult.customerName,
       age: parsed.age,
       dob: parsed.dob && !isNaN(parsed.dob.getTime()) ? parsed.dob.toISOString().slice(0, 10) : null,
@@ -933,7 +1110,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     });
 
   } catch (error) {
-    saleVerificationStore.addSessionLog(saleId, `FATAL BACKEND ERROR: ${error.message}`, 'error');
+    saleVerificationStore.addSessionLog(requestedSaleId, `FATAL BACKEND ERROR: ${error.message}`, 'error');
     console.error('===========================================');
     console.error('❌ ERROR PROCESSING BLUETOOTH SCAN');
     console.error('Error:', error.message);
@@ -1822,12 +1999,8 @@ router.post('/sales/:saleId/verify-from-note', validateSaleId, async (req, res) 
  * TABC requires 2-year retention (730 days)
  * This endpoint is protected by Vercel's internal cron authentication
  */
-router.post('/cron/retention', async (req, res) => {
-  // Verify this is a Vercel Cron request
-  const authHeader = req.headers.authorization;
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+async function runRetentionCron(req, res) {
+  if (!verifyCronRequest(req)) {
     logger.logSecurity('unauthorized_cron_attempt', {
       ip: req.ip,
       path: req.path
@@ -1870,7 +2043,7 @@ router.post('/cron/retention', async (req, res) => {
         verificationDays: 730 // TABC 2-year requirement
       });
 
-      if (process.env.CRON_RUN_SNAPSHOTS === 'true') {
+      if (String(process.env.CRON_RUN_SNAPSHOTS || '').trim().toLowerCase() === 'true') {
         try {
           const snapshots = require('../../api/cron/snapshots.js');
           const mode = process.env.CRON_SNAPSHOT_MODE || 'all';
@@ -1884,7 +2057,7 @@ router.post('/cron/retention', async (req, res) => {
     }
 
     let customerSyncResult = null;
-    if (process.env.CRON_RUN_CUSTOMER_SYNC === 'true') {
+    if (String(process.env.CRON_RUN_CUSTOMER_SYNC || '').trim().toLowerCase() === 'true') {
       try {
         const marketingService = require('./marketingService');
         const maxDurationMs = Math.max(1000, Math.min(Number.parseInt(process.env.CRON_CUSTOMER_SYNC_MAX_DURATION_MS || '8000', 10) || 8000, 60000));
@@ -1927,87 +2100,34 @@ router.post('/cron/retention', async (req, res) => {
       message: 'Failed to enforce data retention'
     });
   }
-});
+}
 
-// Cron job endpoint for retention enforcement
-router.get('/cron/retention', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return res.status(401).json({
-      error: 'UNAUTHORIZED',
-      message: 'Invalid cron secret'
-    });
-  }
-
-  if (!db.pool) {
-    return res.status(503).json({ error: 'DB_UNAVAILABLE' });
-  }
-
-  try {
-    const timeZone = (process.env.CRON_DAILY_TIMEZONE || 'America/Chicago').trim() || 'America/Chicago';
-    const dailyHour = Math.max(0, Math.min(23, Number.parseInt(process.env.CRON_DAILY_HOUR || '23', 10) || 23));
-    const dailyMinute = Math.max(0, Math.min(59, Number.parseInt(process.env.CRON_DAILY_MINUTE || '30', 10) || 30));
-    const daily = await shouldRunDailyMaintenance(db.pool, { timeZone, hour: dailyHour, minute: dailyMinute });
-
-    let retentionResult = null;
-    let retentionSkipped = null;
-    if (daily.shouldRun) {
-      retentionResult = await complianceStore.enforceRetention({ verificationDays: 730 });
-    } else {
-      retentionSkipped = daily.lastRunYmd === daily.ymd ? 'already_ran_today' : 'not_due_yet';
-    }
-
-    let customerSyncResult = null;
-    if (process.env.CRON_RUN_CUSTOMER_SYNC === 'true') {
-      try {
-        const marketingService = require('./marketingService');
-        const maxDurationMs = Math.max(1000, Math.min(Number.parseInt(process.env.CRON_CUSTOMER_SYNC_MAX_DURATION_MS || '8000', 10) || 8000, 60000));
-        customerSyncResult = await marketingService.syncCustomerProfiles(db.pool, { maxDurationMs });
-      } catch (customerError) {
-        logger.logAPIError('cron_customer_sync_from_retention', customerError);
-      }
-    }
-    let snapshotResult = null;
-    if (daily.shouldRun && process.env.CRON_RUN_SNAPSHOTS === 'true') {
-      try {
-        const snapshots = require('../../api/cron/snapshots.js');
-        const mode = process.env.CRON_SNAPSHOT_MODE || 'all';
-        snapshotResult = await snapshots.runSnapshotJob({ mode });
-      } catch (snapshotError) {
-        logger.logAPIError('cron_snapshots_from_retention', snapshotError);
-      }
-    }
-
-    res.json({
-      success: true,
-      daily: {
-        shouldRun: daily.shouldRun,
-        ymd: daily.ymd,
-        timeZone,
-        localHour: daily.localHour,
-        localMinute: daily.localMinute,
-        lastRunYmd: daily.lastRunYmd || null
-      },
-      retention: retentionResult,
-      retentionSkipped,
-      customerSync: customerSyncResult,
-      snapshots: snapshotResult
-    });
-  } catch (error) {
-    logger.logAPIError('cron_retention', error);
-    res.status(500).json({ error: 'INTERNAL_ERROR' });
-  }
-});
+router.get('/cron/retention', runRetentionCron);
+router.post('/cron/retention', runRetentionCron);
 
 function verifyCronRequest(req) {
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.authorization;
-  if (process.env.NODE_ENV === 'production' && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return false;
+  const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
+  if (nodeEnv !== 'production') {
+    return true;
   }
-  return true;
+
+  const cronSecret = String(process.env.CRON_SECRET || '').trim();
+  const authHeader = String(req.headers.authorization || '').trim();
+  const headerSecret = String(req.headers['x-cron-secret'] || '').trim();
+  const querySecret = String((req.query?.cron_secret || req.query?.cronSecret || req.query?.secret || '')).trim();
+
+  const vercelCronHeader = req.headers['x-vercel-cron'];
+  const isVercelCron = Boolean(vercelCronHeader) && String(vercelCronHeader) !== '0' && String(vercelCronHeader).toLowerCase() !== 'false';
+
+  if (cronSecret) {
+    if (authHeader === `Bearer ${cronSecret}`) return true;
+    if (headerSecret && headerSecret === cronSecret) return true;
+    if (querySecret && querySecret === cronSecret) return true;
+  }
+
+  // Vercel Cron requests include `x-vercel-cron: 1` (cannot set custom headers), so we accept that.
+  // This header can be spoofed by external callers; for manual triggering, prefer Authorization: Bearer CRON_SECRET.
+  return isVercelCron;
 }
 
 function timePartsInZone(date, timeZone) {

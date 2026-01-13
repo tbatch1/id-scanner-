@@ -322,6 +322,9 @@
 
             <button class="load-btn" onclick="loadScans(true)">Load Scans</button>
             <button id="refreshNowBtn" class="refresh-btn" onclick="refreshNow()" disabled>Refresh Now</button>
+            <input id="adminTokenInput" class="filter-select" placeholder="Admin token (optional)"
+                style="flex: 1; min-width: 240px; max-width: 420px;" />
+            <button class="refresh-btn" id="saveTokenBtn" type="button">Save Token</button>
         </div>
     </div>
 
@@ -371,6 +374,36 @@
         let currentLimit = 100;
         let hasMore = false;
 
+        function getAdminToken() {
+            try {
+                return (localStorage.getItem('ADMIN_TOKEN') || '').trim();
+            } catch {
+                return '';
+            }
+        }
+
+        function setAdminToken(token) {
+            try {
+                if (!token) {
+                    localStorage.removeItem('ADMIN_TOKEN');
+                } else {
+                    localStorage.setItem('ADMIN_TOKEN', token);
+                }
+            } catch { }
+        }
+
+        async function apiFetch(path, options = {}) {
+            const headers = new Headers(options.headers || {});
+            const token = getAdminToken();
+            if (token) headers.set('x-admin-token', token);
+            const response = await fetch(path, { ...options, headers });
+            if (response.status === 401) {
+                const lastUpdate = document.getElementById('lastUpdate');
+                if (lastUpdate) lastUpdate.textContent = 'Unauthorized (admin token). Paste token above and click Save Token.';
+            }
+            return response;
+        }
+
         async function loadScans(reset = false, { force = false, keepTable = false } = {}) {
             if (reset) {
                 currentPage = 0;
@@ -393,7 +426,7 @@
                 params.append('offset', currentPage * currentLimit);
                 if (force) params.append('force', '1');
 
-                const response = await fetch(`/admin/scans?${params}`);
+                const response = await apiFetch(`/admin/scans?${params}`);
                 const data = await response.json();
 
                 if (!response.ok) {
@@ -512,6 +545,14 @@
         // Load once on page load (no auto-refresh; prevents flicker + resets).
         window.addEventListener('load', () => {
             loadScans(true, { keepTable: false });
+        });
+
+        document.getElementById('adminTokenInput').value = getAdminToken();
+        document.getElementById('saveTokenBtn').addEventListener('click', () => {
+            const token = String(document.getElementById('adminTokenInput').value || '').trim();
+            setAdminToken(token);
+            const lastUpdate = document.getElementById('lastUpdate');
+            if (lastUpdate) lastUpdate.textContent = token ? 'Admin token saved.' : 'Admin token cleared.';
         });
     </script>
 </body>

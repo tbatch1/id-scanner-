@@ -541,7 +541,23 @@
             });
           } else if (action === 'csv') {
             const url = `/admin/marketing/segments/${encodeURIComponent(id)}?format=csv&days=${state.days}&limit=500&offset=0`;
-            window.open(url, '_blank', 'noopener');
+            apiFetch(url)
+              .then(async (res) => {
+                if (!res.ok) {
+                  const payload = await res.json().catch(() => ({}));
+                  throw new Error(payload.message || 'CSV export failed');
+                }
+                const blob = await res.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = `segment-${id}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(objectUrl);
+              })
+              .catch((err) => showToast(err.message || 'CSV export failed'));
           }
         });
       });

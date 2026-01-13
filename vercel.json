@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/retention",
-      "schedule": "30 5 * * *"
+      "schedule": "30 * * * *"
     },
     {
       "path": "/api/cron/customer-reconcile",

@@ -266,6 +266,8 @@
       </select>
 
       <button class="secondary" id="refreshBtn">Refresh Now</button>
+      <input id="adminTokenInput" placeholder="Admin token (optional)" style="flex:1;min-width:240px" />
+      <button class="secondary" id="saveTokenBtn">Save Token</button>
     </div>
 
     <div class="muted" id="lastUpdated">—</div>
@@ -397,6 +399,36 @@
   </div>
 
   <script>
+    function getAdminToken() {
+      try {
+        return (localStorage.getItem('ADMIN_TOKEN') || '').trim();
+      } catch {
+        return '';
+      }
+    }
+
+    function setAdminToken(token) {
+      try {
+        if (!token) {
+          localStorage.removeItem('ADMIN_TOKEN');
+        } else {
+          localStorage.setItem('ADMIN_TOKEN', token);
+        }
+      } catch { }
+    }
+
+    async function apiFetch(path, options = {}) {
+      const headers = new Headers(options.headers || {});
+      const token = getAdminToken();
+      if (token) headers.set('x-admin-token', token);
+      const response = await fetch(path, { ...options, headers });
+      if (response.status === 401) {
+        const lastUpdated = document.getElementById('lastUpdated');
+        if (lastUpdated) lastUpdated.textContent = 'Unauthorized (admin token). Paste token above and click Save Token.';
+      }
+      return response;
+    }
+
     function fmtMoney(value) {
       const n = Number(value || 0);
       return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
@@ -418,7 +450,7 @@
 
     async function loadOutlets() {
       try {
-        const res = await fetch('/admin/outlets', { cache: 'no-store' });
+        const res = await apiFetch('/admin/outlets', { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) return;
         const select = document.getElementById('outletSelect');
@@ -437,7 +469,7 @@
     async function loadSnapshotHealth() {
       const pill = document.getElementById('snapshotPill');
       try {
-        const res = await fetch('/admin/bi/snapshot-health', { cache: 'no-store' });
+        const res = await apiFetch('/admin/bi/snapshot-health', { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.message || 'Snapshot health unavailable');
 
@@ -476,7 +508,7 @@
       const days = document.getElementById('daysSelect').value;
       const outletId = document.getElementById('outletSelect').value || null;
 
-      const res = await fetch(`/admin/bi/summary?${buildParams()}`, { cache: 'no-store' });
+      const res = await apiFetch(`/admin/bi/summary?${buildParams()}`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Summary unavailable');
 
@@ -503,7 +535,7 @@
       const meta = document.getElementById('topProductsMeta');
       body.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
 
-      const res = await fetch(`/admin/bi/top-products?${buildParams({ limit: 10, sortBy: 'revenue' })}`, { cache: 'no-store' });
+      const res = await apiFetch(`/admin/bi/top-products?${buildParams({ limit: 10, sortBy: 'revenue' })}`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Top products unavailable');
 
@@ -531,7 +563,7 @@
       const meta = document.getElementById('lowStockMeta');
       body.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
 
-      const res = await fetch(`/admin/bi/low-stock?${buildParams({ limit: 25 })}`, { cache: 'no-store' });
+      const res = await apiFetch(`/admin/bi/low-stock?${buildParams({ limit: 25 })}`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         meta.textContent = '—';
@@ -563,7 +595,7 @@
       const meta = document.getElementById('topCustomersMeta');
       body.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
 
-      const res = await fetch(`/admin/bi/top-customers?${buildParams({ limit: 10 })}`, { cache: 'no-store' });
+      const res = await apiFetch(`/admin/bi/top-customers?${buildParams({ limit: 10 })}`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Top customers unavailable');
 
@@ -601,6 +633,14 @@
     document.getElementById('refreshBtn').addEventListener('click', refreshAll);
     document.getElementById('daysSelect').addEventListener('change', refreshAll);
     document.getElementById('outletSelect').addEventListener('change', refreshAll);
+
+    document.getElementById('adminTokenInput').value = getAdminToken();
+    document.getElementById('saveTokenBtn').addEventListener('click', () => {
+      const token = String(document.getElementById('adminTokenInput').value || '').trim();
+      setAdminToken(token);
+      const lastUpdated = document.getElementById('lastUpdated');
+      if (lastUpdated) lastUpdated.textContent = token ? 'Admin token saved.' : 'Admin token cleared.';
+    });
 
     loadOutlets().then(refreshAll);
     setInterval(refreshAll, 60000);

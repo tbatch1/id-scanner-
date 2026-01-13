@@ -49,7 +49,7 @@ describe('Bluetooth verify updates customer fields', () => {
     complianceStore.saveVerification.mockResolvedValue(null);
   });
 
-  it('sends Lightspeed-supported field names (sex, physical_address1, postal_address1)', async () => {
+  it('returns quickly without blocking on customer profile updates', async () => {
     lightspeed.getSaleById.mockResolvedValue({
       saleId: 'SALE-1',
       items: [],
@@ -78,21 +78,9 @@ describe('Bluetooth verify updates customer fields', () => {
 
     expect(res.body.success).toBe(true);
     expect(res.body.approved).toBe(true);
+    expect(res.body.customerReconcileQueued).toBe(false);
 
-    expect(lightspeed.updateCustomerById).toHaveBeenCalledTimes(1);
-    const [, updates] = lightspeed.updateCustomerById.mock.calls[0];
-
-    expect(updates).toEqual(
-      expect.objectContaining({
-        first_name: 'JOHN',
-        last_name: 'DOE',
-        sex: 'M',
-        physical_address1: '123 MAIN ST',
-        postal_address1: '123 MAIN ST'
-      })
-    );
-    expect(updates.gender).toBeUndefined();
-    expect(updates.physical_address_1).toBeUndefined();
-    expect(updates.postal_address_1).toBeUndefined();
+    // Fast verify path: customer updates happen asynchronously via reconcile jobs, so this endpoint should not write.
+    expect(lightspeed.updateCustomerById).toHaveBeenCalledTimes(0);
   });
 });
