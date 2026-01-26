@@ -357,6 +357,10 @@
 
             outline: none;
             box-shadow: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
 
             /* Enabled only when ready (prevents arming before tender selection in non-verify modes). */
             pointer-events: none;
@@ -1001,6 +1005,10 @@
             }
         })();
 
+        // iPad/Lightspeed embedded verifier: avoid iOS "text edit" UI (selection lens / copy-paste popover).
+        // We keep the capture input readonly and buffer via keydown so iOS doesn't enter native edit mode.
+        const iosEmbeddedVerify = Boolean(isIOSLike && embeddedMode && verifyOnlyMode);
+
         const autoStartScan = (() => {
             const raw = String(urlParams.get('autoStart') || '').trim().toLowerCase();
             if (['0', 'false', 'no', 'off'].includes(raw)) return false;
@@ -1025,7 +1033,7 @@
 
         // Only enable readonly capture when explicitly requested; it can improve iPad UX by suppressing
         // the on-screen keyboard, but some environments are more reliable with a normal editable input.
-        const preferReadOnlyCapture = noKeyboardHackEnabled;
+        const preferReadOnlyCapture = noKeyboardHackEnabled || iosEmbeddedVerify;
 
         // State
         let selectedTender = null;
@@ -1187,6 +1195,15 @@
         function focusGhostInput(reason = 'focus') {
             try {
                 if (!ghostInput) return false;
+
+                // iOS embedded verifier: keep the input readonly and avoid synthetic click/selection which can
+                // trigger the native text-edit popover and magnifier.
+                if (iosEmbeddedVerify) {
+                    try { ghostInput.readOnly = true; ghostInput.setAttribute('readonly', ''); } catch (e) { }
+                    try { ghostInput.focus({ preventScroll: true }); } catch (e) { try { ghostInput.focus(); } catch (ee) { } }
+                    clientLog('focusGhostInput', { reason, active: document.activeElement === ghostInput, iosEmbeddedVerify: true });
+                    return true;
+                }
 
                 // Default: keep it simple (editable focused field). This is the most reliable path for Bluetooth HID
                 // scanners in iPad/WKWebView. Optional readonly focus hack can be enabled via query param.
