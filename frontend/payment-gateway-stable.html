@@ -801,24 +801,33 @@
     <script>
         // Data from URL (Added fallbacks for different Lightspeed triggers)
         const urlParams = new URLSearchParams(window.location.search);
-        const debugKeysEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugKeys') || urlParams.get('debug') || '').toLowerCase());
+        // Debug UI/keys are disabled on production hostnames to avoid accidental PII exposure.
+        // Use the dev alias hostname for troubleshooting.
+        const __host = String(window.location.hostname || '').toLowerCase();
+        const __isProdHost =
+            __host === 'id-scanner-project.vercel.app' ||
+            __host === 'id-scanner-project-thc-club.vercel.app';
+        const __debugAllowed = !__isProdHost;
+
+        const debugKeysEnabled = __debugAllowed && ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugKeys') || urlParams.get('debug') || '').toLowerCase());
         if (debugKeysEnabled) {
             document.body.classList.add('show-keys');
         }
-        const maskKeysEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('maskKeys') || urlParams.get('maskKeysUi') || urlParams.get('mask') || '').toLowerCase());
+        const maskKeysEnabled = __debugAllowed && ['1', 'true', 'yes', 'on'].includes((urlParams.get('maskKeys') || urlParams.get('maskKeysUi') || urlParams.get('mask') || '').toLowerCase());
         if (maskKeysEnabled) {
             // Show the capture UI, but mask the characters so staff never see raw barcode data.
             document.body.classList.add('show-keys');
             document.body.classList.add('mask-keys');
         }
-        const debugUiEnabled = ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugUi') || urlParams.get('debug') || '').toLowerCase());
+        const debugUiEnabled = __debugAllowed && ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugUi') || urlParams.get('debug') || '').toLowerCase());
         if (debugUiEnabled) {
             document.body.classList.add('debug-ui');
         }
         let remoteTelemetryEnabled =
-            debugUiEnabled ||
-            debugKeysEnabled ||
-            ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('telemetry') || urlParams.get('remoteTelemetry') || urlParams.get('clientLog') || '').trim().toLowerCase());
+            __debugAllowed &&
+            (debugUiEnabled ||
+                debugKeysEnabled ||
+                ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('telemetry') || urlParams.get('remoteTelemetry') || urlParams.get('clientLog') || '').trim().toLowerCase()));
 
         const embeddedMode =
             window.self !== window.top ||
@@ -1216,6 +1225,7 @@
 
         // Long-press the logo to toggle debug (works even when query params are stripped by the iframe host).
         (function installLogoDebugHold() {
+            if (!__debugAllowed) return;
             const logoRoot = document.getElementById('visualRoot');
             if (!logoRoot) return;
             let timer = null;
