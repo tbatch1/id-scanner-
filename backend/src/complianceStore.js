@@ -10,6 +10,71 @@ async function ensureComplianceSchema() {
   if (schemaEnsurePromise) return schemaEnsurePromise;
 
   schemaEnsurePromise = (async () => {
+    // Fast path: for production traffic we should not execute the full schema SQL on every cold start.
+    // Instead, check whether the core tables exist and only run the bootstrap when they don't.
+    try {
+      const { rows } = await query(
+        "SELECT to_regclass('public.verifications') AS verifications, to_regclass('public.banned_customers') AS banned_customers",
+        [],
+        5_000
+      );
+
+      const hasVerifications = Boolean(rows?.[0]?.verifications);
+      const hasBannedCustomers = Boolean(rows?.[0]?.banned_customers);
+
+      if (hasVerifications && hasBannedCustomers) {
+        logger.debug({ event: 'schema_ensure_skipped', reason: 'tables_present' }, 'Compliance schema already present.');
+        return;
+      }
+
+      if (hasVerifications && !hasBannedCustomers) {
+        logger.warn({ event: 'schema_partial', missing: 'banned_customers' }, 'Compliance schema missing banned_customers; bootstrapping minimal table.');
+        await query(
+          `
+            CREATE TABLE IF NOT EXISTS banned_customers (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              document_type VARCHAR(50) NOT NULL,
+              document_number VARCHAR(150) NOT NULL,
+              issuing_country VARCHAR(120) NOT NULL DEFAULT '',
+              banned_location_id VARCHAR(100),
+              date_of_birth DATE,
+              first_name VARCHAR(100),
+              last_name VARCHAR(100),
+              phone VARCHAR(30),
+              email VARCHAR(254),
+              notes TEXT,
+              created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE (document_type, document_number, issuing_country)
+            );
+            ALTER TABLE IF EXISTS banned_customers ADD COLUMN IF NOT EXISTS banned_location_id VARCHAR(100);
+            ALTER TABLE IF EXISTS banned_customers ADD COLUMN IF NOT EXISTS phone VARCHAR(30);
+            ALTER TABLE IF EXISTS banned_customers ADD COLUMN IF NOT EXISTS email VARCHAR(254);
+            CREATE INDEX IF NOT EXISTS idx_banned_customers_doc ON banned_customers(document_number);
+            CREATE INDEX IF NOT EXISTS idx_banned_customers_type ON banned_customers(document_type);
+            CREATE INDEX IF NOT EXISTS idx_banned_customers_country ON banned_customers(issuing_country);
+            CREATE INDEX IF NOT EXISTS idx_banned_customers_banned_location ON banned_customers(banned_location_id);
+          `,
+          [],
+          30_000
+        );
+        logger.info({ event: 'banned_schema_ensured' }, 'Minimal banned customers schema ensured.');
+        return;
+      }
+    } catch (error) {
+      // If the probe fails, fall through to the existing ensure logic (or skip if disabled).
+      logger.debug({ event: 'schema_probe_failed', error: error?.message || String(error) }, 'Compliance schema probe failed.');
+    }
+
+    const allowFullEnsure = config.env !== 'production' || String(process.env.DB_ENSURE_SCHEMA || '').toLowerCase() === 'true';
+    if (!allowFullEnsure) {
+      logger.warn(
+        { event: 'schema_ensure_skipped', reason: 'disabled_in_production' },
+        'Skipping full schema ensure in production. Run migrations/schema.sql ahead of time (or set DB_ENSURE_SCHEMA=true temporarily).'
+      );
+      return;
+    }
+
     try {
       const schemaPath = path.resolve(__dirname, 'schema.sql');
       if (!fs.existsSync(schemaPath)) {
