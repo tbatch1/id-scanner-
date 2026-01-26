@@ -350,7 +350,8 @@
             /* Default: invisible characters (we show masked UI separately when needed). */
             color: transparent;
             -webkit-text-fill-color: transparent;
-            caret-color: var(--thc-orange);
+            /* Hide the blinking caret; focus is indicated via the CTA + status text. */
+            caret-color: transparent;
             text-shadow: 0 0 0 transparent;
             text-align: center;
 
@@ -369,36 +370,10 @@
             outline: none;
         }
 
-        /* Verify-only (iPad) reliability mode: make the input itself look like the CTA. */
-        html.verify-only .scan-now-wrap #btnScanNow {
-            display: none;
-        }
-
+        /* Verify-only (iPad) UX: keep the CTA as the button; the transparent input overlay is the real tap target. */
         html.verify-only .scan-now-wrap #ghostInput {
-            position: relative;
-            inset: auto;
-            display: block;
-            pointer-events: auto;
-            padding: 18px 18px;
-            border-radius: 50px;
-            border: 2px solid var(--thc-orange);
-            background: rgba(229, 92, 44, 0.2);
-            box-shadow: 0 0 30px rgba(229, 92, 44, 0.2);
-            font-size: 18px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            text-align: center;
-            caret-color: var(--thc-orange);
-            -webkit-text-security: disc; /* mask typed chars */
-            color: rgba(255, 255, 255, 0.35);
-            -webkit-text-fill-color: rgba(255, 255, 255, 0.35);
-        }
-
-        html.verify-only .scan-now-wrap #ghostInput::placeholder {
-            color: var(--thc-orange);
-            -webkit-text-fill-color: var(--thc-orange);
-            opacity: 0.9;
+            /* Avoid the iOS blinking caret/selection visuals while still capturing HID keystrokes. */
+            caret-color: transparent !important;
         }
 
         /* Hide raw keystrokes in normal mode (still captured in ghostInput). */
@@ -1146,7 +1121,9 @@
 
         try {
             // Some iOS webviews are more reliable when the focused element is a normal text field.
-            ghostInput.setAttribute('inputmode', 'text');
+            // In the Lightspeed iPad iframe verifier flow, suppress the on-screen keyboard.
+            const suppressOnScreenKeyboard = Boolean(verifyOnlyMode && embeddedMode && isIOSLike);
+            ghostInput.setAttribute('inputmode', suppressOnScreenKeyboard ? 'none' : 'text');
             ghostInput.setAttribute('enterkeyhint', 'done');
             ghostInput.setAttribute('autocomplete', 'off');
             ghostInput.setAttribute('autocorrect', 'off');
@@ -1158,7 +1135,10 @@
         // In verify-only mode inside the Lightspeed iframe, prefer readonly capture (no on-screen keyboard),
         // and buffer keystrokes via keydown.
         if (verifyOnlyMode && embeddedMode) {
-            try { ghostInput.setAttribute('inputmode', 'text'); } catch (e) { }
+            try {
+                const suppressOnScreenKeyboard = Boolean(isIOSLike);
+                ghostInput.setAttribute('inputmode', suppressOnScreenKeyboard ? 'none' : 'text');
+            } catch (e) { }
             if (preferReadOnlyCapture) {
                 try { ghostInput.readOnly = true; ghostInput.setAttribute('readonly', ''); } catch (e) { }
             }
@@ -1174,8 +1154,9 @@
 
         function toggleDebug() {
             document.body.classList.toggle('debug-ui');
-            document.body.classList.toggle('show-keys');
             if (document.body.classList.contains('debug-ui')) remoteTelemetryEnabled = true;
+            // Never toggle raw keystroke preview via the hidden long-press gesture (PII risk).
+            // Use `?debugKeys=1` (or `?debug=1`) explicitly when troubleshooting scanner payloads.
             clientLog('debug toggled', { debugUi: document.body.classList.contains('debug-ui'), showKeys: document.body.classList.contains('show-keys') });
         }
 

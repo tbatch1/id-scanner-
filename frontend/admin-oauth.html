@@ -156,35 +156,27 @@
       color: var(--muted);
     }
 
-    .nav-links {
-      margin-top: 18px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .nav-link {
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--text);
-      text-decoration: none;
-      font-size: 13px;
-    }
   </style>
 </head>
 
 <body>
-  <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
-    <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
-  </a>
-
   <div class="wrap">
     <div class="header">
       <h1>OAuth Setup</h1>
       <div id="statusPill" class="pill">Checking OAuth status…</div>
     </div>
+
+    <nav class="admin-top-nav" aria-label="Admin navigation">
+      <a class="admin-top-nav__brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+        <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+      </a>
+      <a href="/admin/data-center.html" class="admin-top-nav__link">Manager Dashboard</a>
+      <a href="/admin/marketing.html" class="admin-top-nav__link">Marketing Analytics</a>
+      <a href="/admin/scans.html" class="admin-top-nav__link">View All Scans</a>
+      <a href="/admin/audit.html" class="admin-top-nav__link">Transaction Audit</a>
+      <a href="/admin/banned.html" class="admin-top-nav__link">Banned Customers</a>
+    </nav>
+    <div class="admin-top-nav-spacer" aria-hidden="true"></div>
 
     <div class="controls">
       <a class="button primary" href="/api/auth/login?redirect=/admin/oauth.html">Connect Lightspeed</a>
@@ -210,14 +202,6 @@
       </div>
     </div>
 
-    <div class="nav-links">
-      <a class="nav-link" href="/admin/data-center.html">Data Center</a>
-      <a class="nav-link" href="/admin/marketing.html">Marketing</a>
-      <a class="nav-link" href="/admin/audit.html">Audit</a>
-      <a class="nav-link" href="/admin/scans.html">Scans</a>
-      <a class="nav-link" href="/admin/banned.html">Banned</a>
-      <a class="nav-link" href="/admin/overrides.html">Overrides</a>
-    </div>
   </div>
 
   <script>

@@ -2,19 +2,19 @@
   "crons": [
     {
       "path": "/api/cron/retention",
-      "schedule": "30 * * * *"
+      "schedule": "30 3 * * *"
     },
     {
       "path": "/api/cron/customer-reconcile",
-      "schedule": "*/1 * * * *"
+      "schedule": "0 4 * * *"
     },
     {
       "path": "/api/cron/webhooks",
-      "schedule": "*/5 * * * *"
+      "schedule": "30 4 * * *"
     },
     {
       "path": "/api/cron/customers",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 5 * * *"
     }
   ],
   "rewrites": [
@@ -129,10 +129,6 @@
     {
       "source": "/admin/banned.html",
       "destination": "/frontend/admin-banned.html"
-    },
-    {
-      "source": "/admin/overrides.html",
-      "destination": "/frontend/admin-overrides.html"
     },
     {
       "source": "/admin/audit.html",

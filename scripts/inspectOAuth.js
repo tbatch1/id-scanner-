@@ -1,6 +1,6 @@
 "use strict";
 
-require('dotenv').config();
+require('./loadEnv').loadEnv();
 
 const config = require('../backend/src/config');
 const lightspeed = require('../backend/src/lightspeedClient');

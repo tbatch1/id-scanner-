@@ -259,24 +259,6 @@
       font-size: 12px;
     }
 
-    .nav-links {
-      margin-top: 18px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .nav-link {
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--text);
-      text-decoration: none;
-      font-size: 13px;
-      font-weight: 650;
-    }
-
     .toast {
       position: fixed;
       bottom: 16px;
@@ -298,14 +280,23 @@
 </head>
 
 <body>
-  <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
-    <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
-  </a>
   <div class="wrap">
     <div class="header">
       <h1>Marketing Analytics</h1>
       <div class="pill" id="healthPill">Loading customer profiles…</div>
     </div>
+
+    <nav class="admin-top-nav" aria-label="Admin navigation">
+      <a class="admin-top-nav__brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+        <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+      </a>
+      <a href="/admin/data-center.html" class="admin-top-nav__link">Manager Dashboard</a>
+      <a href="/admin/marketing.html" class="admin-top-nav__link">Marketing Analytics</a>
+      <a href="/admin/scans.html" class="admin-top-nav__link">View All Scans</a>
+      <a href="/admin/audit.html" class="admin-top-nav__link">Transaction Audit</a>
+      <a href="/admin/banned.html" class="admin-top-nav__link">Banned Customers</a>
+    </nav>
+    <div class="admin-top-nav-spacer" aria-hidden="true"></div>
 
     <div class="controls">
       <select id="daysSelect">
@@ -317,8 +308,6 @@
       <button class="secondary" id="refreshBtn">Refresh</button>
       <button id="syncBtn">Sync Customers</button>
       <button class="warn" id="resetSyncBtn" title="Rebuild cursor from scratch (runs incremental chunks)">Reset Sync</button>
-      <input id="adminTokenInput" placeholder="Admin token (optional)" style="flex:1;min-width:240px" />
-      <button class="secondary" id="saveTokenBtn">Save Token</button>
     </div>
 
     <div class="grid" id="kpiGrid"></div>
@@ -398,13 +387,6 @@
       </table>
     </div>
 
-    <div class="nav-links">
-      <a href="/admin/data-center.html" class="nav-link">Data Center</a>
-      <a href="/admin/scans.html" class="nav-link">All Scans</a>
-      <a href="/admin/banned.html" class="nav-link">Banned Customers</a>
-      <a href="/admin/overrides.html" class="nav-link">Override History</a>
-      <a href="/admin/audit.html" class="nav-link">Transaction Audit</a>
-    </div>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -426,27 +408,9 @@
       showToast._t = window.setTimeout(() => el.classList.remove('show'), 3400);
     }
 
-    function getAdminToken() {
-      return (localStorage.getItem('ADMIN_TOKEN') || '').trim();
-    }
-
-    function setAdminToken(token) {
-      if (!token) {
-        localStorage.removeItem('ADMIN_TOKEN');
-        return;
-      }
-      localStorage.setItem('ADMIN_TOKEN', token);
-    }
-
     async function apiFetch(path, options = {}) {
       const headers = new Headers(options.headers || {});
-      const token = getAdminToken();
-      if (token) headers.set('x-admin-token', token);
-      const response = await fetch(path, { ...options, headers });
-      if (response.status === 401) {
-        showToast('Unauthorized (admin token). Paste token above and click Save Token.');
-      }
-      return response;
+      return fetch(path, { ...options, headers });
     }
 
     function formatNumber(value) {
@@ -685,15 +649,6 @@
     document.getElementById('syncBtn').addEventListener('click', () => runSync(false));
     document.getElementById('resetSyncBtn').addEventListener('click', () => runSync(true));
 
-    document.getElementById('saveTokenBtn').addEventListener('click', () => {
-      const token = document.getElementById('adminTokenInput').value.trim();
-      setAdminToken(token);
-      showToast(token ? 'Admin token saved.' : 'Admin token cleared.');
-      loadHealth();
-      loadSummaryAndSegments();
-      if (state.currentSegment) loadSegment();
-    });
-
     document.getElementById('prevPageBtn').addEventListener('click', () => {
       state.offset = Math.max(0, state.offset - state.limit);
       loadSegment();
@@ -703,8 +658,6 @@
       state.offset += state.limit;
       loadSegment();
     });
-
-    document.getElementById('adminTokenInput').value = getAdminToken();
 
     loadHealth();
     loadSummaryAndSegments();

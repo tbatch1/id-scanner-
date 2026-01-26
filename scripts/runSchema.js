@@ -1,6 +1,6 @@
 "use strict";
 
-require('dotenv').config();
+require('./loadEnv').loadEnv();
 
 const { Client } = require('pg');
 const fs = require('fs');

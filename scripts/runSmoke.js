@@ -1,6 +1,6 @@
 "use strict";
 
-require('dotenv').config();
+require('./loadEnv').loadEnv();
 
 const wantsRealLightspeed = process.env.SMOKE_USE_REAL_LIGHTSPEED === 'true';
 if (!wantsRealLightspeed) {
@@ -24,7 +24,17 @@ const SALE_ID = process.env.SMOKE_SALE_ID || 'SALE-1001';
 const BANNED_SALE_ID = process.env.SMOKE_BANNED_SALE_ID || 'SALE-1002';
 const OVERRIDE_PIN = process.env.SMOKE_OVERRIDE_PIN || process.env.OVERRIDE_PIN || null;
 const SHOULD_SKIP_BANNED = process.env.SMOKE_SKIP_BANNED === 'true';
-const LOCATION_ID = process.env.SMOKE_LOCATION_ID || process.env.LIGHTSPEED_DEFAULT_OUTLET_ID || null;
+function sanitizeHeaderValue(value) {
+  if (value === null || value === undefined) return null;
+  return String(value)
+    .replace(/\\r\\n/g, '')
+    .replace(/\\n/g, '')
+    .replace(/\\r/g, '')
+    .trim()
+    .replace(/^"|"$/g, '');
+}
+
+const LOCATION_ID = sanitizeHeaderValue(process.env.SMOKE_LOCATION_ID || process.env.LIGHTSPEED_DEFAULT_OUTLET_ID);
 const PAYMENT_TYPE = process.env.SMOKE_PAYMENT_TYPE || 'cash';
 
 function withHeaders(req) {

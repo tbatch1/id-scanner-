@@ -1,5 +1,7 @@
 "use strict";
 
+require('./loadEnv').loadEnv();
+
 const { Client } = require('pg');
 
 const [, , command, ...args] = process.argv;

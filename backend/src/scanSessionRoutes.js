@@ -67,12 +67,15 @@ router.post('/', async (req, res) => {
     let rejectionReason = reason;
     let finalApproved = approved;
 
-    if (documentNumber) {
+    if (documentNumber || (firstName && lastName && dob)) {
       try {
         const bannedRecord = await complianceStore.findBannedCustomer({
           documentType: documentType || 'drivers_license',
           documentNumber: documentNumber,
-          issuingCountry: nationality || null
+          issuingCountry: nationality || null,
+          firstName: firstName || null,
+          lastName: lastName || null,
+          dateOfBirth: dob || null
         });
 
         if (bannedRecord) {

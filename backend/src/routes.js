@@ -8,14 +8,13 @@ const saleVerificationStore = require('./saleVerificationStore');
 const { validateVerification, validateCompletion, validateBannedCreate, validateBannedId, validateOverride, validateSaleId, sanitizeString } = require('./validation');
 const lightspeedWebhookQueue = require('./lightspeedWebhookQueue');
 const customerReconcileQueue = require('./customerReconcileQueue');
-const { adminAuth } = require('./auth');
+const customerFillQueue = require('./customerFillQueue');
+
 const { buildCustomerUpdatePayload } = require('./lightspeedCustomerFields');
 
 const router = express.Router();
 
-// Protect sensitive reporting + banned customer management behind the same admin token used by /admin/* routes.
-// If ADMIN_TOKEN is not configured, this middleware will warn but allow access (useful during setup).
-router.use(['/reports', '/banned'], adminAuth);
+// Note: admin routes are intentionally not token-gated in this deployment.
 
 const millisecondsPerMinute = 60 * 1000;
 const lightspeedMode = process.env.LIGHTSPEED_USE_MOCK === 'true' ? 'mock' : 'live';
@@ -148,11 +147,24 @@ function normalizeSource(value) {
 function normalizeDocumentType(value) {
   const sanitized = sanitizeString(value || '');
   const lower = sanitized.toLowerCase();
-  const allowed = ['drivers_license', 'passport', 'mrz_id', 'id_card', 'routed_id'];
+  const allowed = ['drivers_license', 'passport', 'mrz_id', 'id_card', 'routed_id', 'name_dob'];
   if (allowed.includes(lower)) {
     return lower;
   }
   return 'drivers_license';
+}
+
+function normalizeEmail(value) {
+  const sanitized = sanitizeString(value || '').trim().toLowerCase();
+  if (!sanitized) return null;
+  if (sanitized.length > 254) return sanitized.substring(0, 254);
+  return sanitized;
+}
+
+function normalizePhone(value) {
+  const sanitized = sanitizeString(value || '').trim().replace(/\s+/g, ' ');
+  if (!sanitized) return null;
+  return sanitized.substring(0, 30);
 }
 
 function getOutletDescriptor(outletId, saleOutlet) {
@@ -543,6 +555,12 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
   const registerId = (req.body.registerId || '').trim();
   const clerkId = (req.body.clerkId || '').trim();
 
+  if (requestedSaleId && !saleVerificationStore.getVerification(requestedSaleId)) {
+    try {
+      saleVerificationStore.createVerification(requestedSaleId, { registerId: registerId || null });
+    } catch { }
+  }
+
   // 0. Kick off parallel diagnostic and sale retrieval
   // Fire-and-forget diagnostic so it never blocks or crashes the main flow
   complianceStore.logDiagnostic({
@@ -607,12 +625,15 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       reasonFast = 'Could not read DOB';
     }
 
-    if (approvedFast && db.pool && parsedFast.documentNumber) {
+    if (approvedFast && db.pool && (parsedFast.documentNumber || (parsedFast.firstName && parsedFast.lastName && parsedFast.dob))) {
       try {
         const bannedRecord = await complianceStore.findBannedCustomer({
           documentType: 'drivers_license',
           documentNumber: parsedFast.documentNumber,
-          issuingCountry: parsedFast.issuingCountry
+          issuingCountry: parsedFast.issuingCountry,
+          firstName: parsedFast.firstName,
+          lastName: parsedFast.lastName,
+          dateOfBirth: parsedFast.dob ? parsedFast.dob : null
         });
         if (bannedRecord) {
           approvedFast = false;
@@ -667,8 +688,9 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
 
     let customerReconcileQueuedFast = false;
     let customerReconcileReasonFast = null;
-    if (approvedFast && db.pool && typeof lightspeed.updateCustomerById === 'function') {
-      let fieldsFast = null;
+    let customerFillQueuedFast = false;
+    let fieldsFast = null;
+    if (approvedFast) {
       try {
         fieldsFast = buildCustomerUpdatePayload(parsedFast);
       } catch (e) {
@@ -676,6 +698,18 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       }
 
       if (fieldsFast) {
+        const queued = customerFillQueue.enqueueCustomerFill({ saleId: requestedSaleId, fields: fieldsFast });
+        customerFillQueuedFast = Boolean(queued?.queued);
+        saleVerificationStore.addSessionLog(
+          requestedSaleId,
+          customerFillQueuedFast ? 'LOADER: Waiting for loyalty customer attach (in-memory)' : `LOADER: Not queued (${queued?.reason || 'unknown'})`,
+          customerFillQueuedFast ? 'info' : 'warn'
+        );
+      }
+
+      // Sale notes are intentionally disabled (compliance is tracked via DB + manager audit endpoints instead).
+
+      if (fieldsFast && db.pool && typeof lightspeed.updateCustomerById === 'function') {
         customerReconcileReasonFast = 'populate_customer_fields_async';
         try {
           await customerReconcileQueue.enqueueJob({
@@ -845,13 +879,16 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
 
     // 3. Check Banned List (Database)
     let bannedRecord = null;
-    if (db.pool && parsed.documentNumber) {
+    if (db.pool && (parsed.documentNumber || (parsed.firstName && parsed.lastName && parsed.dob))) {
       try {
         saleVerificationStore.addSessionLog(requestedSaleId, 'Checking banned customers...', 'info');
         bannedRecord = await complianceStore.findBannedCustomer({
           documentType: 'drivers_license',
           documentNumber: parsed.documentNumber,
-          issuingCountry: parsed.issuingCountry
+          issuingCountry: parsed.issuingCountry,
+          firstName: parsed.firstName,
+          lastName: parsed.lastName,
+          dateOfBirth: parsed.dob ? parsed.dob : null
         });
         saleVerificationStore.addSessionLog(requestedSaleId, `Banned list check finished (banned: ${!!bannedRecord})`, 'info');
 
@@ -913,43 +950,8 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       }
     }
 
-    // 4.5 Write an audit note back to Lightspeed (best-effort, never blocks checkout)
-    let noteUpdated = false;
-    try {
-      saleVerificationStore.addSessionLog(requestedSaleId, 'Updating Lightspeed sale note...', 'info');
-      const safeDate = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString().slice(0, 10) : null;
-
-      const verification = await lightspeed.recordVerification({
-        saleId: effectiveSaleId,
-        clerkId: clerkId || 'BLUETOOTH_DEVICE',
-        verificationData: {
-          approved,
-          reason,
-          firstName: parsed.firstName,
-          lastName: parsed.lastName,
-          dob: safeDate(parsed.dob),
-          age: parsed.age,
-          documentType: 'drivers_license',
-          documentNumber: parsed.documentNumber,
-          issuingCountry: parsed.issuingCountry,
-          nationality: parsed.issuingCountry,
-          sex: parsed.sex,
-          source: 'bluetooth_gun',
-          documentExpiry: parsed.documentExpiry || null
-        },
-        sale,
-        locationId
-      });
-      noteUpdated = Boolean(verification?.noteUpdated);
-      saleVerificationStore.addSessionLog(
-        requestedSaleId,
-        noteUpdated ? 'Lightspeed note recorded' : approved ? 'Lightspeed note not written' : 'Lightspeed note not written (rejected)',
-        noteUpdated ? 'info' : 'warn'
-      );
-    } catch (e) {
-      saleVerificationStore.addSessionLog(requestedSaleId, `Lightspeed note failed: ${e.message}`, 'warn');
-      logger.warn({ event: 'bluetooth_note_update_failed', saleId: effectiveSaleId }, 'Failed to update Lightspeed note for bluetooth scan');
-    }
+    // Sale notes are intentionally disabled (compliance is tracked via DB + manager audit endpoints instead).
+    const noteUpdated = false;
 
     // 4.6 Optionally update the Lightspeed customer profile (when a customer was selected via phone/loyalty)
     let customerUpdated = false;
@@ -957,12 +959,23 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     let customerUpdateSkipped = null;
     let customerUpdateStatus = null;
     let customerUpdatesPayload = null;
+    let customerFillQueued = false;
     if (approved && sale?.customerId && typeof lightspeed.updateCustomerById === 'function') {
       try {
         saleVerificationStore.addSessionLog(requestedSaleId, `Updating customer profile (${sale.customerId})...`, 'info');
 
         const updates = buildCustomerUpdatePayload(parsed);
         customerUpdatesPayload = updates;
+
+        try {
+          const queued = customerFillQueue.enqueueCustomerFill({ saleId: effectiveSaleId, fields: updates });
+          customerFillQueued = Boolean(queued?.queued);
+          saleVerificationStore.addSessionLog(
+            requestedSaleId,
+            customerFillQueued ? 'LOADER: Started customer profile fill (in-memory)' : `LOADER: Not queued (${queued?.reason || 'unknown'})`,
+            customerFillQueued ? 'info' : 'warn'
+          );
+        } catch { }
 
         const result = await lightspeed.updateCustomerById(sale.customerId, updates, { fillBlanksOnly: true });
         customerUpdated = Boolean(result?.updated);
@@ -985,6 +998,18 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
         customerUpdatesPayload = buildCustomerUpdatePayload(parsed);
       } catch (e) {
         customerUpdatesPayload = null;
+      }
+
+      if (customerUpdatesPayload) {
+        try {
+          const queued = customerFillQueue.enqueueCustomerFill({ saleId: effectiveSaleId, fields: customerUpdatesPayload });
+          customerFillQueued = Boolean(queued?.queued);
+          saleVerificationStore.addSessionLog(
+            requestedSaleId,
+            customerFillQueued ? 'LOADER: Waiting for loyalty customer attach (in-memory)' : `LOADER: Not queued (${queued?.reason || 'unknown'})`,
+            customerFillQueued ? 'info' : 'warn'
+          );
+        } catch { }
       }
     }
 
@@ -1105,6 +1130,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       customerUpdatedFields,
       customerUpdateSkipped,
       customerUpdateStatus,
+      customerFillQueued,
       customerReconcileQueued,
       customerReconcileReason
     });
@@ -1181,12 +1207,15 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
 
   let bannedRecord = null;
 
-  if (db.pool && normalizedScan.documentNumber) {
+  if (db.pool && (normalizedScan.documentNumber || (normalizedScan.firstName && normalizedScan.lastName && normalizedScan.dob))) {
     try {
       bannedRecord = await complianceStore.findBannedCustomer({
         documentType: normalizedScan.documentType,
         documentNumber: normalizedScan.documentNumber,
-        issuingCountry: normalizedScan.issuingCountry || null
+        issuingCountry: normalizedScan.issuingCountry || null,
+        firstName: normalizedScan.firstName || null,
+        lastName: normalizedScan.lastName || null,
+        dateOfBirth: normalizedScan.dob || null
       });
 
       if (bannedRecord) {
@@ -1425,9 +1454,10 @@ router.post('/sales/:saleId/complete', validateCompletion, async (req, res) => {
 
 router.get('/reports/compliance', async (req, res, next) => {
   if (!db.pool) {
-    return res.status(503).json({
-      error: 'COMPLIANCE_STORAGE_DISABLED',
-      message: 'Compliance reporting requires DATABASE_URL to be configured.'
+    return res.status(200).json({
+      success: false,
+      dbAvailable: false,
+      data: []
     });
   }
 
@@ -1448,9 +1478,10 @@ router.get('/reports/compliance', async (req, res, next) => {
 
 router.get('/reports/overrides', async (req, res) => {
   if (!db.pool) {
-    return res.status(503).json({
-      error: 'OVERRIDE_HISTORY_UNAVAILABLE',
-      message: 'Override history reporting requires DATABASE_URL to be configured.'
+    return res.status(200).json({
+      success: false,
+      dbAvailable: false,
+      data: []
     });
   }
 
@@ -1593,20 +1624,36 @@ router.post('/sales/:saleId/override', validateOverride, async (req, res) => {
 router.post('/banned', validateBannedCreate, async (req, res) => {
   if (!db.pool) {
     return res.status(503).json({
-      error: 'BANNED_LIST_UNAVAILABLE',
-      message: 'Banned customer management requires DATABASE_URL to be configured.'
+      success: false,
+      dbAvailable: false,
+      error: 'DATABASE_NOT_CONFIGURED',
+      message: 'Database not configured. Unable to persist banned customers.',
+      data: null
     });
   }
+
+  const makePlaceholderBannedDocNumber = () =>
+    `BANNED-${Date.now()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
 
   const payload = {
     documentType: normalizeDocumentType(req.body.documentType),
     documentNumber: normalizeDocumentNumber(req.body.documentNumber),
     issuingCountry: normalizeCountry(req.body.issuingCountry),
+    bannedLocationId: req.body.bannedLocationId ? sanitizeString(req.body.bannedLocationId) : null,
     dateOfBirth: normalizeDateInput(req.body.dateOfBirth) || null,
     firstName: req.body.firstName ? sanitizeString(req.body.firstName).trim() : null,
     lastName: req.body.lastName ? sanitizeString(req.body.lastName).trim() : null,
+    phone: normalizePhone(req.body.phone),
+    email: normalizeEmail(req.body.email),
     notes: req.body.notes ? sanitizeString(req.body.notes) : null
   };
+
+  // If the UI bans by name+DOB (no DL#), store a placeholder docNumber so the DB constraint is satisfied.
+  if (!payload.documentNumber) {
+    payload.documentType = 'name_dob';
+    payload.documentNumber = makePlaceholderBannedDocNumber();
+    payload.issuingCountry = null;
+  }
 
   try {
     const record = await complianceStore.addBannedCustomer(payload);
@@ -1623,8 +1670,11 @@ router.post('/banned', validateBannedCreate, async (req, res) => {
 router.get('/banned', async (req, res) => {
   if (!db.pool) {
     return res.status(503).json({
-      error: 'BANNED_LIST_UNAVAILABLE',
-      message: 'Banned customer management requires DATABASE_URL to be configured.'
+      success: false,
+      dbAvailable: false,
+      error: 'DATABASE_NOT_CONFIGURED',
+      count: 0,
+      data: []
     });
   }
 
@@ -1656,11 +1706,28 @@ router.get('/banned', async (req, res) => {
   }
 });
 
+router.get('/locations', async (req, res) => {
+  const outlets = Object.values(config?.lightspeed?.outlets || {});
+  const data = outlets
+    .slice()
+    .sort((a, b) => String(a?.label || '').localeCompare(String(b?.label || '')))
+    .map((o) => ({
+      id: o.id,
+      code: o.code,
+      slug: o.slug || String(o.code || '').toLowerCase(),
+      label: o.label
+    }));
+
+  res.status(200).json({ success: true, count: data.length, data });
+});
+
 router.delete('/banned/:id', validateBannedId, async (req, res) => {
   if (!db.pool) {
     return res.status(503).json({
-      error: 'BANNED_LIST_UNAVAILABLE',
-      message: 'Banned customer management requires DATABASE_URL to be configured.'
+      success: false,
+      dbAvailable: false,
+      error: 'DATABASE_NOT_CONFIGURED',
+      message: 'Database not configured. Unable to remove banned customers.'
     });
   }
 
@@ -1684,9 +1751,10 @@ router.delete('/banned/:id', validateBannedId, async (req, res) => {
 });
 router.get('/sales/:saleId/overrides', validateSaleId, async (req, res) => {
   if (!db.pool) {
-    return res.status(503).json({
-      error: 'OVERRIDE_UNAVAILABLE',
-      message: 'Override flow requires DATABASE_URL to be configured.'
+    return res.status(200).json({
+      success: false,
+      dbAvailable: false,
+      data: []
     });
   }
 
@@ -1885,12 +1953,15 @@ router.post('/sales/:saleId/verify-from-note', validateSaleId, async (req, res) 
     }
 
     // Check banned list if configured.
-    if (db.pool && parsed.documentNumber) {
+    if (db.pool && (parsed.documentNumber || (parsed.firstName && parsed.lastName && parsed.dob))) {
       try {
         const bannedRecord = await complianceStore.findBannedCustomer({
           documentType: 'drivers_license',
           documentNumber: parsed.documentNumber,
-          issuingCountry: parsed.issuingCountry
+          issuingCountry: parsed.issuingCountry,
+          firstName: parsed.firstName,
+          lastName: parsed.lastName,
+          dateOfBirth: parsed.dob ? parsed.dob : null
         });
 
         if (bannedRecord) {

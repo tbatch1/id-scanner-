@@ -1,9 +1,38 @@
 const path = require('path');
+const fs = require('fs');
 const dotenv = require('dotenv');
 
 dotenv.config({
   path: process.env.DOTENV_PATH || path.resolve(process.cwd(), '.env')
 });
+
+// Local convenience: if a Vercel-pulled `.env.production.local` exists, load it as a fallback source
+// (without overriding anything already set by `.env` or the host environment).
+try {
+  const vercelProdEnvPath = path.resolve(process.cwd(), '.env.production.local');
+  if (!process.env.DOTENV_PATH && fs.existsSync(vercelProdEnvPath)) {
+    dotenv.config({ path: vercelProdEnvPath, override: false });
+  }
+} catch {
+  // ignore
+}
+
+function sanitizeVercelCliValue(value) {
+  if (typeof value !== 'string') return value;
+  // Vercel CLI sometimes writes literal "\n" / "\r\n" sequences inside quoted env values.
+  // Strip ONLY trailing escape sequences so secrets/tokens work as expected.
+  return value.replace(/(\\r\\n|\\n|\\r)+$/g, '');
+}
+
+try {
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value !== 'string') continue;
+    const next = sanitizeVercelCliValue(value);
+    if (next !== value) process.env[key] = next;
+  }
+} catch {
+  // ignore
+}
 
 function envTrim(name, fallback = '') {
   const value = process.env[name];

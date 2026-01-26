@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 const db = require('./db');
 const config = require('./config');
 const logger = require('./logger');
@@ -41,6 +43,13 @@ function mustHave(value, name) {
     throw err;
   }
   return v;
+}
+
+function hasOAuthConfig() {
+  const clientId = String(config.lightspeed.clientId || '').trim();
+  const clientSecret = String(config.lightspeed.clientSecret || '').trim();
+  const redirectUri = String(config.lightspeed.redirectUri || '').trim();
+  return Boolean(clientId && clientSecret && redirectUri);
 }
 
 function tokenUrlForDomainPrefix(domainPrefix) {
@@ -88,6 +97,68 @@ async function loadTokensFromDb(domainPrefix = null) {
   };
 }
 
+function getLocalTokenPath() {
+  const rootDir = path.resolve(__dirname, '..', '..');
+  return path.join(rootDir, '.lightspeed_oauth_tokens.local.json');
+}
+
+function loadTokensFromFile(domainPrefix = null) {
+  try {
+    const tokenPath = getLocalTokenPath();
+    if (!fs.existsSync(tokenPath)) return null;
+    const parsed = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+    if (!parsed || typeof parsed !== 'object') return null;
+    const items = Array.isArray(parsed.tokens) ? parsed.tokens : [];
+
+    const dp = String(domainPrefix || '').trim();
+    const row = dp ? items.find((t) => String(t.domainPrefix || '').trim() === dp) : items[0] || null;
+    if (!row) return null;
+
+    return {
+      domainPrefix: row.domainPrefix || null,
+      accessToken: row.accessToken || null,
+      refreshToken: row.refreshToken || null,
+      scope: row.scope || null,
+      expiresAtMs: row.expiresAtMs ? Number(row.expiresAtMs) : null,
+      updatedAt: row.updatedAt || null
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveTokensToFile({ domainPrefix, accessToken, refreshToken, scope, expiresAtMs }) {
+  const tokenPath = getLocalTokenPath();
+  const dp = mustHave(domainPrefix, 'domain_prefix');
+
+  const nextRow = {
+    domainPrefix: dp,
+    accessToken: accessToken || null,
+    refreshToken: refreshToken || null,
+    scope: scope || null,
+    expiresAtMs: expiresAtMs || null,
+    updatedAt: new Date().toISOString()
+  };
+
+  let payload = { tokens: [] };
+  try {
+    if (fs.existsSync(tokenPath)) {
+      const parsed = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+      if (parsed && typeof parsed === 'object') payload = parsed;
+    }
+  } catch {
+    payload = { tokens: [] };
+  }
+
+  const tokens = Array.isArray(payload.tokens) ? payload.tokens : [];
+  const merged = new Map(tokens.map((t) => [String(t.domainPrefix || '').trim(), t]));
+  merged.set(String(dp).trim(), nextRow);
+  payload.tokens = Array.from(merged.values());
+
+  fs.writeFileSync(tokenPath, JSON.stringify(payload, null, 2), 'utf8');
+  return true;
+}
+
 async function saveTokensToDb({
   domainPrefix,
   accessToken,
@@ -96,6 +167,11 @@ async function saveTokensToDb({
   expiresAtMs
 }) {
   if (!db.pool) {
+    // Local-dev fallback: allow OAuth without a database by persisting tokens to a local file.
+    if (String(config.env || '').toLowerCase() !== 'production') {
+      saveTokensToFile({ domainPrefix, accessToken, refreshToken, scope, expiresAtMs });
+      return;
+    }
     const err = new Error('DATABASE_URL is not configured; cannot persist OAuth tokens.');
     err.code = 'DB_DISABLED';
     throw err;
@@ -126,11 +202,13 @@ async function loadTokensCached(domainPrefix = null) {
   }
 
   const fromDb = await loadTokensFromDb(domainPrefix);
+  const fromFile = !fromDb ? loadTokensFromFile(domainPrefix) : null;
   const envRefreshToken = String(config.lightspeed.refreshToken || '').trim();
   const envDomain = String(config.lightspeed.domainPrefix || config.lightspeed.accountId || '').trim();
 
   const tokens =
     fromDb ||
+    fromFile ||
     (envRefreshToken
       ? {
           domainPrefix: envDomain || null,
@@ -338,6 +416,9 @@ async function refreshAccessToken(force = false) {
 }
 
 async function getAccessToken() {
+  // If OAuth isn't configured, return null so callers can fall back to personal tokens.
+  if (!hasOAuthConfig()) return null;
+
   const current = await loadTokensCached();
   if (!current) return null;
   if (!current.accessToken || !current.expiresAtMs) {

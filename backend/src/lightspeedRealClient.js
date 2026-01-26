@@ -1,7 +1,6 @@
 const axios = require('axios');
 const config = require('./config');
 const logger = require('./logger');
-const { appendAgeNote, buildAgeNoteLine } = require('./ageNote');
 const oauth = require('./lightspeedOAuth');
 
 const PERSONAL_TOKEN = (process.env.LIGHTSPEED_API_KEY || '').trim();
@@ -164,47 +163,8 @@ async function recordVerification({ saleId, clerkId, verificationData, sale: sal
     createdAt: new Date().toISOString()
   };
 
-  // Lightspeed's Sales endpoints are not guaranteed to support updates (and some accounts return 404/405 on write).
-  // Detect this once and stop attempting so scans remain fast/reliable.
-  if (recordVerification._saleNoteWriteSupported === false) {
-    return { ...verification, noteUpdated: false };
-  }
-
-  let noteUpdated = false;
-  try {
-    // Only write Age note for successful verifications (approved). Rejections are tracked in our DB already.
-    if (!verificationData.approved) {
-      return { ...verification, noteUpdated };
-    }
-
-    let currentNote = typeof saleContext?.note === 'string' ? saleContext.note : '';
-    if (!currentNote) {
-      const response = await api.get(`/sales/${saleId}`);
-      currentNote = response?.data?.data?.note || '';
-    }
-
-    const nextNote = appendAgeNote(currentNote, verificationData.age);
-
-    // Keep note from growing unbounded.
-    const capped = nextNote.length > 1800 ? nextNote.slice(nextNote.length - 1800) : nextNote;
-    await api.put(`/sales/${saleId}`, { note: capped });
-    noteUpdated = true;
-    const ageLine = buildAgeNoteLine(verificationData.age) || null;
-    logger.info({ event: 'verification_recorded', saleId, ageNote: ageLine });
-  } catch (error) {
-    const status = error?.response?.status || null;
-    if (status === 404 || status === 405) {
-      recordVerification._saleNoteWriteSupported = false;
-      logger.warn(
-        { event: 'record_verification_not_supported', saleId, status },
-        'Lightspeed sale note write not supported; disabling further note attempts'
-      );
-    } else {
-      logger.error({ event: 'record_verification_failed', saleId, status, error: error.message });
-    }
-  }
-
-  return { ...verification, noteUpdated };
+  // Sale note writes are intentionally disabled. Compliance is tracked via DB + manager audit endpoints.
+  return { ...verification, noteUpdated: false };
 }
 
 function normalizeStringValue(value) {
@@ -602,6 +562,8 @@ async function listCustomers({ limit = 200, email = null, allPages = false } = {
       lastName: customer.last_name || null,
       email: customer.email || null,
       phone: customer.phone || null,
+      enable_loyalty: customer.enable_loyalty ?? null,
+      enableLoyalty: customer.enable_loyalty ?? null,
       customerGroupId: customer.customer_group_id || null,
       yearToDate: parseFloat(customer.year_to_date || 0),
       balance: parseFloat(customer.balance || 0),
@@ -682,6 +644,8 @@ async function getCustomerById(customerId) {
       lastName: customer.last_name || null,
       email: customer.email || null,
       phone: customer.phone || null,
+      enable_loyalty: customer.enable_loyalty ?? null,
+      enableLoyalty: customer.enable_loyalty ?? null,
       customerGroupId: customer.customer_group_id || null,
       yearToDate: parseFloat(customer.year_to_date || 0),
       balance: parseFloat(customer.balance || 0),

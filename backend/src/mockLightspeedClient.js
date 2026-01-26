@@ -1,7 +1,6 @@
 // Mock Lightspeed Client - Used when API credentials are not configured
 
 const config = require('./config');
-const { appendAgeNote } = require('./ageNote');
 
 const saleStore = new Map();
 const verificationStore = new Map();
@@ -41,6 +40,7 @@ function seedSales() {
       total: 87.48,
       currency: 'USD',
       note: '',
+      customerId: 'CUST-001',
       items: [
         {
           saleLineID: 'LINE-1',
@@ -150,6 +150,7 @@ function getSaleById(saleId) {
     status: sale.status,
     verificationExpired,
     registerId: sale.registerId || null,
+    customerId: sale.customerId || null,
     outletId,
     outlet: outletDescriptor
   };
@@ -198,16 +199,11 @@ function recordVerification({ saleId, clerkId, verificationData, sale: saleConte
 
   storedSale.lastVerificationId = verificationId;
   storedSale.status = verificationData.approved ? 'verified' : 'awaiting_verification';
-  let noteUpdated = false;
-  if (verificationData.approved) {
-    storedSale.note = appendAgeNote(storedSale.note || '', verificationData.age);
-    noteUpdated = true;
-  }
   storedSale.updatedAt = timestamp;
 
   saleStore.set(saleId, storedSale);
 
-  return { ...record, noteUpdated };
+  return { ...record, noteUpdated: false };
 }
 
 function completeSale({ saleId, verificationId, paymentType, sale: saleContext, locationId }) {

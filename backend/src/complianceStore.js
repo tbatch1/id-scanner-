@@ -1,6 +1,77 @@
 const { query } = require('./db');
 const logger = require('./logger');
 const config = require('./config');
+const fs = require('fs');
+const path = require('path');
+
+let schemaEnsurePromise = null;
+
+async function ensureComplianceSchema() {
+  if (schemaEnsurePromise) return schemaEnsurePromise;
+
+  schemaEnsurePromise = (async () => {
+    try {
+      const schemaPath = path.resolve(__dirname, 'schema.sql');
+      if (!fs.existsSync(schemaPath)) {
+        logger.warn({ event: 'schema_missing', schemaPath }, 'Base schema.sql missing; skipping schema ensure.');
+        return;
+      }
+
+      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+      if (!schemaSql || !schemaSql.trim()) {
+        logger.warn({ event: 'schema_empty', schemaPath }, 'Base schema.sql empty; skipping schema ensure.');
+        return;
+      }
+
+      await query(schemaSql, [], 60_000);
+      logger.info({ event: 'schema_ensured', schemaPath }, 'Compliance schema ensured.');
+    } catch (error) {
+      logger.warn(
+        { event: 'schema_ensure_failed', error: error?.message || String(error) },
+        'Failed to ensure base schema; attempting minimal banned table bootstrap.'
+      );
+      try {
+        await query(
+          `
+            CREATE TABLE IF NOT EXISTS banned_customers (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              document_type VARCHAR(50) NOT NULL,
+              document_number VARCHAR(150) NOT NULL,
+              issuing_country VARCHAR(120) NOT NULL DEFAULT '',
+              banned_location_id VARCHAR(100),
+              date_of_birth DATE,
+              first_name VARCHAR(100),
+              last_name VARCHAR(100),
+              phone VARCHAR(30),
+              email VARCHAR(254),
+              notes TEXT,
+              created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE (document_type, document_number, issuing_country)
+            );
+            ALTER TABLE IF EXISTS banned_customers ADD COLUMN IF NOT EXISTS banned_location_id VARCHAR(100);
+            ALTER TABLE IF EXISTS banned_customers ADD COLUMN IF NOT EXISTS phone VARCHAR(30);
+            ALTER TABLE IF EXISTS banned_customers ADD COLUMN IF NOT EXISTS email VARCHAR(254);
+            CREATE INDEX IF NOT EXISTS idx_banned_customers_doc ON banned_customers(document_number);
+            CREATE INDEX IF NOT EXISTS idx_banned_customers_type ON banned_customers(document_type);
+            CREATE INDEX IF NOT EXISTS idx_banned_customers_country ON banned_customers(issuing_country);
+            CREATE INDEX IF NOT EXISTS idx_banned_customers_banned_location ON banned_customers(banned_location_id);
+          `,
+          [],
+          30_000
+        );
+        logger.info({ event: 'banned_schema_ensured' }, 'Minimal banned customers schema ensured.');
+      } catch (fallbackError) {
+        logger.error(
+          { event: 'banned_schema_ensure_failed', error: fallbackError?.message || String(fallbackError) },
+          'Failed to ensure minimal banned schema.'
+        );
+      }
+    }
+  })();
+
+  return schemaEnsurePromise;
+}
 
 function sanitizeNote(note) {
   if (!note) return null;
@@ -322,30 +393,69 @@ async function summarizeCompliance({ days = 30, limit = 50 } = {}) {
   };
 }
 
-async function findBannedCustomer({ documentType, documentNumber, issuingCountry }) {
-  if (!documentType || !documentNumber) {
-    return null;
-  }
+async function findBannedCustomer({ documentType, documentNumber, issuingCountry, firstName, lastName, dateOfBirth }) {
+  await ensureComplianceSchema();
 
+  const normalizedDocType = documentType || null;
+  const normalizedDocNumber = documentNumber || null;
   const normalizedCountry = issuingCountry ? issuingCountry : '';
 
-  const { rows } = await query(
-    `
-      SELECT *
-      FROM banned_customers
-      WHERE document_type = $1
-        AND document_number = $2
-        AND ($3 = '' OR issuing_country = $3 OR issuing_country = '')
-      LIMIT 1
-    `,
-    [documentType, documentNumber, normalizedCountry]
-  );
+  if (normalizedDocType && normalizedDocNumber) {
+    const { rows } = await query(
+      `
+        SELECT *
+        FROM banned_customers
+        WHERE document_type = $1
+          AND document_number = $2
+          AND ($3 = '' OR issuing_country = $3 OR issuing_country = '')
+        LIMIT 1
+      `,
+      [normalizedDocType, normalizedDocNumber, normalizedCountry]
+    );
 
-  return rows[0] || null;
+    if (rows[0]) return rows[0];
+  }
+
+  // Name + DOB match (for store owners who don't track DL#).
+  // We require DOB to reduce false positives from common names.
+  const fn = firstName ? String(firstName).trim() : '';
+  const ln = lastName ? String(lastName).trim() : '';
+  const dob = dateOfBirth ? new Date(dateOfBirth) : null;
+  if (fn && ln && dob && !Number.isNaN(dob.getTime())) {
+    const { rows } = await query(
+      `
+        SELECT *
+        FROM banned_customers
+        WHERE lower(first_name) = lower($1)
+          AND lower(last_name) = lower($2)
+          AND date_of_birth IS NOT NULL
+          AND date_of_birth = $3::date
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `,
+      [fn, ln, dob.toISOString().slice(0, 10)]
+    );
+    if (rows[0]) return rows[0];
+  }
+
+  return null;
 }
 
 async function addBannedCustomer(entry) {
-  const { documentType, documentNumber, issuingCountry, dateOfBirth, firstName, lastName, notes } = entry;
+  await ensureComplianceSchema();
+
+  const {
+    documentType,
+    documentNumber,
+    issuingCountry,
+    bannedLocationId,
+    dateOfBirth,
+    firstName,
+    lastName,
+    phone,
+    email,
+    notes
+  } = entry;
   const normalizedCountry = issuingCountry ? issuingCountry : '';
 
   const { rows } = await query(
@@ -354,19 +464,25 @@ async function addBannedCustomer(entry) {
         document_type,
         document_number,
         issuing_country,
+        banned_location_id,
         date_of_birth,
         first_name,
         last_name,
+        phone,
+        email,
         notes
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       ON CONFLICT (document_type, document_number, issuing_country)
       DO UPDATE
         SET
           issuing_country = EXCLUDED.issuing_country,
+          banned_location_id = EXCLUDED.banned_location_id,
           date_of_birth = EXCLUDED.date_of_birth,
           first_name = EXCLUDED.first_name,
           last_name = EXCLUDED.last_name,
+          phone = EXCLUDED.phone,
+          email = EXCLUDED.email,
           notes = EXCLUDED.notes,
           updated_at = NOW()
       RETURNING *
@@ -375,9 +491,12 @@ async function addBannedCustomer(entry) {
       documentType,
       documentNumber,
       normalizedCountry,
+      bannedLocationId || null,
       dateOfBirth ? new Date(dateOfBirth) : null,
       firstName || null,
       lastName || null,
+      phone || null,
+      email || null,
       notes || null
     ]
   );
@@ -396,6 +515,8 @@ async function addBannedCustomer(entry) {
 }
 
 async function listBannedCustomers({ query: search, limit = 500, offset = 0 } = {}) {
+  await ensureComplianceSchema();
+
   const normalizedSearch = search ? sanitizeNote(search).trim() : null;
   const normalizedLimit = Math.min(Math.max(parseInt(limit, 10) || 500, 1), 2000);
   const normalizedOffset = Math.max(parseInt(offset, 10) || 0, 0);
@@ -407,9 +528,12 @@ async function listBannedCustomers({ query: search, limit = 500, offset = 0 } = 
         document_type AS "documentType",
         document_number AS "documentNumber",
         NULLIF(issuing_country, '') AS "issuingCountry",
+        banned_location_id AS "bannedLocationId",
         date_of_birth AS "dateOfBirth",
         first_name AS "firstName",
         last_name AS "lastName",
+        phone,
+        email,
         notes,
         created_at AS "createdAt",
         updated_at AS "updatedAt"
@@ -418,6 +542,8 @@ async function listBannedCustomers({ query: search, limit = 500, offset = 0 } = 
         OR (document_number ILIKE '%' || $1 || '%')
         OR (first_name ILIKE '%' || $1 || '%')
         OR (last_name ILIKE '%' || $1 || '%')
+        OR (phone ILIKE '%' || $1 || '%')
+        OR (email ILIKE '%' || $1 || '%')
         OR (notes ILIKE '%' || $1 || '%')
       ORDER BY created_at DESC
       LIMIT $2 OFFSET $3
@@ -644,6 +770,8 @@ async function enforceRetention({
 }
 
 async function removeBannedCustomer(id) {
+  await ensureComplianceSchema();
+
   const { rowCount } = await query(`DELETE FROM banned_customers WHERE id = $1`, [id]);
   if (rowCount) {
     logger.info({ event: 'banned_customer_removed', id }, 'Banned customer removed');
@@ -691,6 +819,7 @@ async function logDiagnostic({ type, saleId, userAgent, error, details }) {
 // Ensure diagnostics table exists
 async function initDiagnostics() {
   try {
+    await ensureComplianceSchema();
     await query(`
       CREATE TABLE IF NOT EXISTS diagnostics (
         id SERIAL PRIMARY KEY,
@@ -720,6 +849,7 @@ module.exports = {
   removeBannedCustomer,
   logDiagnostic,
   initDiagnostics,
+  ensureComplianceSchema,
   markVerificationOverride,
   listOverridesForSale,
   listRecentOverrides,

@@ -98,6 +98,12 @@ function optionalAuth(req, res, next) {
  * - Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
  */
 function adminAuth(req, res, next) {
+  // Allow the admin HTML shell pages to load without a token so the UI can prompt
+  // for X-Admin-Token (production serves these via static rewrites).
+  if (req.method === 'GET' && typeof req.path === 'string' && req.path.toLowerCase().endsWith('.html')) {
+    return next();
+  }
+
   const token = String(req.headers['x-admin-token'] || '').trim();
   const expectedToken = String(process.env.ADMIN_TOKEN || '').trim();
 

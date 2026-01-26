@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -36,6 +36,12 @@
             padding: 20px;
         }
 
+        .wrap {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 16px 28px;
+        }
+
         .header {
             text-align: center;
             margin-bottom: 24px;
@@ -68,11 +74,125 @@
             color: var(--ls-amber);
         }
 
+        .helper {
+            font-size: 13px;
+            color: rgba(244, 246, 255, 0.65);
+            margin-top: -8px;
+            margin-bottom: 14px;
+            line-height: 1.4;
+        }
+
         .form-row {
             display: flex;
             gap: 10px;
             margin-bottom: 12px;
             flex-wrap: wrap;
+        }
+
+        .field {
+            flex: 1;
+            min-width: 220px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .field-label {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: rgba(244, 246, 255, 0.72);
+            padding-left: 2px;
+        }
+
+        .form-row--tight {
+            margin-bottom: 10px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        .secondary-btn {
+            padding: 12px 18px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--ls-border);
+            border-radius: 10px;
+            color: var(--ls-text);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .secondary-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .list-controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .system-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: rgba(244, 246, 255, 0.8);
+            user-select: none;
+            padding: 10px 12px;
+            border: 1px solid var(--ls-border);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .system-toggle input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--ls-blue);
+        }
+
+        .inline-error {
+            margin-top: 10px;
+            font-size: 13px;
+            color: rgba(254, 202, 202, 0.95);
+        }
+
+        .toast {
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            z-index: 2000;
+            display: none;
+            max-width: min(520px, calc(100vw - 36px));
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(15, 18, 30, 0.92);
+            color: rgba(244, 246, 255, 0.96);
+            box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        .toast.show {
+            display: block;
+        }
+
+        .toast--success {
+            border-color: rgba(31, 191, 117, 0.35);
+        }
+
+        .toast--error {
+            border-color: rgba(239, 68, 68, 0.45);
         }
 
         .form-input {
@@ -138,8 +258,9 @@
         }
 
         .banned-list {
-            max-height: 600px;
-            overflow-y: auto;
+            /* Avoid nested scroll containers (hard to use on trackpads/tablets). */
+            max-height: none;
+            overflow: visible;
         }
 
         .banned-item {
@@ -165,10 +286,41 @@
             margin-bottom: 4px;
         }
 
-        .banned-details {
-            font-size: 13px;
-            color: rgba(244, 246, 255, 0.6);
-            margin-bottom: 4px;
+        .banned-tags {
+            margin-top: 6px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.06);
+            color: rgba(244, 246, 255, 0.9);
+        }
+
+        .tag--blue {
+            background: rgba(90, 84, 255, 0.16);
+            border-color: rgba(90, 84, 255, 0.34);
+        }
+
+        .tag--teal {
+            background: rgba(34, 211, 238, 0.12);
+            border-color: rgba(34, 211, 238, 0.34);
+        }
+
+        .tag--muted {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.08);
+            color: rgba(244, 246, 255, 0.7);
+            font-weight: 600;
         }
 
         .banned-note {
@@ -203,26 +355,6 @@
             text-align: center;
             padding: 40px;
             color: rgba(244, 246, 255, 0.5);
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .nav-link {
-            flex: 1;
-            min-width: 150px;
-            padding: 10px 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--ls-border);
-            border-radius: 10px;
-            color: var(--ls-text);
-            text-decoration: none;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 600;
         }
 
         .modal-overlay {
@@ -323,72 +455,105 @@
 </head>
 
 <body>
-    <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
-        <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
-    </a>
     <div class="header">
         <h1>Banned Customers</h1>
     </div>
 
-    <div class="filters" style="max-width: 1200px; margin: 0 auto 18px; padding: 0 16px;">
-        <div class="form-row" style="align-items: center;">
-            <input id="adminTokenInput" type="text" class="form-input" placeholder="Admin token (optional)" style="flex: 1; min-width: 240px;" />
-            <button class="refresh-btn" id="saveTokenBtn" type="button">Save Token</button>
-        </div>
-    </div>
+    <nav class="admin-top-nav" aria-label="Admin navigation">
+        <a class="admin-top-nav__brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+            <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+        </a>
+        <a href="/admin/data-center.html" class="admin-top-nav__link">Manager Dashboard</a>
+        <a href="/admin/marketing.html" class="admin-top-nav__link">Marketing Analytics</a>
+        <a href="/admin/scans.html" class="admin-top-nav__link">View All Scans</a>
+        <a href="/admin/audit.html" class="admin-top-nav__link">Transaction Audit</a>
+        <a href="/admin/banned.html" class="admin-top-nav__link">Banned Customers</a>
+    </nav>
+    <div class="admin-top-nav-spacer" aria-hidden="true"></div>
 
+    <div class="wrap">
     <div class="add-section">
         <div class="form-title">Add Banned Customer</div>
-
-        <div class="form-row">
-            <select id="documentType" class="form-input" style="min-width: 220px;">
-                <option value="drivers_license">Driver License</option>
-                <option value="id_card">ID Card</option>
-                <option value="passport">Passport</option>
-                <option value="mrz_id">MRZ ID</option>
-                <option value="routed_id">Routed ID (internal)</option>
-            </select>
-            <input type="text" id="documentNumber" class="form-input" placeholder="Document Number (scan or type)" />
+        <div class="helper">
+            Add a customer to the banned list. To match against scanned IDs, enter either the Driver License # or the customer's DOB.
         </div>
 
-        <div class="form-row">
-            <input type="text" id="issuingCountry" class="form-input" placeholder="Issuing Country (e.g., USA)" value="USA" />
-            <input type="date" id="dateOfBirth" class="form-input" placeholder="Date of Birth (optional)" />
+        <div class="form-row form-row--tight">
+            <div class="field">
+                <div class="field-label">First Name</div>
+                <input type="text" id="firstName" class="form-input" placeholder="First name" autocomplete="given-name" />
+            </div>
+            <div class="field">
+                <div class="field-label">Last Name</div>
+                <input type="text" id="lastName" class="form-input" placeholder="Last name" autocomplete="family-name" />
+            </div>
+            <div class="field">
+                <div id="docNumberLabel" class="field-label">Driver License # (optional)</div>
+                <input type="text" id="documentNumber" class="form-input" placeholder="Driver License / ID #" aria-label="Driver license number" autocomplete="off" />
+            </div>
         </div>
 
-        <div class="form-row">
-            <input type="text" id="firstName" class="form-input" placeholder="First Name (optional)" />
-            <input type="text" id="lastName" class="form-input" placeholder="Last Name (optional)" />
+        <div class="form-row form-row--tight">
+            <div class="field">
+                <div class="field-label">DOB (optional)</div>
+                <input
+                    type="text"
+                    id="dateOfBirth"
+                    class="form-input"
+                    placeholder="MM/DD/YYYY"
+                    inputmode="numeric"
+                    autocomplete="bday"
+                    aria-label="Date of birth (MM/DD/YYYY)"
+                />
+            </div>
+            <div class="field">
+                <div class="field-label">Banned at location (optional)</div>
+                <select id="bannedLocationId" class="form-input" aria-label="Banned at location">
+                    <option value="">(Optional) Select a location</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row form-row--tight">
+            <div class="field">
+                <div class="field-label">Phone (optional)</div>
+                <input type="tel" id="phone" class="form-input" placeholder="(555) 555-5555" autocomplete="tel" inputmode="tel" />
+            </div>
+            <div class="field">
+                <div class="field-label">Email (optional)</div>
+                <input type="email" id="email" class="form-input" placeholder="name@email.com" autocomplete="email" inputmode="email" />
+            </div>
         </div>
 
         <textarea id="notes" class="form-textarea" placeholder="Notes (optional)"></textarea>
 
-        <button class="add-btn" onclick="addBanned()">Add to Banned List</button>
-        <button class="refresh-btn" onclick="generateRoutedId()">Generate Routed ID</button>
-        <button class="refresh-btn" onclick="clearForm()">Clear</button>
+        <div class="form-actions">
+            <button id="addBannedBtn" class="add-btn" type="button" onclick="addBanned()">Ban Customer</button>
+            <button class="secondary-btn" type="button" onclick="clearForm()">Clear</button>
+        </div>
+
+        <div id="formError" class="inline-error" style="display:none;"></div>
     </div>
 
     <div class="table-container">
-        <div class="table-header">
-            Banned Customer List
-            <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap:wrap;">
-                <input type="text" id="search" class="form-input" style="flex: 1; min-width: 240px;" placeholder="Search by doc #, name, or notes" />
-                <button class="refresh-btn" onclick="loadBanned()">Search</button>
-                <button class="refresh-btn" onclick="resetSearch()">Reset</button>
+            <div class="table-header">
+                Banned Customer List
+                <div class="list-controls">
+                    <input type="text" id="search" class="form-input" style="flex: 1; min-width: 240px;"
+                        placeholder="Search name, DL#, phone, email, or notes" />
+                    <button class="refresh-btn" onclick="loadBanned()">Search</button>
+                    <button class="refresh-btn" onclick="resetSearch()">Reset</button>
+                    <label class="system-toggle" title="Show/hide test entries">
+                        <input type="checkbox" id="showSystem" />
+                        Show test/system entries
+                    </label>
+                </div>
+                <div id="bannedMeta" style="margin-top: 10px; font-size: 13px; color: rgba(244, 246, 255, 0.65);"></div>
             </div>
-            <div id="bannedMeta" style="margin-top: 10px; font-size: 13px; color: rgba(244, 246, 255, 0.65);"></div>
-        </div>
         <div id="bannedList" class="banned-list">
             <div class="loading">Loading...</div>
         </div>
     </div>
-
-    <div class="nav-links">
-        <a href="/admin/data-center.html" class="nav-link">Manager Dashboard</a>
-        <a href="/admin/marketing.html" class="nav-link">Marketing Analytics</a>
-        <a href="/admin/scans.html" class="nav-link">View All Scans</a>
-        <a href="/admin/audit.html" class="nav-link">Transaction Audit</a>
-        <a href="/admin/overrides.html" class="nav-link">Override History</a>
     </div>
 
     <div id="confirmModal" class="modal-overlay">
@@ -405,29 +570,11 @@
         </div>
     </div>
 
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
     <script>
-        function getAdminToken() {
-            try {
-                return (localStorage.getItem('ADMIN_TOKEN') || '').trim();
-            } catch {
-                return '';
-            }
-        }
-
-        function setAdminToken(token) {
-            try {
-                if (!token) {
-                    localStorage.removeItem('ADMIN_TOKEN');
-                } else {
-                    localStorage.setItem('ADMIN_TOKEN', token);
-                }
-            } catch { }
-        }
-
         async function apiFetch(path, options = {}) {
             const headers = new Headers(options.headers || {});
-            const token = getAdminToken();
-            if (token) headers.set('x-admin-token', token);
             return fetch(path, { ...options, headers });
         }
         function escapeHtml(value) {
@@ -439,26 +586,178 @@
                 .replace(/'/g, '&#039;');
         }
 
+        let toastTimer = null;
+        function showToast(kind, message, timeoutMs = 3200) {
+            const toast = document.getElementById('toast');
+            if (!toast) return;
+            toast.className = `toast show toast--${kind}`;
+            toast.textContent = message;
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.className = 'toast';
+                toast.textContent = '';
+            }, timeoutMs);
+        }
+
+        function setFormError(message) {
+            const el = document.getElementById('formError');
+            if (!el) return;
+            if (!message) {
+                el.style.display = 'none';
+                el.textContent = '';
+                return;
+            }
+            el.style.display = 'block';
+            el.textContent = message;
+        }
+
+        function setButtonBusy(button, busy, labelWhenBusy = 'Working...') {
+            if (!button) return () => { };
+            const old = button.textContent;
+            button.disabled = Boolean(busy);
+            if (busy) button.textContent = labelWhenBusy;
+            return () => {
+                button.disabled = false;
+                button.textContent = old;
+            };
+        }
+
+        function updateDocUi() {
+            const docLabel = document.getElementById('docNumberLabel');
+            const docInput = document.getElementById('documentNumber');
+            if (docLabel) docLabel.textContent = 'Driver License # (optional)';
+            if (docInput) docInput.placeholder = 'Driver License / ID # (scan or type)';
+        }
+
+        function normalizeDocNumberInput(value) {
+            return String(value || '').replace(/\s+/g, '').toUpperCase().substring(0, 150);
+        }
+
+        function normalizeEmailInput(value) {
+            return String(value || '').trim().toLowerCase().substring(0, 254);
+        }
+
+        function normalizePhoneInput(value) {
+            // Keep user-friendly formatting; just normalize whitespace.
+            return String(value || '')
+                .trim()
+                .replace(/\s+/g, ' ')
+                .substring(0, 30);
+        }
+
+        function formatDobTyping(raw) {
+            const digits = String(raw || '').replace(/\D/g, '').slice(0, 8); // MMDDYYYY
+            const mm = digits.slice(0, 2);
+            const dd = digits.slice(2, 4);
+            const yyyy = digits.slice(4, 8);
+            if (digits.length <= 2) return mm;
+            if (digits.length <= 4) return `${mm}/${dd}`;
+            return `${mm}/${dd}/${yyyy}`;
+        }
+
+        function parseDobToIso(raw) {
+            const value = String(raw || '').trim();
+            if (!value) return null;
+
+            // Accept either MM/DD/YYYY or YYYY-MM-DD.
+            const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (isoMatch) {
+                const year = Number(isoMatch[1]);
+                const month = Number(isoMatch[2]);
+                const day = Number(isoMatch[3]);
+                if (!isValidDateParts(year, month, day)) return null;
+                return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+            }
+
+            const usMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (!usMatch) return null;
+            const month = Number(usMatch[1]);
+            const day = Number(usMatch[2]);
+            const year = Number(usMatch[3]);
+            if (!isValidDateParts(year, month, day)) return null;
+            const mm = String(month).padStart(2, '0');
+            const dd = String(day).padStart(2, '0');
+            return `${year}-${mm}-${dd}`;
+        }
+
+        function formatIsoToUs(iso) {
+            const match = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return '';
+            return `${match[2]}/${match[3]}/${match[1]}`;
+        }
+
+        function isValidDateParts(year, month, day) {
+            if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return false;
+            if (year < 1900 || year > 2100) return false;
+            if (month < 1 || month > 12) return false;
+            if (day < 1 || day > 31) return false;
+            const d = new Date(Date.UTC(year, month - 1, day));
+            return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day;
+        }
+
         function clearForm() {
-            document.getElementById('documentType').value = 'drivers_license';
+            setFormError(null);
             document.getElementById('documentNumber').value = '';
-            document.getElementById('issuingCountry').value = 'USA';
             document.getElementById('dateOfBirth').value = '';
             document.getElementById('firstName').value = '';
             document.getElementById('lastName').value = '';
+            const loc = document.getElementById('bannedLocationId');
+            if (loc) loc.value = '';
+            document.getElementById('phone').value = '';
+            document.getElementById('email').value = '';
             document.getElementById('notes').value = '';
-        }
-
-        function generateRoutedId() {
-            const routedId = `RT-${Date.now()}-${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
-            document.getElementById('documentType').value = 'routed_id';
-            document.getElementById('documentNumber').value = routedId;
-            document.getElementById('issuingCountry').value = 'USA';
+            updateDocUi();
         }
 
         function resetSearch() {
             document.getElementById('search').value = '';
             loadBanned();
+        }
+
+        let locationsById = {};
+
+        async function loadLocations() {
+            try {
+                const response = await apiFetch('/api/locations');
+                if (!response.ok) return;
+                const payload = await response.json().catch(() => ({}));
+                const list = Array.isArray(payload.data) ? payload.data : [];
+                locationsById = list.reduce((acc, item) => {
+                    if (item && item.id) acc[String(item.id)] = item;
+                    return acc;
+                }, {});
+
+                const select = document.getElementById('bannedLocationId');
+                if (!select) return;
+                const currentValue = select.value;
+                const options = [
+                    '<option value="">(Optional) Select a location</option>',
+                    ...list.map((loc) => `<option value="${escapeHtml(loc.id)}">${escapeHtml(loc.label || loc.code || loc.id)}</option>`)
+                ];
+                select.innerHTML = options.join('');
+                if (currentValue) select.value = currentValue;
+            } catch {
+                // best-effort; location dropdown is optional
+            }
+        }
+
+        function isSystemRecord(item) {
+            const doc = String(item?.documentNumber || '').toUpperCase();
+            const notes = String(item?.notes || '').toUpperCase();
+            return doc.startsWith('SMOKE-BANNED-') || notes.includes('SMOKE TEST');
+        }
+
+        function displayDocLabel(documentType) {
+            const dt = String(documentType || '').toLowerCase();
+            if (dt === 'drivers_license') return 'DL#';
+            if (dt === 'id_card') return 'ID#';
+            if (dt === 'passport') return 'Passport#';
+            return 'ID#';
+        }
+
+        function renderTag(text, className = '') {
+            const cls = className ? `tag ${className}` : 'tag';
+            return `<span class="${cls}">${escapeHtml(text)}</span>`;
         }
 
         async function loadBanned() {
@@ -477,11 +776,20 @@
                 const data = await response.json();
 
                 if (!response.ok) {
+                    if (response.status === 503 && data && data.dbAvailable === false) {
+                        meta.textContent = 'Database not configured (banned list unavailable).';
+                        listContainer.innerHTML = '<div class="empty">Banned list requires a configured database connection.</div>';
+                        return;
+                    }
                     throw new Error(data.message || 'Failed to load banned customers');
                 }
 
-                const banned = data.data || data.banned || [];
-                meta.textContent = `${banned.length} result(s)${q ? ` for "${q}"` : ''}`;
+                const bannedRaw = data.data || data.banned || [];
+                const showSystem = Boolean(document.getElementById('showSystem')?.checked);
+                const banned = bannedRaw.filter((item) => showSystem || !isSystemRecord(item));
+                const hiddenCount = bannedRaw.length - banned.length;
+
+                meta.textContent = `${banned.length} result(s)${q ? ` for "${q}"` : ''}${hiddenCount ? ` (${hiddenCount} hidden)` : ''}`;
 
                 if (banned.length === 0) {
                     listContainer.innerHTML = '<div class="empty">No banned customers</div>';
@@ -489,26 +797,38 @@
                 }
 
                 const html = banned.map(item => {
-                    const name = [item.firstName, item.lastName].filter(Boolean).join(' ') || 'Unknown';
-                    const created = item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'n/a';
-                    const docType = item.documentType ? String(item.documentType).replace(/_/g, ' ') : 'unknown';
-                    const country = item.issuingCountry || '—';
-                    const dob = item.dateOfBirth ? new Date(item.dateOfBirth).toISOString().slice(0, 10) : null;
+                    const name = [item.firstName, item.lastName].filter(Boolean).join(' ') || 'Unknown customer';
+                    const dobIso = item.dateOfBirth ? new Date(item.dateOfBirth).toISOString().slice(0, 10) : null;
+                    const dob = dobIso ? formatIsoToUs(dobIso) : null;
+                    const phone = item.phone ? String(item.phone) : null;
+                    const email = item.email ? String(item.email) : null;
+                    const bannedLocationId = item.bannedLocationId ? String(item.bannedLocationId) : null;
+                    const bannedLocationLabel = bannedLocationId && locationsById[bannedLocationId]
+                        ? (locationsById[bannedLocationId].label || locationsById[bannedLocationId].code || bannedLocationId)
+                        : null;
                     const removeId = JSON.stringify(String(item.id));
                     const removeName = JSON.stringify(name);
-                    const detailsParts = [
-                        `Doc: ${escapeHtml(docType)}`,
-                        `# ${escapeHtml(item.documentNumber)}`,
-                        `Country: ${escapeHtml(country)}`,
-                        dob ? `DOB: ${escapeHtml(dob)}` : null,
-                        `Added: ${escapeHtml(created)}`
-                    ].filter(Boolean);
+                    const isNameDobRecord = String(item.documentType || '').toLowerCase() === 'name_dob';
+                    const tags = [];
+                    if (isNameDobRecord) {
+                        tags.push(renderTag('Match: Name + DOB', 'tag--teal'));
+                    } else if (item.documentNumber) {
+                        const label = displayDocLabel(item.documentType);
+                        tags.push(renderTag(`${label}: ${String(item.documentNumber)}`, 'tag--blue'));
+                    } else {
+                        tags.push(renderTag('No ID number saved', 'tag--muted'));
+                    }
+
+                    if (dob) tags.push(renderTag(`DOB: ${dob}`));
+                    if (phone) tags.push(renderTag(`Phone: ${phone}`));
+                    if (email) tags.push(renderTag(`Email: ${email}`));
+                    if (bannedLocationLabel) tags.push(renderTag(`Location: ${bannedLocationLabel}`, 'tag--muted'));
 
                     return `
                         <div class="banned-item">
                             <div class="banned-info">
                                 <div class="banned-doc">${escapeHtml(name)}</div>
-                                <div class="banned-details">${detailsParts.join(' | ')}</div>
+                                <div class="banned-tags">${tags.join('')}</div>
                                 ${item.notes ? `<div class="banned-note">${escapeHtml(item.notes)}</div>` : ''}
                             </div>
                             <button class="remove-btn" onclick="showRemoveModal(${removeId}, ${removeName})">Remove</button>
@@ -520,60 +840,104 @@
 
             } catch (error) {
                 console.error('Failed to load banned customers:', error);
-                listContainer.innerHTML = `<div class="empty">Error: ${error.message}</div>`;
+                listContainer.innerHTML = `<div class="empty">Error: ${escapeHtml(error.message)}</div>`;
             }
         }
 
         async function addBanned() {
-            const documentType = document.getElementById('documentType').value;
-            let documentNumber = document.getElementById('documentNumber').value.trim();
-            const issuingCountry = document.getElementById('issuingCountry').value.trim();
-            const dateOfBirth = document.getElementById('dateOfBirth').value;
             const firstName = document.getElementById('firstName').value.trim();
             const lastName = document.getElementById('lastName').value.trim();
+            let documentNumber = document.getElementById('documentNumber').value.trim();
+            const dateOfBirthRaw = document.getElementById('dateOfBirth').value;
+            const dateOfBirthIso = parseDobToIso(dateOfBirthRaw);
+            const bannedLocationId = document.getElementById('bannedLocationId')?.value || null;
+            const phone = normalizePhoneInput(document.getElementById('phone').value);
+            const email = normalizeEmailInput(document.getElementById('email').value);
             const notes = document.getElementById('notes').value.trim();
 
-            if (!documentNumber) {
-                if (documentType === 'routed_id') {
-                    generateRoutedId();
-                    documentNumber = document.getElementById('documentNumber').value.trim();
-                } else {
-                    alert('Document number is required');
-                    return;
-                }
+            if (!firstName || !lastName) {
+                setFormError('First and last name are required.');
+                showToast('error', 'Enter first + last name');
+                return;
             }
 
+            // We can match banned customers during scans using either DL# or Name + DOB.
+            if (!documentNumber && !dateOfBirthIso) {
+                setFormError('Enter either Driver License # OR DOB so the scan can match this customer.');
+                showToast('error', 'Need DL# or DOB');
+                return;
+            }
+
+            // If no DL#, store as a "name_dob" record (blocks by name+dop during scan checks).
+            const documentType = documentNumber ? 'drivers_license' : 'name_dob';
+            const issuingCountry = documentNumber ? 'USA' : null;
+            if (dateOfBirthRaw && !dateOfBirthIso) {
+                setFormError('DOB must be a real date in MM/DD/YYYY (example: 01/31/1990).');
+                showToast('error', 'Invalid DOB');
+                return;
+            }
+
+            let releaseBusy = () => { };
             try {
+                setFormError(null);
+                releaseBusy = setButtonBusy(document.getElementById('addBannedBtn'), true, 'Banning...');
+                // Only send optional fields when they exist, so older backends don't choke on `null`.
+                const payload = {
+                    documentType,
+                    issuingCountry: issuingCountry || undefined,
+                    dateOfBirth: dateOfBirthIso || undefined,
+                    firstName: firstName || undefined,
+                    lastName: lastName || undefined,
+                    bannedLocationId: bannedLocationId || undefined,
+                    phone: phone || undefined,
+                    email: email || undefined,
+                    notes: notes || undefined
+                };
+                if (documentNumber) payload.documentNumber = documentNumber;
                 const response = await apiFetch('/api/banned', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        documentType,
-                        documentNumber,
-                        issuingCountry: issuingCountry || null,
-                        dateOfBirth: dateOfBirth || null,
-                        firstName: firstName || null,
-                        lastName: lastName || null,
-                        notes: notes || null
+                        ...payload
                     })
                 });
 
                 const data = await response.json();
 
                 if (!response.ok) {
+                    if (response.status === 503 && data && data.dbAvailable === false) {
+                        throw new Error(data.message || 'Database not configured');
+                    }
+                    if (response.status === 400) {
+                        const details = Array.isArray(data.details) ? data.details : null;
+                        if (details && details.length) {
+                            const first = details[0] || {};
+                            const msg = first?.msg || data.message || 'Invalid input data';
+                            const field = first?.path || first?.param || null;
+                            // Express-validator sometimes returns the generic "Invalid value".
+                            // Make it actionable for managers/admins.
+                            if (String(msg).toLowerCase() === 'invalid value' && field) {
+                                throw new Error(`${field}: ${msg}`);
+                            }
+                            throw new Error(msg);
+                        }
+                        throw new Error(data.message || 'Invalid input data');
+                    }
                     throw new Error(data.message || 'Failed to add banned customer');
                 }
 
-                alert('Customer banned successfully!');
+                showToast('success', 'Customer banned');
                 clearForm();
 
                 // Reload list
                 loadBanned();
-
             } catch (error) {
-                alert('Failed to add banned customer: ' + error.message);
+                setFormError(error.message);
+                showToast('error', `Failed: ${error.message}`);
+            } finally {
+                releaseBusy();
             }
         }
 
@@ -599,7 +963,7 @@
                 });
 
                 if (!response.ok) {
-                    const data = await response.json();
+                    const data = await response.json().catch(() => ({}));
 
                     // If customer is already removed (404), just refresh the list
                     if (response.status === 404) {
@@ -608,14 +972,19 @@
                         return;
                     }
 
+                    if (response.status === 503 && data && data.dbAvailable === false) {
+                        throw new Error(data.message || 'Database not configured');
+                    }
+
                     throw new Error(data.message || 'Failed to remove banned customer');
                 }
 
                 closeModal();
                 loadBanned();
+                showToast('success', 'Removed from banned list');
 
             } catch (error) {
-                alert('Failed to remove customer: ' + error.message);
+                showToast('error', `Remove failed: ${error.message}`);
                 closeModal();
             }
         }
@@ -629,12 +998,51 @@
 
         // Auto-load on page load
         window.addEventListener('load', () => {
-            document.getElementById('adminTokenInput').value = getAdminToken();
-            document.getElementById('saveTokenBtn').addEventListener('click', () => {
-                const token = String(document.getElementById('adminTokenInput').value || '').trim();
-                setAdminToken(token);
-            });
-            loadBanned();
+            updateDocUi();
+            (async () => {
+                await loadLocations();
+                await loadBanned();
+            })();
+        });
+
+        document.getElementById('documentNumber')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addBanned();
+            }
+        });
+
+        document.getElementById('documentNumber')?.addEventListener('blur', (e) => {
+            const input = e.target;
+            const normalized = normalizeDocNumberInput(input.value);
+            if (normalized !== input.value) input.value = normalized;
+        });
+
+        document.getElementById('dateOfBirth')?.addEventListener('input', (e) => {
+            const input = e.target;
+            const formatted = formatDobTyping(input.value);
+            if (formatted !== input.value) input.value = formatted;
+        });
+
+        document.getElementById('dateOfBirth')?.addEventListener('blur', (e) => {
+            const input = e.target;
+            const iso = parseDobToIso(input.value);
+            if (!input.value) return;
+            if (!iso) return;
+            const us = formatIsoToUs(iso);
+            if (us && us !== input.value) input.value = us;
+        });
+
+        document.getElementById('email')?.addEventListener('blur', (e) => {
+            const input = e.target;
+            const normalized = normalizeEmailInput(input.value);
+            if (normalized !== input.value) input.value = normalized;
+        });
+
+        document.getElementById('phone')?.addEventListener('blur', (e) => {
+            const input = e.target;
+            const normalized = normalizePhoneInput(input.value);
+            if (normalized !== input.value) input.value = normalized;
         });
 
         document.addEventListener('keydown', (e) => {
@@ -643,7 +1051,12 @@
                 loadBanned();
             }
         });
+
+        document.getElementById('showSystem')?.addEventListener('change', () => {
+            loadBanned();
+        });
     </script>
 </body>
 
 </html>
+

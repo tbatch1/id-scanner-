@@ -187,6 +187,40 @@
             color: var(--ls-amber);
         }
 
+        .verify-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            font-weight: 800;
+            font-size: 14px;
+        }
+
+        .verify-ok {
+            background: rgba(31, 191, 117, 0.18);
+            border-color: rgba(31, 191, 117, 0.35);
+            color: var(--ls-green);
+        }
+
+        .verify-bad {
+            background: rgba(239, 68, 68, 0.18);
+            border-color: rgba(239, 68, 68, 0.35);
+            color: var(--ls-red);
+        }
+
+        .sale-link {
+            color: #93c5fd;
+            text-decoration: none;
+            font-weight: 650;
+        }
+
+        .sale-link:hover {
+            text-decoration: underline;
+        }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -197,27 +231,6 @@
             text-align: center;
             padding: 40px;
             color: rgba(244, 246, 255, 0.5);
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-            flex-wrap: wrap;
-        }
-
-        .nav-link {
-            flex: 1;
-            min-width: 150px;
-            padding: 10px 16px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--ls-border);
-            border-radius: 10px;
-            color: var(--ls-text);
-            text-decoration: none;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 600;
         }
 
         .pagination {
@@ -274,12 +287,21 @@
 </head>
 
 <body>
-    <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
-        <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
-    </a>
     <div class="header">
         <h1>All ID Scans</h1>
     </div>
+
+    <nav class="admin-top-nav" aria-label="Admin navigation">
+        <a class="admin-top-nav__brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+            <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+        </a>
+        <a href="/admin/data-center.html" class="admin-top-nav__link">Manager Dashboard</a>
+        <a href="/admin/marketing.html" class="admin-top-nav__link">Marketing Analytics</a>
+        <a href="/admin/scans.html" class="admin-top-nav__link">View All Scans</a>
+        <a href="/admin/audit.html" class="admin-top-nav__link">Transaction Audit</a>
+        <a href="/admin/banned.html" class="admin-top-nav__link">Banned Customers</a>
+    </nav>
+    <div class="admin-top-nav-spacer" aria-hidden="true"></div>
 
     <div class="filters">
         <div class="filter-row">
@@ -322,9 +344,6 @@
 
             <button class="load-btn" onclick="loadScans(true)">Load Scans</button>
             <button id="refreshNowBtn" class="refresh-btn" onclick="refreshNow()" disabled>Refresh Now</button>
-            <input id="adminTokenInput" class="filter-select" placeholder="Admin token (optional)"
-                style="flex: 1; min-width: 240px; max-width: 420px;" />
-            <button class="refresh-btn" id="saveTokenBtn" type="button">Save Token</button>
         </div>
     </div>
 
@@ -336,6 +355,7 @@
                     <th>Name</th>
                     <th>Age</th>
                     <th>Status</th>
+                    <th>Verification</th>
                     <th>Source</th>
                     <th>Reason</th>
                     <th>Location</th>
@@ -345,7 +365,7 @@
             </thead>
             <tbody id="scansTableBody">
                 <tr>
-                    <td colspan="9" class="loading">Click "Load Scans" to view data</td>
+                    <td colspan="10" class="loading">Click "Load Scans" to view data</td>
                 </tr>
             </tbody>
         </table>
@@ -361,52 +381,81 @@
         </div>
     </div>
 
-    <div class="nav-links">
-        <a href="/admin/data-center.html" class="nav-link">Manager Dashboard</a>
-        <a href="/admin/marketing.html" class="nav-link">Marketing Analytics</a>
-        <a href="/admin/audit.html" class="nav-link">Transaction Audit</a>
-        <a href="/admin/banned.html" class="nav-link">Banned Customers</a>
-        <a href="/admin/overrides.html" class="nav-link">Override History</a>
-    </div>
-
     <script>
         let currentPage = 0;
         let currentLimit = 100;
         let hasMore = false;
-
-        function getAdminToken() {
-            try {
-                return (localStorage.getItem('ADMIN_TOKEN') || '').trim();
-            } catch {
-                return '';
-            }
-        }
-
-        function setAdminToken(token) {
-            try {
-                if (!token) {
-                    localStorage.removeItem('ADMIN_TOKEN');
-                } else {
-                    localStorage.setItem('ADMIN_TOKEN', token);
-                }
-            } catch { }
-        }
+        let outletLabelsById = {};
 
         async function apiFetch(path, options = {}) {
             const headers = new Headers(options.headers || {});
-            const token = getAdminToken();
-            if (token) headers.set('x-admin-token', token);
-            const response = await fetch(path, { ...options, headers });
-            if (response.status === 401) {
-                const lastUpdate = document.getElementById('lastUpdate');
-                if (lastUpdate) lastUpdate.textContent = 'Unauthorized (admin token). Paste token above and click Save Token.';
+            return fetch(path, { ...options, headers });
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        async function loadOutlets() {
+            const select = document.getElementById('locationFilter');
+            if (!select) return;
+            try {
+                const res = await apiFetch('/admin/outlets', { cache: 'no-store' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.message || 'Failed to load outlets');
+
+                const outlets = Array.isArray(data.outlets) ? data.outlets : [];
+                outletLabelsById = outlets.reduce((acc, o) => {
+                    if (o && o.outletId) acc[String(o.outletId)] = String(o.label || o.code || o.outletId);
+                    return acc;
+                }, {});
+
+                const current = select.value || '';
+                select.innerHTML = `<option value="">All Locations</option>` + outlets
+                    .map((o) => `<option value="${String(o.outletId)}">${escapeHtml(String(o.label || o.code || o.outletId))}</option>`)
+                    .join('');
+                if (current) select.value = current;
+            } catch (e) {
+                // Optional: keep existing options if the endpoint is unavailable.
+                outletLabelsById = {};
             }
-            return response;
+        }
+
+        function makeSaleLink(id) {
+            const saleId = String(id || '').trim();
+            if (!saleId) return 'N/A';
+            const href = `https://retail.lightspeed.app/sales/${encodeURIComponent(saleId)}?platform=ios&action=view`;
+            return `<a class="sale-link" href="${href}" target="_blank" rel="noreferrer">${escapeHtml(saleId)}</a>`;
+        }
+
+        function getSourceLabel(scan, isManualOverride) {
+            const source = String(scan?.source || '').trim().toLowerCase();
+            if (source === 'bluetooth_gun') return 'Bluetooth Scanner';
+            if (source) return scan.source;
+            if (isManualOverride) return 'Manual Override';
+            return 'Scanner/App';
+        }
+
+        function renderVerificationBadge(status) {
+            const s = String(status || '').toLowerCase();
+            const ok = s === 'approved' || s === 'approved_override';
+            const cls = ok ? 'verify-ok' : 'verify-bad';
+            const text = ok ? '✓' : '✕';
+            return `<span class="verify-badge ${cls}" title="${escapeHtml(status || '')}">${text}</span>`;
         }
 
         async function loadScans(reset = false, { force = false, keepTable = false } = {}) {
             if (reset) {
                 currentPage = 0;
+            }
+
+            if (Object.keys(outletLabelsById).length === 0) {
+                await loadOutlets();
             }
 
             const location = document.getElementById('locationFilter').value;
@@ -415,7 +464,7 @@
 
             const tbody = document.getElementById('scansTableBody');
             if (!keepTable) {
-                tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading...</td></tr>';
             }
 
             try {
@@ -438,7 +487,7 @@
                 const scans = hasMore ? data.scans.slice(0, currentLimit) : data.scans;
 
                 if (scans.length === 0 && currentPage === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="empty">No scans found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="10" class="empty">No scans found</td></tr>';
                     updatePagination(0, 0, false);
                     return;
                 }
@@ -448,24 +497,25 @@
                 const tempDiv = document.createElement('div');
 
                 const html = scans.map(scan => {
-                    const time = new Date(scan.created_at).toLocaleString();
+                    const time = scan.created_at ? new Date(scan.created_at).toLocaleString() : 'N/A';
                     const name = [scan.first_name, scan.last_name].filter(Boolean).join(' ') || 'Unknown';
                     const isManualOverride = scan.status === 'approved_override' && (scan.document_type === 'manual' || scan.source === 'manual_override');
                     const ageCell = isManualOverride ? 'Override' : (scan.age ?? 'N/A');
-                    const statusClass = `status-${scan.status.replace('_', '-')}`;
+                    const statusClass = `status-${String(scan.status || 'unknown').toLowerCase().replace(/_/g, '-')}`;
                     const source = scan.source === 'bluetooth_gun' ? '🔫 Gun' : (scan.source || '📱 App');
 
                     return `
                         <tr>
-                            <td>${time}</td>
-                            <td>${name}</td>
-                            <td>${ageCell}</td>
-                            <td><span class="status-badge ${statusClass}">${scan.status}</span></td>
-                            <td>${source}</td>
-                            <td>${scan.reason || '-'}</td>
-                            <td>${scan.location_id || 'N/A'}</td>
-                            <td>${scan.clerk_id || 'N/A'}</td>
-                            <td>${scan.sale_id}</td>
+                            <td>${escapeHtml(time)}</td>
+                            <td>${escapeHtml(name)}</td>
+                            <td>${escapeHtml(ageCell)}</td>
+                            <td><span class="status-badge ${escapeHtml(statusClass)}">${escapeHtml(scan.status || 'unknown')}</span></td>
+                            <td>${renderVerificationBadge(scan.status)}</td>
+                            <td>${escapeHtml(getSourceLabel(scan, isManualOverride))}</td>
+                            <td>${escapeHtml(scan.reason || '-')}</td>
+                            <td title="${escapeHtml(scan.location_id || '')}">${escapeHtml(scan.location_label || outletLabelsById[String(scan.location_id || '')] || scan.location_id || 'N/A')}</td>
+                            <td>${escapeHtml(scan.clerk_id || 'N/A')}</td>
+                            <td>${makeSaleLink(scan.sale_id)}</td>
                         </tr>
                     `;
                 }).join('');
@@ -482,7 +532,7 @@
 
             } catch (error) {
                 console.error('Failed to load scans:', error);
-                tbody.innerHTML = `<tr><td colspan="8" class="empty">Error: ${error.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" class="empty">Error: ${escapeHtml(error.message)}</td></tr>`;
                 updatePagination(0, 0, false);
             }
         }
@@ -542,18 +592,31 @@
             }
         }
 
+        // Encoding-safe overrides (ensures badges/text render correctly in all editors/browsers).
+        function renderVerificationBadge(status) {
+            const s = String(status || '').toLowerCase();
+            const ok = s === 'approved' || s === 'approved_override';
+            const cls = ok ? 'verify-ok' : 'verify-bad';
+            const text = ok ? '&#10003;' : '&#10005;';
+            return `<span class="verify-badge ${cls}" title="${escapeHtml(status || '')}" aria-label="${ok ? 'Verified' : 'Not verified'}">${text}</span>`;
+        }
+
+        function updateLastRefreshTime(isoTimestamp = null, cached = false) {
+            const lastUpdateTime = isoTimestamp ? new Date(isoTimestamp) : new Date();
+            const timeStr = lastUpdateTime.toLocaleTimeString();
+            const updateIndicator = document.getElementById('lastUpdate');
+            if (updateIndicator) {
+                updateIndicator.textContent = `Last updated: ${timeStr}${cached ? ' (cached)' : ''} • Backend updates ~60s • Tap Refresh Now for latest`;
+            }
+        }
+
         // Load once on page load (no auto-refresh; prevents flicker + resets).
         window.addEventListener('load', () => {
+            loadOutlets();
             loadScans(true, { keepTable: false });
         });
 
-        document.getElementById('adminTokenInput').value = getAdminToken();
-        document.getElementById('saveTokenBtn').addEventListener('click', () => {
-            const token = String(document.getElementById('adminTokenInput').value || '').trim();
-            setAdminToken(token);
-            const lastUpdate = document.getElementById('lastUpdate');
-            if (lastUpdate) lastUpdate.textContent = token ? 'Admin token saved.' : 'Admin token cleared.';
-        });
+        // Admin token auth removed.
     </script>
 </body>
 

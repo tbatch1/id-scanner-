@@ -88,18 +88,28 @@ CREATE TABLE IF NOT EXISTS banned_customers (
   document_type VARCHAR(50) NOT NULL,
   document_number VARCHAR(150) NOT NULL,
   issuing_country VARCHAR(120),
+  banned_location_id VARCHAR(100),
   date_of_birth DATE,
   first_name VARCHAR(100),
   last_name VARCHAR(100),
+  phone VARCHAR(30),
+  email VARCHAR(254),
   notes TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   UNIQUE (document_type, document_number, issuing_country)
 );
 
+-- Allow schema.sql to upgrade existing tables too.
+ALTER TABLE IF EXISTS banned_customers ADD COLUMN IF NOT EXISTS banned_location_id VARCHAR(100);
+ALTER TABLE IF EXISTS banned_customers ADD COLUMN IF NOT EXISTS phone VARCHAR(30);
+ALTER TABLE IF EXISTS banned_customers ADD COLUMN IF NOT EXISTS email VARCHAR(254);
+
 CREATE INDEX IF NOT EXISTS idx_banned_customers_doc ON banned_customers(document_number);
 CREATE INDEX IF NOT EXISTS idx_banned_customers_type ON banned_customers(document_type);
 CREATE INDEX IF NOT EXISTS idx_banned_customers_country ON banned_customers(issuing_country);
+CREATE INDEX IF NOT EXISTS idx_banned_customers_banned_location ON banned_customers(banned_location_id);
+CREATE INDEX IF NOT EXISTS idx_banned_customers_name_dob ON banned_customers(lower(first_name), lower(last_name), date_of_birth);
 
 -- Compliance Reports View (Easy exports for TABC inspections)
 -- This view joins verifications with sales completions for complete audit trail
@@ -164,8 +174,14 @@ END;
 $$ language 'plpgsql';
 
 -- Trigger to auto-update updated_at
-CREATE TRIGGER update_verifications_updated_at BEFORE UPDATE
-  ON verifications FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_verifications_updated_at') THEN
+    CREATE TRIGGER update_verifications_updated_at BEFORE UPDATE
+      ON verifications FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+END;
+$$;
 
 -- Comments for documentation
 COMMENT ON TABLE verifications IS 'TABC Compliance: All age verifications for consumable hemp products. Required by Texas law.';

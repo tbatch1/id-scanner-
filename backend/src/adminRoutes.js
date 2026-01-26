@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const lightspeed = require('./lightspeedClient');
 const config = require('./config');
@@ -9,6 +10,29 @@ const lightspeedWebhookQueue = require('./lightspeedWebhookQueue');
 const customerReconcileQueue = require('./customerReconcileQueue');
 
 const router = express.Router();
+
+// Admin UI pages live in /frontend and are served at /admin/*.html in production via Vercel rewrites.
+// When running the Express server directly (npm run dev/start), these routes ensure the same URLs work.
+const frontendDir = path.resolve(__dirname, '..', '..', 'frontend');
+function serveAdminPage(req, res, filename) {
+  return res.sendFile(path.join(frontendDir, filename), (err) => {
+    if (!err) return;
+    // Avoid turning a missing HTML file into a 500.
+    if (err.code === 'ENOENT' || err.statusCode === 404) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'The requested resource was not found.' });
+    }
+    logger.error({ err, filename }, 'Failed to serve admin page');
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to render admin page.' });
+  });
+}
+
+router.get('/data-center.html', (req, res) => serveAdminPage(req, res, 'admin-data-center.html'));
+router.get('/pending.html', (req, res) => serveAdminPage(req, res, 'admin-data-center.html'));
+router.get('/scans.html', (req, res) => serveAdminPage(req, res, 'admin-scans.html'));
+router.get('/banned.html', (req, res) => serveAdminPage(req, res, 'admin-banned.html'));
+router.get('/audit.html', (req, res) => serveAdminPage(req, res, 'admin-audit.html'));
+router.get('/marketing.html', (req, res) => serveAdminPage(req, res, 'admin-marketing.html'));
+router.get('/oauth.html', (req, res) => serveAdminPage(req, res, 'admin-oauth.html'));
 
 const scansCache = new Map();
 const SCAN_CACHE_TTL_MS = 60 * 1000;
@@ -95,6 +119,190 @@ function isoDateOnly(value) {
   } catch {
     return null;
   }
+}
+
+async function getCompliantSaleIdsFromDb(saleIds) {
+  const ids = Array.isArray(saleIds) ? saleIds.map((s) => String(s || '').trim()).filter(Boolean) : [];
+  if (!ids.length) return new Set();
+
+  const [verificationsRes, overridesRes, mappedRes] = await Promise.all([
+    db.pool.query('SELECT DISTINCT sale_id FROM verifications WHERE sale_id = ANY($1::text[])', [ids]),
+    db.pool.query('SELECT DISTINCT sale_id FROM verification_overrides WHERE sale_id = ANY($1::text[])', [ids]),
+    db.pool.query(
+      `
+        SELECT DISTINCT j.resolved_sale_id AS sale_id
+        FROM customer_reconcile_jobs j
+        JOIN verifications v ON v.sale_id = j.sale_id
+        WHERE j.resolved_sale_id = ANY($1::text[])
+      `,
+      [ids]
+    )
+  ]);
+
+  const set = new Set();
+  for (const row of verificationsRes.rows || []) {
+    if (row?.sale_id) set.add(String(row.sale_id));
+  }
+  for (const row of overridesRes.rows || []) {
+    if (row?.sale_id) set.add(String(row.sale_id));
+  }
+  for (const row of mappedRes.rows || []) {
+    if (row?.sale_id) set.add(String(row.sale_id));
+  }
+  return set;
+}
+
+async function listRecentClosedSalesFromLightspeed({ minutes = 240, limit = 200, outletId = null } = {}) {
+  const normalizedMinutes = Math.max(5, Math.min(Number.parseInt(minutes, 10) || 240, 24 * 60 * 7));
+  const normalizedLimit = Math.max(1, Math.min(Number.parseInt(limit, 10) || 200, 1000));
+  const start = new Date(Date.now() - normalizedMinutes * 60 * 1000);
+  const end = new Date();
+
+  const dateFrom = start.toISOString();
+  const dateTo = end.toISOString();
+
+  if (typeof lightspeed.searchSalesRaw === 'function') {
+    const pageSize = Math.max(1, Math.min(normalizedLimit, 1000));
+    const maxPages = Math.max(1, Math.min(20, Math.ceil(normalizedLimit / pageSize)));
+
+    const mapped = [];
+    let skip = 0;
+    for (let page = 0; page < maxPages; page += 1) {
+      const raw = await lightspeed.searchSalesRaw({
+        outletId: outletId || null,
+        limit: pageSize,
+        skip,
+        state: 'CLOSED',
+        dateFrom,
+        dateTo
+      });
+
+      const items = Array.isArray(raw) ? raw : [];
+      if (!items.length) break;
+
+      for (const sale of items) {
+        mapped.push({
+          saleId: sale.id,
+          total: safeNumber(sale.total_price),
+          totalTax: safeNumber(sale.total_tax),
+          outletId: sale.outlet_id || null,
+          registerId: sale.register_id || null,
+          userId: sale.user_id || null,
+          customerId: sale.customer_id || null,
+          status: sale.status || null,
+          saleDate: sale.sale_date || sale.created_at || null,
+          lineItems: (sale.line_items || []).map((item) => ({
+            productId: item.product_id || null,
+            productName: item.product?.name || item.name || item.product_name || item.product_id || null,
+            sku: item.product?.sku || item.sku || item.product_sku || null,
+            quantity: safeNumber(item.quantity),
+            unitPrice: safeNumber(item.price || item.unit_price),
+            lineTotal: safeNumber(item.price_total || item.total_price || (safeNumber(item.price) * safeNumber(item.quantity)))
+          }))
+        });
+        if (mapped.length >= normalizedLimit) break;
+      }
+
+      if (mapped.length >= normalizedLimit) break;
+      if (items.length < pageSize) break;
+      skip += items.length;
+    }
+
+    return mapped.slice(0, normalizedLimit);
+  }
+
+  if (typeof lightspeed.listSalesWithLineItems === 'function') {
+    const rows = await lightspeed.listSalesWithLineItems({
+      status: 'CLOSED',
+      limit: normalizedLimit,
+      outletId: outletId || null,
+      dateFrom,
+      dateTo,
+      allPages: false
+    });
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  return [];
+}
+
+function getIsoDateRangeForDays(days) {
+  const normalizedDays = Math.max(1, Math.min(Number.parseInt(days, 10) || 7, 3650));
+  const rangeEnd = isoDateOnly(new Date());
+  const rangeStart = isoDateOnly(new Date(Date.now() - (normalizedDays - 1) * 24 * 60 * 60 * 1000));
+  return { start: rangeStart, end: rangeEnd, days: normalizedDays };
+}
+
+function safeNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function computeAgeBucket(dob) {
+  if (!dob) return null;
+  const date = new Date(dob);
+  if (Number.isNaN(date.getTime())) return null;
+  const ageMs = Date.now() - date.getTime();
+  const age = Math.floor(ageMs / (365.25 * 24 * 60 * 60 * 1000));
+  if (!Number.isFinite(age) || age < 0) return null;
+  if (age < 21) return '<21';
+  if (age <= 30) return '21-30';
+  if (age <= 40) return '31-40';
+  if (age <= 50) return '41-50';
+  if (age <= 60) return '51-60';
+  return '61+';
+}
+
+const marketingMemory = {
+  cursor: null,
+  profiles: [],
+  lastSyncedAt: null
+};
+
+async function getMarketingProfilesLive({ after = null, pageSize = 200 } = {}) {
+  if (typeof lightspeed.listCustomersRaw === 'function') {
+    const raw = await lightspeed.listCustomersRaw({ after, pageSize });
+    return (raw || []).map((row) => ({
+      customer_id: row.id || null,
+      name: row.name || null,
+      first_name: row.first_name || null,
+      last_name: row.last_name || null,
+      email: row.email || null,
+      enable_loyalty: row.enable_loyalty ?? null,
+      date_of_birth: row.date_of_birth || null,
+      sex: row.sex || null,
+      physical_postcode: row.physical_postcode || null,
+      physical_city: row.physical_city || null,
+      loyalty_balance: row.loyalty_balance ?? null,
+      year_to_date: row.year_to_date ?? null,
+      version: row.version ?? null,
+      created_at: row.created_at || null,
+      updated_at: row.updated_at || null
+    }));
+  }
+
+  if (typeof lightspeed.listCustomers === 'function') {
+    const customers = await lightspeed.listCustomers({ limit: pageSize });
+    return (customers || []).map((c) => ({
+      customer_id: c.customerId || null,
+      name: c.name || null,
+      first_name: c.firstName || null,
+      last_name: c.lastName || null,
+      email: c.email || null,
+      enable_loyalty: c.enable_loyalty ?? c.enableLoyalty ?? null,
+      date_of_birth: c.dateOfBirth ?? null,
+      sex: c.sex ?? null,
+      physical_postcode: c.physical_postcode ?? null,
+      physical_city: c.physical_city ?? null,
+      loyalty_balance: c.loyaltyBalance ?? null,
+      year_to_date: c.yearToDate ?? null,
+      version: c.version ?? null,
+      created_at: null,
+      updated_at: null
+    }));
+  }
+
+  return [];
 }
 
 function getScanCacheKey(query) {
@@ -485,8 +693,12 @@ router.get('/pending/:locationId', async (req, res) => {
     }
 
     return res.status(503).json({
-      error: 'DATABASE_UNAVAILABLE',
-      message: 'Database connection required'
+      success: false,
+      dbAvailable: false,
+      location: req.params.locationId,
+      count: 0,
+      pending: [],
+      message: 'Database not configured and no fallback data source is available.'
     });
   }
 
@@ -572,8 +784,13 @@ router.get('/scans', async (req, res) => {
     }
 
     return res.status(503).json({
-      error: 'DATABASE_UNAVAILABLE',
-      message: 'Database connection required'
+      success: false,
+      dbAvailable: false,
+      count: 0,
+      scans: [],
+      generatedAt: new Date().toISOString(),
+      cached: false,
+      message: 'Database not configured and no fallback data source is available.'
     });
   }
 
@@ -614,6 +831,7 @@ router.get('/scans', async (req, res) => {
       status,
       reason,
       document_type,
+      source,
       location_id,
       clerk_id,
       created_at
@@ -625,10 +843,20 @@ router.get('/scans', async (req, res) => {
 
     const result = await db.pool.query(query, params);
 
+    const outletsById = config?.lightspeed?.outletsById || {};
+    const scans = (result.rows || []).map((row) => {
+      const locationId = row.location_id ? String(row.location_id) : null;
+      const outlet = locationId ? outletsById[locationId] : null;
+      return {
+        ...row,
+        location_label: outlet?.label || outlet?.code || null
+      };
+    });
+
     const payload = {
       success: true,
-      count: result.rows.length,
-      scans: result.rows,
+      count: scans.length,
+      scans,
       generatedAt: new Date().toISOString(),
       cached: false
     };
@@ -692,7 +920,14 @@ router.get('/sales', async (req, res) => {
 // BI endpoints (Data Center) - DB-backed daily snapshots for fast dashboards
 router.get('/bi/snapshot-health', async (req, res) => {
   if (!db.pool) {
-    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'Database not configured.' });
+    const today = isoDateOnly(new Date());
+    return res.status(200).json({
+      success: true,
+      dbAvailable: false,
+      present: { sales: true, inventory: true, customers: true, outlets: true },
+      latest: { sales: today, inventory: today, customers: today, outlets: today },
+      generatedAt: new Date().toISOString()
+    });
   }
 
   try {
@@ -729,9 +964,151 @@ router.get('/bi/snapshot-health', async (req, res) => {
   }
 });
 
+// Compliance audit (for managers): detect CLOSED sales missing an ID scan/override (does NOT depend on store speed).
+router.get('/compliance/summary', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!db.pool) {
+    return res.status(200).json({
+      success: false,
+      dbAvailable: false,
+      message: 'Database not configured.',
+      generatedAt: new Date().toISOString()
+    });
+  }
+
+  const minutes = normalizeInteger(req.query?.minutes, { fallback: 240, min: 5, max: 24 * 60 * 7 });
+  const limit = normalizeInteger(req.query?.limit, { fallback: 200, min: 1, max: 1000 });
+  const outletId = req.query?.outletId ? String(req.query.outletId).trim() : null;
+
+  try {
+    const sales = await listRecentClosedSalesFromLightspeed({ minutes, limit, outletId });
+    const filtered = (sales || []).filter((s) => String(s?.status || '').toUpperCase() === 'CLOSED');
+    const saleIds = filtered.map((s) => s.saleId).filter(Boolean);
+
+    const compliant = await getCompliantSaleIdsFromDb(saleIds);
+    const missing = filtered.filter((s) => !compliant.has(String(s.saleId)));
+
+    return res.status(200).json({
+      success: true,
+      dbAvailable: true,
+      minutes,
+      limit,
+      outletId,
+      checkedCount: filtered.length,
+      missingCount: missing.length,
+      flag: missing.length > 0 ? 1 : 0,
+      sampleMissingSaleIds: missing.slice(0, 10).map((s) => s.saleId),
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.logAPIError('admin_compliance_summary', error, { minutes, outletId });
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to load compliance summary.' });
+  }
+});
+
+router.get('/compliance/missing-scans', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!db.pool) {
+    return res.status(200).json({
+      success: false,
+      dbAvailable: false,
+      message: 'Database not configured.',
+      generatedAt: new Date().toISOString()
+    });
+  }
+
+  const minutes = normalizeInteger(req.query?.minutes, { fallback: 240, min: 5, max: 24 * 60 * 7 });
+  const limit = normalizeInteger(req.query?.limit, { fallback: 200, min: 1, max: 1000 });
+  const outletId = req.query?.outletId ? String(req.query.outletId).trim() : null;
+
+  try {
+    const sales = await listRecentClosedSalesFromLightspeed({ minutes, limit, outletId });
+    const filtered = (sales || []).filter((s) => String(s?.status || '').toUpperCase() === 'CLOSED');
+    const saleIds = filtered.map((s) => s.saleId).filter(Boolean);
+
+    const compliant = await getCompliantSaleIdsFromDb(saleIds);
+    const missing = filtered.filter((s) => !compliant.has(String(s.saleId)));
+
+    return res.status(200).json({
+      success: true,
+      dbAvailable: true,
+      minutes,
+      limit,
+      outletId,
+      count: missing.length,
+      missing: missing.slice(0, 200).map((s) => ({
+        saleId: s.saleId,
+        outletId: s.outletId || null,
+        registerId: s.registerId || null,
+        userId: s.userId || null,
+        customerId: s.customerId || null,
+        status: s.status || null,
+        saleDate: s.saleDate || null,
+        total: s.total ?? null
+      })),
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.logAPIError('admin_compliance_missing_scans', error, { minutes, outletId });
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to load missing scans.' });
+  }
+});
+
 router.get('/bi/summary', async (req, res) => {
   if (!db.pool) {
-    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'Database not configured.' });
+    const days = normalizeInteger(req.query?.days, { fallback: 7, min: 1, max: 365 });
+    const outletId = req.query?.outletId ? String(req.query.outletId).trim() : null;
+
+    try {
+      const range = getIsoDateRangeForDays(days);
+      const startMs = new Date(`${range.start}T00:00:00Z`).getTime();
+      const endMs = new Date(`${range.end}T23:59:59Z`).getTime();
+
+      const sales = typeof lightspeed.listSalesWithLineItems === 'function'
+        ? await lightspeed.listSalesWithLineItems({ status: 'CLOSED', limit: 500, outletId })
+        : [];
+
+      const inWindow = (sales || []).filter((s) => {
+        const ts = new Date(s.saleDate || s.createdAt || s.updatedAt || '').getTime();
+        if (!Number.isFinite(ts)) return false;
+        return ts >= startMs && ts <= endMs;
+      });
+
+      const totalRevenue = inWindow.reduce((acc, s) => acc + safeNumber(s.total), 0);
+      const totalTransactions = inWindow.length;
+      const itemsSold = inWindow.reduce((acc, s) => acc + (s.lineItems || []).reduce((a, li) => a + safeNumber(li.quantity), 0), 0);
+      const uniqueCustomers = new Set(inWindow.map((s) => s.customerId).filter(Boolean)).size;
+      const avgTransactionValue = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+
+      return res.status(200).json({
+        success: true,
+        dbAvailable: false,
+        source: 'live',
+        range,
+        outletId,
+        totals: {
+          totalRevenue,
+          totalTransactions,
+          itemsSold,
+          uniqueCustomers,
+          avgTransactionValue
+        },
+        outlets: [],
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.logAPIError('bi_summary_live_fallback', error, { outletId });
+      return res.status(200).json({
+        success: false,
+        dbAvailable: false,
+        message: 'Live summary unavailable (no database configured).',
+        range: getIsoDateRangeForDays(days),
+        outletId,
+        totals: { totalRevenue: 0, totalTransactions: 0, itemsSold: 0, uniqueCustomers: 0, avgTransactionValue: 0 },
+        outlets: [],
+        generatedAt: new Date().toISOString()
+      });
+    }
   }
 
   const days = normalizeInteger(req.query?.days, { fallback: 7, min: 1, max: 365 });
@@ -846,7 +1223,72 @@ router.get('/bi/summary', async (req, res) => {
 
 router.get('/bi/top-products', async (req, res) => {
   if (!db.pool) {
-    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'Database not configured.' });
+    const days = normalizeInteger(req.query?.days, { fallback: 7, min: 1, max: 365 });
+    const limit = normalizeInteger(req.query?.limit, { fallback: 10, min: 1, max: 200 });
+    const sortBy = String(req.query?.sortBy || 'revenue').toLowerCase() === 'quantity' ? 'quantity' : 'revenue';
+    const outletId = req.query?.outletId ? String(req.query.outletId).trim() : null;
+
+    try {
+      const range = getIsoDateRangeForDays(days);
+      const startMs = new Date(`${range.start}T00:00:00Z`).getTime();
+      const endMs = new Date(`${range.end}T23:59:59Z`).getTime();
+
+      const sales = typeof lightspeed.listSalesWithLineItems === 'function'
+        ? await lightspeed.listSalesWithLineItems({ status: 'CLOSED', limit: 800, outletId })
+        : [];
+
+      const inWindow = (sales || []).filter((s) => {
+        const ts = new Date(s.saleDate || '').getTime();
+        return Number.isFinite(ts) && ts >= startMs && ts <= endMs;
+      });
+
+      const byProduct = new Map();
+      for (const sale of inWindow) {
+        const seenInSale = new Set();
+        for (const li of sale.lineItems || []) {
+          const productId = li.productId || li.sku || li.productName || 'unknown';
+          const current = byProduct.get(productId) || {
+            productId,
+            productName: li.productName || null,
+            sku: li.sku || null,
+            categoryName: null,
+            quantitySold: 0,
+            revenue: 0,
+            transactionCount: 0
+          };
+          current.quantitySold += safeNumber(li.quantity);
+          current.revenue += safeNumber(li.lineTotal ?? (safeNumber(li.unitPrice) * safeNumber(li.quantity)));
+          if (!seenInSale.has(productId)) {
+            current.transactionCount += 1;
+            seenInSale.add(productId);
+          }
+          byProduct.set(productId, current);
+        }
+      }
+
+      const rows = Array.from(byProduct.values());
+      rows.sort((a, b) => (sortBy === 'quantity' ? b.quantitySold - a.quantitySold : b.revenue - a.revenue));
+
+      return res.status(200).json({
+        success: true,
+        dbAvailable: false,
+        source: 'live',
+        range,
+        outletId,
+        sortBy,
+        count: Math.min(limit, rows.length),
+        products: rows.slice(0, limit),
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.logAPIError('bi_top_products_live_fallback', error, { outletId });
+      return res.status(200).json({
+        success: false,
+        dbAvailable: false,
+        products: [],
+        generatedAt: new Date().toISOString()
+      });
+    }
   }
 
   const days = normalizeInteger(req.query?.days, { fallback: 7, min: 1, max: 365 });
@@ -956,7 +1398,71 @@ router.get('/bi/top-products', async (req, res) => {
 
 router.get('/bi/top-customers', async (req, res) => {
   if (!db.pool) {
-    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'Database not configured.' });
+    const days = normalizeInteger(req.query?.days, { fallback: 30, min: 1, max: 730 });
+    const limit = normalizeInteger(req.query?.limit, { fallback: 10, min: 1, max: 200 });
+    const outletId = req.query?.outletId ? String(req.query.outletId).trim() : null;
+
+    try {
+      const range = getIsoDateRangeForDays(days);
+      const startMs = new Date(`${range.start}T00:00:00Z`).getTime();
+      const endMs = new Date(`${range.end}T23:59:59Z`).getTime();
+
+      const sales = typeof lightspeed.listSalesWithLineItems === 'function'
+        ? await lightspeed.listSalesWithLineItems({ status: 'CLOSED', limit: 800, outletId })
+        : [];
+
+      const inWindow = (sales || []).filter((s) => {
+        const ts = new Date(s.saleDate || '').getTime();
+        return Number.isFinite(ts) && ts >= startMs && ts <= endMs;
+      });
+
+      const byCustomer = new Map();
+      for (const sale of inWindow) {
+        const customerId = sale.customerId;
+        if (!customerId) continue;
+        const current = byCustomer.get(customerId) || { customerId, transactionCount: 0, totalSpend: 0 };
+        current.transactionCount += 1;
+        current.totalSpend += safeNumber(sale.total);
+        byCustomer.set(customerId, current);
+      }
+
+      const profiles = typeof lightspeed.listCustomers === 'function' ? await lightspeed.listCustomers({ limit: 500 }) : [];
+      const byId = new Map((profiles || []).map((c) => [String(c.customerId), c]));
+
+      const rows = Array.from(byCustomer.values())
+        .map((c) => {
+          const profile = byId.get(String(c.customerId)) || null;
+          const avgTransactionValue = c.transactionCount > 0 ? c.totalSpend / c.transactionCount : 0;
+          return {
+            customerId: String(c.customerId),
+            customerName: profile?.name || profile?.fullName || `Customer ${c.customerId}`,
+            customerEmail: profile?.email || null,
+            transactionCount: c.transactionCount,
+            totalSpend: c.totalSpend,
+            avgTransactionValue
+          };
+        })
+        .sort((a, b) => b.totalSpend - a.totalSpend);
+
+      return res.status(200).json({
+        success: true,
+        dbAvailable: false,
+        source: 'live',
+        range,
+        outletId,
+        count: Math.min(limit, rows.length),
+        customers: rows.slice(0, limit),
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.logAPIError('bi_top_customers_live_fallback', error, { outletId });
+      return res.status(200).json({
+        success: false,
+        dbAvailable: false,
+        customers: [],
+        generatedAt: new Date().toISOString()
+      });
+    }
   }
 
   const days = normalizeInteger(req.query?.days, { fallback: 30, min: 1, max: 730 });
@@ -1016,7 +1522,66 @@ router.get('/bi/top-customers', async (req, res) => {
 
 router.get('/bi/low-stock', async (req, res) => {
   if (!db.pool) {
-    return res.status(503).json({ error: 'DB_UNAVAILABLE', message: 'Database not configured.' });
+    const limit = normalizeInteger(req.query?.limit, { fallback: 25, min: 1, max: 500 });
+    const outletId = req.query?.outletId ? String(req.query.outletId).trim() : null;
+    const threshold = req.query?.threshold !== undefined ? normalizeInteger(req.query.threshold, { fallback: null, min: 0, max: 100000 }) : null;
+
+    try {
+      const outlets = await listOutletsForAdmin();
+      const outletIds = outletId ? [outletId] : outlets.map((o) => o.outletId).slice(0, 10);
+
+      const inventories = await Promise.all(
+        outletIds.map(async (id) => {
+          if (typeof lightspeed.listInventory !== 'function') return [];
+          const rows = await lightspeed.listInventory({ outletId: id, limit: 200, allPages: false });
+          const label = outlets.find((o) => String(o.outletId) === String(id))?.label || id;
+          return (rows || []).map((r) => ({ ...r, outletId: String(id), outletName: label }));
+        })
+      );
+
+      const all = inventories.flat();
+      const items = all
+        .filter((item) => {
+          const current = safeNumber(item.currentAmount ?? item.current_amount ?? 0);
+          const reorder = item.reorderPoint === null || item.reorderPoint === undefined ? null : safeNumber(item.reorderPoint);
+          if (threshold === null) return reorder !== null && reorder > 0 && current <= reorder;
+          return current <= threshold;
+        })
+        .map((item) => ({
+          outletId: item.outletId,
+          outletName: item.outletName || item.outletId || null,
+          productId: item.productId || null,
+          productName: item.productName || null,
+          sku: item.sku || null,
+          currentAmount: safeNumber(item.currentAmount ?? item.current_amount ?? 0),
+          reorderPoint: item.reorderPoint === null || item.reorderPoint === undefined ? null : safeNumber(item.reorderPoint),
+          averageCost: safeNumber(item.averageCost ?? item.average_cost ?? 0),
+          retailPrice: safeNumber(item.retailPrice ?? item.retail_price ?? 0),
+          inventoryValue: safeNumber(item.currentAmount ?? item.current_amount ?? 0) * safeNumber(item.averageCost ?? item.average_cost ?? 0)
+        }))
+        .sort((a, b) => (safeNumber(b.reorderPoint ?? 0) - b.currentAmount) - (safeNumber(a.reorderPoint ?? 0) - a.currentAmount))
+        .slice(0, limit);
+
+      return res.status(200).json({
+        success: true,
+        dbAvailable: false,
+        source: 'live',
+        snapshotDate: null,
+        outletId,
+        threshold,
+        count: items.length,
+        items,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.logAPIError('bi_low_stock_live_fallback_no_db', error, { outletId });
+      return res.status(200).json({
+        success: false,
+        dbAvailable: false,
+        items: [],
+        generatedAt: new Date().toISOString()
+      });
+    }
   }
 
   const limit = normalizeInteger(req.query?.limit, { fallback: 25, min: 1, max: 500 });
@@ -1140,7 +1705,16 @@ router.get('/bi/low-stock', async (req, res) => {
 router.get('/marketing/health', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!db.pool) {
-    return res.status(503).json({ error: 'DATABASE_UNAVAILABLE', message: 'Database connection required' });
+    const profiles = marketingMemory.profiles.length ? marketingMemory.profiles : await getMarketingProfilesLive({ after: null, pageSize: 500 });
+    const cursor = marketingMemory.cursor ?? Math.max(0, ...profiles.map((p) => Number(p.version || 0)));
+    return res.status(200).json({
+      success: true,
+      dbAvailable: false,
+      profilesCount: profiles.length,
+      lastSyncedAt: marketingMemory.lastSyncedAt,
+      cursor: Number.isFinite(cursor) && cursor > 0 ? cursor : null,
+      generatedAt: new Date().toISOString()
+    });
   }
 
   try {
@@ -1155,7 +1729,54 @@ router.get('/marketing/health', async (req, res) => {
 router.post('/marketing/sync', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!db.pool) {
-    return res.status(503).json({ error: 'DATABASE_UNAVAILABLE', message: 'Database connection required' });
+    try {
+      const resetCursor = ['1', 'true', 'yes', 'on'].includes(String(req.query?.reset || '').toLowerCase());
+      const pageSize = normalizeInteger(req.query?.pageSize, { fallback: 200, min: 1, max: 200 });
+
+      if (resetCursor) {
+        marketingMemory.cursor = null;
+        marketingMemory.profiles = [];
+        marketingMemory.lastSyncedAt = null;
+      }
+
+      const after = marketingMemory.cursor;
+      const newProfiles = await getMarketingProfilesLive({ after, pageSize });
+      const merged = new Map(marketingMemory.profiles.map((p) => [String(p.customer_id), p]));
+      for (const p of newProfiles) {
+        if (!p.customer_id) continue;
+        merged.set(String(p.customer_id), p);
+      }
+
+      const profiles = Array.from(merged.values());
+      const nextCursor = Math.max(0, ...profiles.map((p) => Number(p.version || 0)));
+      marketingMemory.profiles = profiles;
+      marketingMemory.cursor = Number.isFinite(nextCursor) && nextCursor > 0 ? nextCursor : null;
+      marketingMemory.lastSyncedAt = new Date().toISOString();
+
+      const health = {
+        profilesCount: marketingMemory.profiles.length,
+        lastSyncedAt: marketingMemory.lastSyncedAt,
+        cursor: marketingMemory.cursor
+      };
+
+      return res.status(200).json({
+        success: true,
+        dbAvailable: false,
+        resetCursor,
+        pageSize,
+        done: true,
+        health,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.logAPIError('marketing_sync_live_fallback', error);
+      return res.status(200).json({
+        success: false,
+        dbAvailable: false,
+        message: 'Customer sync unavailable (no database configured).',
+        generatedAt: new Date().toISOString()
+      });
+    }
   }
 
   try {
@@ -1176,7 +1797,67 @@ router.post('/marketing/sync', async (req, res) => {
 router.get('/marketing/summary', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!db.pool) {
-    return res.status(503).json({ error: 'DATABASE_UNAVAILABLE', message: 'Database connection required' });
+    const days = normalizeInteger(req.query?.days, { fallback: 90, min: 1, max: 3650 });
+    try {
+      const profiles = marketingMemory.profiles.length ? marketingMemory.profiles : await getMarketingProfilesLive({ after: null, pageSize: 500 });
+
+      const customers = {
+        total_customers: profiles.length,
+        with_email: profiles.filter((p) => Boolean(p.email)).length,
+        with_phone: 0,
+        with_dob: profiles.filter((p) => Boolean(p.date_of_birth)).length,
+        with_sex: profiles.filter((p) => Boolean(p.sex)).length,
+        with_postcode: profiles.filter((p) => Boolean(p.physical_postcode)).length,
+        loyalty_enabled: profiles.filter((p) => Boolean(p.enable_loyalty)).length
+      };
+
+      const activity = {
+        active_customers: profiles.length
+      };
+
+      const countBy = (key, outKey) => {
+        const counter = new Map();
+        for (const p of profiles) {
+          const value = p[key] ? String(p[key]).trim() : '';
+          if (!value) continue;
+          counter.set(value, (counter.get(value) || 0) + 1);
+        }
+        return Array.from(counter.entries())
+          .map(([val, count]) => ({ [outKey]: val, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10);
+      };
+
+      const ageCounter = new Map();
+      for (const p of profiles) {
+        const bucket = computeAgeBucket(p.date_of_birth);
+        if (!bucket) continue;
+        ageCounter.set(bucket, (ageCounter.get(bucket) || 0) + 1);
+      }
+      const ageBuckets = Array.from(ageCounter.entries())
+        .map(([bucket, count]) => ({ bucket, count }))
+        .sort((a, b) => b.count - a.count);
+
+      return res.status(200).json({
+        success: true,
+        dbAvailable: false,
+        days,
+        customers,
+        activity,
+        topZips: countBy('physical_postcode', 'zip'),
+        topCities: countBy('physical_city', 'city'),
+        ageBuckets,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.logAPIError('marketing_summary_live_fallback', error);
+      return res.status(200).json({
+        success: false,
+        dbAvailable: false,
+        message: 'Marketing summary unavailable (no database configured).',
+        generatedAt: new Date().toISOString()
+      });
+    }
   }
 
   try {
@@ -1192,7 +1873,47 @@ router.get('/marketing/summary', async (req, res) => {
 router.get('/marketing/segments', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!db.pool) {
-    return res.status(503).json({ error: 'DATABASE_UNAVAILABLE', message: 'Database connection required' });
+    const days = normalizeInteger(req.query?.days, { fallback: 90, min: 1, max: 3650 });
+    try {
+      const profiles = marketingMemory.profiles.length ? marketingMemory.profiles : await getMarketingProfilesLive({ after: null, pageSize: 500 });
+
+      const hasEmail = (p) => Boolean(p.email);
+      const hasZip = (p) => Boolean(p.physical_postcode);
+      const loyaltyEnabled = (p) => Boolean(p.enable_loyalty);
+      const highSpend = (p) => safeNumber(p.year_to_date) >= 1000;
+      const age21Plus = (p) => {
+        const bucket = computeAgeBucket(p.date_of_birth);
+        return bucket && bucket !== '<21';
+      };
+
+      const segments = [
+        { id: 'with_email', name: 'Has Email', description: 'Customers with an email address on file', count: profiles.filter(hasEmail).length },
+        { id: 'loyalty_enabled', name: 'Loyalty Enabled', description: 'Customers enrolled in loyalty', count: profiles.filter(loyaltyEnabled).length },
+        { id: 'high_spend_ytd', name: 'High Spend (YTD)', description: 'Customers with year-to-date spend ≥ $1,000', count: profiles.filter(highSpend).length },
+        { id: 'age_21_plus', name: '21+ (DOB Collected)', description: 'Customers with DOB indicating age 21+', count: profiles.filter(age21Plus).length },
+        { id: 'missing_postcode', name: 'Missing ZIP', description: 'Customers without a ZIP/postcode', count: profiles.filter((p) => !hasZip(p)).length }
+      ];
+
+      return res.status(200).json({
+        success: true,
+        dbAvailable: false,
+        days,
+        count: segments.length,
+        segments,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.logAPIError('marketing_segments_live_fallback', error);
+      return res.status(200).json({
+        success: false,
+        dbAvailable: false,
+        days,
+        count: 0,
+        segments: [],
+        message: 'Segments unavailable (no database configured).',
+        generatedAt: new Date().toISOString()
+      });
+    }
   }
 
   try {
@@ -1217,7 +1938,86 @@ function csvEscape(value) {
 router.get('/marketing/segments/:segmentId', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!db.pool) {
-    return res.status(503).json({ error: 'DATABASE_UNAVAILABLE', message: 'Database connection required' });
+    const segmentId = String(req.params.segmentId || '').trim();
+    const days = normalizeInteger(req.query?.days, { fallback: 90, min: 1, max: 3650 });
+    const limit = normalizeInteger(req.query?.limit, { fallback: 100, min: 1, max: 500 });
+    const offset = normalizeInteger(req.query?.offset, { fallback: 0, min: 0, max: 500000 });
+    const format = String(req.query?.format || '').toLowerCase();
+
+    try {
+      const profiles = marketingMemory.profiles.length ? marketingMemory.profiles : await getMarketingProfilesLive({ after: null, pageSize: 500 });
+
+      const predicates = {
+        with_email: (p) => Boolean(p.email),
+        loyalty_enabled: (p) => Boolean(p.enable_loyalty),
+        high_spend_ytd: (p) => safeNumber(p.year_to_date) >= 1000,
+        age_21_plus: (p) => {
+          const bucket = computeAgeBucket(p.date_of_birth);
+          return bucket && bucket !== '<21';
+        },
+        missing_postcode: (p) => !p.physical_postcode
+      };
+
+      const pred = predicates[segmentId];
+      if (!pred) {
+        return res.status(404).json({
+          error: 'SEGMENT_NOT_FOUND',
+          message: `Unknown segment: ${segmentId}`
+        });
+      }
+
+      const filtered = profiles.filter(pred);
+      const customers = filtered
+        .slice(offset, offset + limit)
+        .map((p) => ({
+          customer_id: p.customer_id,
+          name: p.name,
+          email: p.email,
+          physical_city: p.physical_city,
+          physical_postcode: p.physical_postcode,
+          date_of_birth: p.date_of_birth,
+          sex: p.sex,
+          enable_loyalty: p.enable_loyalty,
+          loyalty_balance: p.loyalty_balance,
+          year_to_date: p.year_to_date
+        }));
+
+      if (format === 'csv') {
+        const headers = Object.keys(customers[0] || { customer_id: '', name: '', email: '' });
+        const lines = [
+          headers.join(','),
+          ...customers.map((row) => headers.map((key) => csvEscape(row[key])).join(','))
+        ];
+        res.type('text/csv').status(200).send(lines.join('\n'));
+        return;
+      }
+
+      return res.status(200).json({
+        success: true,
+        dbAvailable: false,
+        segmentId,
+        days,
+        limit,
+        offset,
+        count: customers.length,
+        customers,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.logAPIError('marketing_segment_detail_live_fallback', error, { segmentId });
+      return res.status(200).json({
+        success: false,
+        dbAvailable: false,
+        segmentId,
+        days,
+        limit,
+        offset,
+        count: 0,
+        customers: [],
+        message: 'Failed to load segment customers (no database configured).',
+        generatedAt: new Date().toISOString()
+      });
+    }
   }
 
   const segmentId = String(req.params.segmentId || '').trim();

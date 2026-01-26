@@ -1,12 +1,6 @@
 const path = require('path');
 const axios = require('axios');
-const dotenv = require('dotenv');
-
-const rootDir = path.resolve(__dirname, '..');
-
-dotenv.config({
-  path: process.env.DOTENV_PATH || path.join(rootDir, '.env.production.local')
-});
+require('./loadEnv').loadEnv();
 
 function env(name) {
   return String(process.env[name] || '').trim();

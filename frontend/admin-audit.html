@@ -1,393 +1,360 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manager Dashboard - Compliance Exceptions</title>
+    <link rel="stylesheet" href="/frontend/admin-shared.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        background: #0f172a;
+        color: #f4f6ff;
+        font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+      }
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Manager Dashboard - Transaction Audit</title>
-  <link rel="stylesheet" href="/frontend/admin-shared.css" />
-  <style>
-    body {
-      margin: 0;
-      padding: 20px;
-      background: #0f172a;
-      color: #f4f6ff;
-      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
 
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
+      .header h1 {
+        margin: 0;
+        font-size: 24px;
+      }
 
-    .header h1 {
-      margin: 0;
-      font-size: 24px;
-    }
+      .pill {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 13px;
+        background: rgba(59, 130, 246, 0.18);
+        border: 1px solid rgba(59, 130, 246, 0.35);
+      }
 
-    .pill {
-      display: inline-flex;
-      gap: 8px;
-      align-items: center;
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 13px;
-      background: rgba(59, 130, 246, 0.18);
-      border: 1px solid rgba(59, 130, 246, 0.35);
-    }
+      .pill.bad {
+        background: rgba(239, 68, 68, 0.18);
+        border-color: rgba(239, 68, 68, 0.35);
+      }
 
-    .pill.bad {
-      background: rgba(239, 68, 68, 0.18);
-      border-color: rgba(239, 68, 68, 0.35);
-    }
+      .pill.warn {
+        background: rgba(245, 158, 11, 0.18);
+        border-color: rgba(245, 158, 11, 0.35);
+      }
 
-    .pill.warn {
-      background: rgba(245, 158, 11, 0.18);
-      border-color: rgba(245, 158, 11, 0.35);
-    }
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
 
-    .controls {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-bottom: 16px;
-    }
+      select,
+      button {
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+        color: #f4f6ff;
+        font-size: 14px;
+      }
 
-    select,
-    button {
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.06);
-      color: #f4f6ff;
-      font-size: 14px;
-    }
+      button {
+        cursor: pointer;
+        background: rgba(46, 167, 80, 0.25);
+        border-color: rgba(46, 167, 80, 0.35);
+        font-weight: 650;
+      }
 
-    button {
-      cursor: pointer;
-      background: rgba(46, 167, 80, 0.25);
-      border-color: rgba(46, 167, 80, 0.35);
-      font-weight: 600;
-    }
+      button:active {
+        transform: scale(0.99);
+      }
 
-    button:active {
-      transform: scale(0.99);
-    }
+      .card {
+        background: rgba(30, 41, 59, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 14px;
+      }
 
-    .card {
-      background: rgba(30, 41, 59, 0.55);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      border-radius: 14px;
-      padding: 14px;
-      margin-bottom: 14px;
-    }
+      .muted {
+        color: rgba(244, 246, 255, 0.65);
+        font-size: 12px;
+      }
 
-    .muted {
-      color: rgba(244, 246, 255, 0.65);
-      font-size: 12px;
-    }
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        overflow: hidden;
+        border-radius: 14px;
+        background: rgba(30, 41, 59, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
 
-    .table {
-      width: 100%;
-      border-collapse: collapse;
-      overflow: hidden;
-      border-radius: 14px;
-      background: rgba(30, 41, 59, 0.55);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-    }
+      th,
+      td {
+        text-align: left;
+        padding: 12px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 13px;
+        vertical-align: top;
+        word-break: break-word;
+      }
 
-    th,
-    td {
-      text-align: left;
-      padding: 12px 10px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      font-size: 13px;
-      vertical-align: top;
-      word-break: break-word;
-    }
+      th {
+        font-size: 12px;
+        color: rgba(244, 246, 255, 0.65);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        background: rgba(15, 23, 42, 0.6);
+      }
 
-    th {
-      font-size: 12px;
-      color: rgba(244, 246, 255, 0.65);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      background: rgba(15, 23, 42, 0.6);
-    }
+      tr.noncompliant td {
+        background: rgba(239, 68, 68, 0.08);
+      }
 
-    tr.missing-note td {
-      background: rgba(239, 68, 68, 0.08);
-    }
+      .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+      }
 
-    .badge {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.06);
-    }
+      .badge.ok {
+        background: rgba(46, 167, 80, 0.22);
+        border-color: rgba(46, 167, 80, 0.35);
+      }
 
-    .badge.ok {
-      background: rgba(46, 167, 80, 0.22);
-      border-color: rgba(46, 167, 80, 0.35);
-    }
+      .badge.bad {
+        background: rgba(239, 68, 68, 0.18);
+        border-color: rgba(239, 68, 68, 0.35);
+      }
 
-    .badge.warn {
-      background: rgba(245, 158, 11, 0.18);
-      border-color: rgba(245, 158, 11, 0.35);
-    }
+      .sale-link {
+        color: #93c5fd;
+        text-decoration: none;
+        font-weight: 650;
+      }
 
-    .badge.bad {
-      background: rgba(239, 68, 68, 0.18);
-      border-color: rgba(239, 68, 68, 0.35);
-    }
+      .sale-link:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
 
-    .nav-links {
-      margin-top: 14px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .nav-link {
-      color: #93c5fd;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 13px;
-    }
-  </style>
-</head>
-
-<body>
-  <a class="thc-admin-brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
-    <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
-  </a>
-  <div class="header">
-    <h1>Transaction Audit</h1>
-    <div id="summaryPill" class="pill">Loading…</div>
-  </div>
-
-  <div class="controls">
-    <select id="statusSelect">
-      <option value="ALL" selected>ALL</option>
-      <option value="CLOSED">CLOSED</option>
-      <option value="OPEN">OPEN</option>
-    </select>
-    <select id="limitSelect">
-      <option value="25">25</option>
-      <option value="50" selected>50</option>
-      <option value="100">100</option>
-      <option value="200">200</option>
-    </select>
-    <button onclick="loadAudit()">Refresh</button>
-    <input id="adminTokenInput" placeholder="Admin token (optional)" style="flex:1;min-width:240px" />
-    <button class="secondary" id="saveTokenBtn" type="button">Save Token</button>
-  </div>
-
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-      <div>
-        <div style="font-weight:700;">Notification Center</div>
-        <div class="muted">Shows only transactions needing attention (missing "Age: 31" note or note couldn't be checked).</div>
-      </div>
-      <div class="muted" id="lastUpdated">—</div>
+  <body>
+    <div class="header">
+      <h1>Compliance Exceptions</h1>
+      <div id="summaryPill" class="pill">Loading…</div>
     </div>
-    <div id="missingList" class="muted" style="margin-top:10px;">Loading…</div>
-  </div>
 
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Sale</th>
-        <th>Status</th>
-        <th>Total</th>
-        <th>Age Note</th>
-        <th>Verification</th>
-        <th>Updated</th>
-      </tr>
-    </thead>
-    <tbody id="tbody">
-      <tr>
-        <td colspan="6" class="muted">Loading…</td>
-      </tr>
-    </tbody>
-  </table>
+    <nav class="admin-top-nav" aria-label="Admin navigation">
+      <a class="admin-top-nav__brand" href="/admin/data-center.html" aria-label="THC Club Admin Home">
+        <img src="/frontend/assets/thc-logo.png" alt="THC Club" />
+      </a>
+      <a href="/admin/data-center.html" class="admin-top-nav__link">Manager Dashboard</a>
+      <a href="/admin/marketing.html" class="admin-top-nav__link">Marketing Analytics</a>
+      <a href="/admin/scans.html" class="admin-top-nav__link">View All Scans</a>
+      <a href="/admin/audit.html" class="admin-top-nav__link">Transaction Audit</a>
+      <a href="/admin/banned.html" class="admin-top-nav__link">Banned Customers</a>
+    </nav>
+    <div class="admin-top-nav-spacer" aria-hidden="true"></div>
 
-  <div class="nav-links">
-    <a href="/admin/data-center.html" class="nav-link">Manager Dashboard</a>
-    <a href="/admin/marketing.html" class="nav-link">Marketing Analytics</a>
-    <a href="/admin/scans.html" class="nav-link">All Scans</a>
-    <a href="/admin/banned.html" class="nav-link">Banned Customers</a>
-    <a href="/admin/overrides.html" class="nav-link">Override History</a>
-  </div>
+    <div class="controls">
+      <select id="minutesSelect">
+        <option value="60">Last 60 minutes</option>
+        <option value="240" selected>Last 4 hours</option>
+        <option value="1440">Last 24 hours</option>
+        <option value="10080">Last 7 days</option>
+      </select>
+      <select id="outletSelect">
+        <option value="">All Outlets</option>
+      </select>
+      <select id="limitSelect">
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+        <option value="200">200</option>
+        <option value="500">500</option>
+      </select>
+      <button id="refreshBtn" type="button">Refresh</button>
+    </div>
 
-  <script>
-    function getAdminToken() {
-      try {
-        return (localStorage.getItem('ADMIN_TOKEN') || '').trim();
-      } catch {
-        return '';
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:700;">Clerk Workflow Tracking</div>
+          <div class="muted">
+            Shows CLOSED sales missing an ID scan or manager override (not tied to slow stores).
+          </div>
+        </div>
+        <div class="muted" id="lastUpdated">—</div>
+      </div>
+      <div id="missingList" class="muted" style="margin-top:10px;">Loading…</div>
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Sale</th>
+          <th>Outlet</th>
+          <th>Register</th>
+          <th>User</th>
+          <th>Total</th>
+          <th>Sale Date</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr>
+          <td colspan="6" class="muted">Loading…</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <script>
+      async function apiFetch(path, options = {}) {
+        const headers = new Headers(options.headers || {});
+        return fetch(path, { ...options, headers });
       }
-    }
 
-    function setAdminToken(token) {
-      try {
-        if (!token) {
-          localStorage.removeItem('ADMIN_TOKEN');
-        } else {
-          localStorage.setItem('ADMIN_TOKEN', token);
-        }
-      } catch { }
-    }
-
-    async function apiFetch(path, options = {}) {
-      const headers = new Headers(options.headers || {});
-      const token = getAdminToken();
-      if (token) headers.set('x-admin-token', token);
-      const response = await fetch(path, { ...options, headers });
-      if (response.status === 401) {
-        const lastUpdated = document.getElementById('lastUpdated');
-        if (lastUpdated) lastUpdated.textContent = 'Unauthorized (admin token). Paste token above and click Save Token.';
+      function fmtMoney(value) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return "—";
+        return `$${num.toFixed(2)}`;
       }
-      return response;
-    }
-    function fmtMoney(value) {
-      const num = Number(value);
-      if (!Number.isFinite(num)) return '—';
-      return `$${num.toFixed(2)}`;
-    }
 
-    function fmtDate(value) {
-      if (!value) return '—';
-      const d = new Date(value);
-      if (Number.isNaN(d.getTime())) return '—';
-      return d.toLocaleString();
-    }
-
-    function makeSaleLink(id) {
-      if (!id) return '—';
-      const href = `https://retail.lightspeed.app/sales/${encodeURIComponent(id)}?platform=ios&action=view`;
-      return `<a href="${href}" target="_blank" rel="noreferrer" class="nav-link" style="color:#93c5fd;">${id}</a>`;
-    }
-
-    async function loadAudit() {
-      const status = document.getElementById('statusSelect').value;
-      const limit = document.getElementById('limitSelect').value;
-      const tbody = document.getElementById('tbody');
-      const summaryPill = document.getElementById('summaryPill');
-      const missingList = document.getElementById('missingList');
-      const lastUpdated = document.getElementById('lastUpdated');
-
-      tbody.innerHTML = `<tr><td colspan="6" class="muted">Loading…</td></tr>`;
-      summaryPill.textContent = 'Loading…';
-      summaryPill.className = 'pill';
-      missingList.textContent = 'Loading…';
-
-      try {
-        const params = new URLSearchParams({ limit });
-        if (status && status !== 'ALL') params.set('status', status);
-        params.set('missingOnly', 'true');
-        const res = await apiFetch(`/admin/transactions?${params}`, { cache: 'no-store' });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.message || 'Failed to load transactions');
-
-        const items = data.transactions || [];
-        const missing = items.filter(x => x.missingNote === true);
-        const fetchErrors = Number(data.saleFetchErrorCount) || 0;
-
-        lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
-
-        const missingCount = Number(data.missingNoteCount) || missing.length;
-        if (missingCount > 0) {
-          summaryPill.textContent = `Missing age notes: ${missingCount}`;
-          summaryPill.className = 'pill bad';
-        } else if (fetchErrors > 0) {
-          summaryPill.textContent = `System warning: ${fetchErrors} note checks failed`;
-          summaryPill.className = 'pill warn';
-        } else {
-          summaryPill.textContent = 'All good (no missing notes)';
-          summaryPill.className = 'pill';
-        }
-
-        if (fetchErrors > 0) {
-          missingList.innerHTML = `<span class="badge warn">WARN</span> Note checks failed for ${fetchErrors} sale(s) (Lightspeed returned SALE_NOT_FOUND). These are not clerk mistakes—fix system/config/test data.`;
-        } else if (missingCount > 0) {
-          const preview = items.slice(0, 10).map(x => x.sale_id).join(', ');
-          missingList.innerHTML = preview
-            ? `<span class="badge bad">Missing notes</span> ${preview}${items.length > 10 ? '...' : ''}`
-            : `<span class="badge bad">Missing notes</span>`;
-        } else {
-          missingList.innerHTML = `<span class="badge ok">OK</span> Only sales missing an "Age: ##" note will appear here.`;
-        }
-
-        /*
-        if (false) {
-          summaryPill.textContent = `${missing.length} missing age note${fetchErrors ? ` • ${fetchErrors} sale fetch errors` : ''}`;
-          summaryPill.className = 'pill bad';
-          const preview = missing.slice(0, 10).map(x => x.sale_id).join(', ');
-          missingList.innerHTML = `<span class="badge bad">Missing notes</span> ${preview}${missing.length > 10 ? '…' : ''}`;
-        } else {
-          summaryPill.textContent = `All good (no missing notes)${fetchErrors ? ` • ${fetchErrors} sale fetch errors` : ''}`;
-          summaryPill.className = 'pill';
-          missingList.innerHTML = fetchErrors
-            ? `<span class="badge warn">WARN</span> Notes couldn't be checked for ${fetchErrors} sale(s) due to Lightspeed fetch errors.`
-            : `<span class="badge ok">OK</span> No missing notes in this list.`;
-        }
-
-        */
-        if (items.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="6" class="muted">No transactions need attention.</td></tr>`;
-          return;
-        }
-
-        tbody.innerHTML = items.map((t) => {
-          const noteBadge = t.missingNote === null
-            ? `<span class="badge warn">UNKNOWN</span>`
-            : (t.hasIdNote
-              ? `<span class="badge ok">${t.noteStatus || 'ID NOTE'}</span> ${t.noteAge ? `Age ${t.noteAge}` : ''} ${t.noteDobYear ? `DOB ${t.noteDobYear}` : ''}`
-              : `<span class="badge bad">MISSING</span>`);
-
-          const isOverride = String(t.verification_status || '') === 'approved_override';
-          const verAgeText = isOverride ? 'Override' : (t.verification_age ? `Age ${t.verification_age}` : '');
-          const verBadge = t.hasVerification
-            ? `<span class="badge ${String(t.verification_status || '').startsWith('approved') ? 'ok' : 'warn'}">${t.verification_status}</span> ${verAgeText}`
-            : `<span class="badge warn">NO DB</span>`;
-
-          const rowClass = t.missingNote === true ? 'missing-note' : '';
-
-          return `
-            <tr class="${rowClass}">
-              <td>${makeSaleLink(t.sale_id)}</td>
-              <td>${t.saleFetchOk === false ? 'FETCH_FAILED' : (t.status || '—')}</td>
-              <td>${fmtMoney(t.total)}</td>
-              <td>${noteBadge}</td>
-              <td>${verBadge}</td>
-              <td>${fmtDate(t.updated_at || t.created_at)}</td>
-            </tr>
-          `;
-        }).join('');
-
-      } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="6" class="muted">Error: ${e.message}</td></tr>`;
-        summaryPill.textContent = 'Error';
-        summaryPill.className = 'pill bad';
-        missingList.textContent = e.message;
+      function fmtDate(value) {
+        if (!value) return "—";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return "—";
+        return d.toLocaleString();
       }
-    }
 
-    document.getElementById('adminTokenInput').value = getAdminToken();
-    document.getElementById('saveTokenBtn').addEventListener('click', () => {
-      const token = String(document.getElementById('adminTokenInput').value || '').trim();
-      setAdminToken(token);
-      const lastUpdated = document.getElementById('lastUpdated');
-      if (lastUpdated) lastUpdated.textContent = token ? 'Admin token saved.' : 'Admin token cleared.';
-    });
+      function makeSaleLink(id) {
+        if (!id) return "—";
+        const href = `https://retail.lightspeed.app/sales/${encodeURIComponent(id)}?platform=ios&action=view`;
+        return `<a href="${href}" target="_blank" rel="noreferrer" class="sale-link">${id}</a>`;
+      }
 
-    loadAudit();
-    setInterval(loadAudit, 30000);
-  </script>
-</body>
+      async function loadOutlets() {
+        const select = document.getElementById("outletSelect");
+        if (!select) return;
+        try {
+          const res = await apiFetch("/admin/outlets", { cache: "no-store" });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.message || "Failed to load outlets");
+          const outlets = Array.isArray(data.outlets) ? data.outlets : [];
+          const current = select.value || "";
+          select.innerHTML =
+            `<option value="">All Outlets</option>` +
+            outlets
+              .map(
+                (o) =>
+                  `<option value="${String(o.outletId)}">${o.label || o.code || o.outletId}</option>`
+              )
+              .join("");
+          if (current) select.value = current;
+        } catch {
+          // optional
+        }
+      }
 
+      async function loadExceptions() {
+        const minutes = document.getElementById("minutesSelect").value;
+        const outletId = document.getElementById("outletSelect").value || "";
+        const limit = document.getElementById("limitSelect").value;
+        const tbody = document.getElementById("tbody");
+        const summaryPill = document.getElementById("summaryPill");
+        const missingList = document.getElementById("missingList");
+        const lastUpdated = document.getElementById("lastUpdated");
+
+        tbody.innerHTML = `<tr><td colspan="6" class="muted">Loading…</td></tr>`;
+        summaryPill.textContent = "Loading…";
+        summaryPill.className = "pill";
+        missingList.textContent = "Loading…";
+
+        try {
+          const params = new URLSearchParams({ minutes, limit });
+          if (outletId) params.set("outletId", outletId);
+          const res = await apiFetch(`/admin/compliance/missing-scans?${params.toString()}`, {
+            cache: "no-store"
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.message || "Failed to load compliance exceptions");
+
+          lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+
+          if (data.dbAvailable === false) {
+            summaryPill.textContent = "DB not configured";
+            summaryPill.className = "pill warn";
+            missingList.textContent = "Compliance exceptions require the database.";
+            tbody.innerHTML = `<tr><td colspan="6" class="muted">Database not configured.</td></tr>`;
+            return;
+          }
+
+          const items = Array.isArray(data.missing) ? data.missing : [];
+          const missingCount = Number(data.count || items.length || 0);
+
+          if (missingCount > 0) {
+            summaryPill.textContent = `Missing ID scan workflow: ${missingCount}`;
+            summaryPill.className = "pill bad";
+            const preview = items
+              .slice(0, 10)
+              .map((x) => x.saleId)
+              .filter(Boolean)
+              .join(", ");
+            missingList.innerHTML = preview
+              ? `<span class="badge bad">Flagged</span> ${preview}${items.length > 10 ? "…" : ""}`
+              : `<span class="badge bad">Flagged</span>`;
+          } else {
+            summaryPill.textContent = "OK (no missing workflows)";
+            summaryPill.className = "pill";
+            missingList.innerHTML = `<span class="badge ok">OK</span> No closed sales missing ID scan/override in this window.`;
+          }
+
+          if (!items.length) {
+            tbody.innerHTML = `<tr><td colspan="6" class="muted">No exceptions.</td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = items
+            .map((t) => {
+              return `
+                <tr class="noncompliant">
+                  <td>${makeSaleLink(t.saleId)}</td>
+                  <td>${t.outletId || "—"}</td>
+                  <td>${t.registerId || "—"}</td>
+                  <td>${t.userId || "—"}</td>
+                  <td>${fmtMoney(t.total)}</td>
+                  <td>${fmtDate(t.saleDate)}</td>
+                </tr>
+              `;
+            })
+            .join("");
+        } catch (e) {
+          tbody.innerHTML = `<tr><td colspan="6" class="muted">Error: ${e.message}</td></tr>`;
+          summaryPill.textContent = "Error";
+          summaryPill.className = "pill bad";
+          missingList.textContent = e.message;
+        }
+      }
+
+      document.getElementById("refreshBtn").addEventListener("click", loadExceptions);
+      document.getElementById("minutesSelect").addEventListener("change", loadExceptions);
+      document.getElementById("outletSelect").addEventListener("change", loadExceptions);
+      document.getElementById("limitSelect").addEventListener("change", loadExceptions);
+
+      loadOutlets().then(loadExceptions);
+      setInterval(loadExceptions, 60000);
+    </script>
+  </body>
 </html>

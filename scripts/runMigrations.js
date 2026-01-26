@@ -1,10 +1,18 @@
 "use strict";
 
-require('dotenv').config();
+require('./loadEnv').loadEnv();
 
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
+
+function loadBaseSchema() {
+  const schemaPath = path.resolve(__dirname, '../backend/src/schema.sql');
+  if (!fs.existsSync(schemaPath)) {
+    throw new Error(`Base schema not found: ${schemaPath}`);
+  }
+  return fs.readFileSync(schemaPath, 'utf8');
+}
 
 async function ensureMigrationsTable(client) {
   await client.query(`
@@ -45,7 +53,13 @@ function loadMigrations() {
 }
 
 async function runMigrations() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = String(process.env.DATABASE_URL || '')
+    .replace(/\\r\\n/g, '')
+    .replace(/\\n/g, '')
+    .replace(/\\r/g, '')
+    .replace(/[\r\n]/g, '')
+    .trim()
+    .replace(/^"|"$/g, '');
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set. Export it before running migrations.');
   }
@@ -64,6 +78,12 @@ async function runMigrations() {
   console.log('Connected to database');
 
   try {
+    // Ensure core tables/views exist (schema.sql is idempotent).
+    const baseSchema = loadBaseSchema();
+    await client.query('BEGIN');
+    await client.query(baseSchema);
+    await client.query('COMMIT');
+
     await ensureMigrationsTable(client);
     const applied = await getAppliedMigrations(client);
     const migrations = loadMigrations();

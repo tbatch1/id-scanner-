@@ -33,5 +33,14 @@ coverage/
 
 # Local secrets (do not commit)
 .secrets.local*
+.lightspeed_oauth_tokens.local.json
 
 .tmp_ls_v2.yml
+
+# Local artifacts (generated during scanner debugging)
+pdf_page_images/
+page_4_images/
+.tmp_pdfs/
+netum_1200_repair_barcodes.html
+netum_1200_repair_barcodes.png
+netumscan_quick_start.pdf

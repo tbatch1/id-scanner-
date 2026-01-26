@@ -216,44 +216,85 @@ const validateBannedCreate = [
     .withMessage('documentType must be alphanumeric'),
 
   body('documentNumber')
+    .customSanitizer((value) => (typeof value === 'string' ? value.trim() : value))
+    .optional({ nullable: true, checkFalsy: true })
     .isString()
-    .trim()
     .isLength({ min: 1, max: 150 })
     .withMessage('documentNumber must be between 1 and 150 characters'),
 
+  body('bannedLocationId')
+    .optional({ nullable: true, checkFalsy: true })
+    .isString()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('bannedLocationId must be under 100 characters'),
+
   body('issuingCountry')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isString()
     .trim()
     .isLength({ max: 120 })
     .withMessage('issuingCountry must be under 120 characters'),
 
   body('dateOfBirth')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isString()
     .matches(/^\d{4}-\d{2}-\d{2}$/)
     .withMessage('dateOfBirth must be YYYY-MM-DD if provided'),
 
   body('firstName')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isString()
     .trim()
     .isLength({ max: 100 })
     .withMessage('firstName must be under 100 characters'),
 
   body('lastName')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isString()
     .trim()
     .isLength({ max: 100 })
     .withMessage('lastName must be under 100 characters'),
 
+  body('phone')
+    .optional({ nullable: true, checkFalsy: true })
+    .isString()
+    .trim()
+    .isLength({ max: 30 })
+    .withMessage('phone must be under 30 characters'),
+
+  body('email')
+    .optional({ nullable: true, checkFalsy: true })
+    .isString()
+    .trim()
+    .isLength({ max: 254 })
+    .isEmail()
+    .withMessage('email must be a valid email address'),
+
   body('notes')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isString()
     .trim()
     .isLength({ max: 500 })
     .withMessage('notes must be under 500 characters'),
+
+  body().custom((value) => {
+    const firstName = String(value?.firstName || '').trim();
+    const lastName = String(value?.lastName || '').trim();
+    const dob = String(value?.dateOfBirth || '').trim();
+    const docNumber = String(value?.documentNumber || '').trim();
+
+    // Require a matching key: either DL#/ID# OR DOB for name+DOB matching.
+    if (!docNumber && !dob) {
+      throw new Error('Provide either documentNumber or dateOfBirth');
+    }
+
+    // If banning by Name + DOB, require names to reduce false positives.
+    if (!docNumber && dob && (!firstName || !lastName)) {
+      throw new Error('firstName and lastName are required when using dateOfBirth');
+    }
+    return true;
+  }),
 
   handleValidationErrors
 ];

@@ -1,7 +1,23 @@
 const { Pool } = require('pg');
 const logger = require('./logger');
 
-const connectionString = process.env.DATABASE_URL;
+function sanitizeConnectionString(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/\\r\\n/g, '')
+    .replace(/\\n/g, '')
+    .replace(/\\r/g, '')
+    .replace(/[\r\n]/g, '')
+    .trim()
+    .replace(/^"|"$/g, '');
+}
+
+const connectionString = sanitizeConnectionString(process.env.DATABASE_URL);
+
+function parseIntOr(value, fallback) {
+  const n = Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 if (!connectionString) {
   logger.warn(
@@ -42,9 +58,11 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? {
     rejectUnauthorized: false // Required for Vercel Postgres
   } : false,
-  max: 40, // Maximum number of connections in pool (upgraded for 18 locations)
-  idleTimeoutMillis: 30000, // Close idle connections after 30s
-  connectionTimeoutMillis: 2000, // Timeout if can't connect in 2s
+  // IMPORTANT: Vercel is serverless. Keep the per-instance pool small and rely on Neon Pooler.
+  // You can override with env vars if needed.
+  max: parseIntOr(process.env.DB_POOL_MAX, process.env.NODE_ENV === 'production' ? 10 : 20),
+  idleTimeoutMillis: parseIntOr(process.env.DB_IDLE_TIMEOUT_MS, 30_000),
+  connectionTimeoutMillis: parseIntOr(process.env.DB_CONNECTION_TIMEOUT_MS, 5_000),
 });
 
 // Log successful connections
@@ -71,11 +89,38 @@ async function query(text, params, timeoutMs = 5000) {
     setTimeout(() => reject(new Error('DATABASE_QUERY_TIMEOUT')), timeoutMs);
   });
 
+  const isRetryableDbError = (error) => {
+    const msg = String(error?.message || '').toLowerCase();
+    const code = String(error?.code || '');
+    return (
+      msg.includes('connection terminated') ||
+      msg.includes('connection terminated unexpectedly') ||
+      msg.includes('connection reset') ||
+      msg.includes('econnreset') ||
+      msg.includes('etimedout') ||
+      msg.includes('timeout') ||
+      code === '57P01' || // admin_shutdown
+      code === '57P02' || // crash_shutdown
+      code === '57P03' || // cannot_connect_now
+      code === '53300' // too_many_connections
+    );
+  };
+
+  const execute = async () => Promise.race([pool.query(text, params), timeoutPromise]);
+
   try {
-    const result = await Promise.race([
-      pool.query(text, params),
-      timeoutPromise
-    ]);
+    let result;
+    try {
+      result = await execute();
+    } catch (error) {
+      // One retry for transient connection issues (never loops indefinitely).
+      if (isRetryableDbError(error)) {
+        await new Promise((r) => setTimeout(r, 120));
+        result = await execute();
+      } else {
+        throw error;
+      }
+    }
     const duration = Date.now() - start;
 
     logger.logPerformance('db_query', duration, true);

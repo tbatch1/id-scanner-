@@ -1249,7 +1249,8 @@
                             let color = '#fff';
                             if (l.type === 'error') color = '#ff4d4d';
                             if (l.type === 'warn') color = '#ffcc00';
-                            return `<div style="color: ${color}; margin-bottom: 2px;">• ${l.message}</div>`;
+                            const msg = (l && (l.m || l.message)) ? String(l.m || l.message) : '';
+                            return `<div style="color: ${color}; margin-bottom: 2px;">• ${msg}</div>`;
                         }).join('');
                         logEl.scrollTop = logEl.scrollHeight;
                     }
