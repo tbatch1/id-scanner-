@@ -370,6 +370,14 @@
             pointer-events: auto;
         }
 
+        /* iPad embedded verifier: prevent iOS text-edit popovers by making the BUTTON the tap/focus target. */
+        html.ios-embedded-verify .scan-now-wrap #btnScanNow {
+            pointer-events: auto;
+        }
+        html.ios-embedded-verify .scan-now-wrap #ghostInput {
+            pointer-events: none !important;
+        }
+
         .scan-now-wrap #ghostInput:focus {
             outline: none;
         }
@@ -1006,8 +1014,11 @@
         })();
 
         // iPad/Lightspeed embedded verifier: avoid iOS "text edit" UI (selection lens / copy-paste popover).
-        // We keep the capture input readonly and buffer via keydown so iOS doesn't enter native edit mode.
+        // Prefer using a non-text focus target (button) + keydown buffering.
         const iosEmbeddedVerify = Boolean(isIOSLike && embeddedMode && verifyOnlyMode);
+        if (iosEmbeddedVerify) {
+            try { document.documentElement.classList.add('ios-embedded-verify'); } catch (e) { }
+        }
 
         const autoStartScan = (() => {
             const raw = String(urlParams.get('autoStart') || '').trim().toLowerCase();
@@ -1196,12 +1207,13 @@
             try {
                 if (!ghostInput) return false;
 
-                // iOS embedded verifier: keep the input readonly and avoid synthetic click/selection which can
-                // trigger the native text-edit popover and magnifier.
+                // iOS embedded verifier: DO NOT focus the text input (it triggers iOS edit UI). Focus the CTA button
+                // instead, and capture the scan via keydown buffering.
                 if (iosEmbeddedVerify) {
                     try { ghostInput.readOnly = true; ghostInput.setAttribute('readonly', ''); } catch (e) { }
-                    try { ghostInput.focus({ preventScroll: true }); } catch (e) { try { ghostInput.focus(); } catch (ee) { } }
-                    clientLog('focusGhostInput', { reason, active: document.activeElement === ghostInput, iosEmbeddedVerify: true });
+                    try { ghostInput.blur(); } catch (e) { }
+                    try { btnScanNow.focus({ preventScroll: true }); } catch (e) { try { btnScanNow.focus(); } catch (ee) { } }
+                    clientLog('focusKeySink', { reason, active: document.activeElement === btnScanNow, iosEmbeddedVerify: true });
                     return true;
                 }
 
@@ -2308,9 +2320,22 @@
                         return;
                     }
 
-                    // Otherwise, let the browser insert the character into the input (most reliable).
-                    // Give iPad/WKWebView a tiny window to commit the final characters to `.value` before we flush.
-                    if (ch === '\n') setTimeout(() => flushVerifyOnlyAttempt('enter'), 40);
+                     // Otherwise, let the browser insert the character into the input (most reliable).
+                     // Give iPad/WKWebView a tiny window to commit the final characters to `.value` before we flush.
+                     if (ch === '\n') setTimeout(() => flushVerifyOnlyAttempt('enter'), 40);
+                }, true);
+
+                // iOS embedded verifier fallback: capture keystrokes even when no text input is focused.
+                // (We intentionally keep focus on the button to avoid iOS edit UI.)
+                window.addEventListener('keydown', (e) => {
+                    if (!iosEmbeddedVerify) return;
+                    if (scanLocked) return;
+                    if (document.activeElement === ghostInput) return;
+                    const ch = keyToScanChar(e);
+                    if (!ch) return;
+                    if (!isScanning) armScan('window-keydown');
+                    e.preventDefault();
+                    handleKeyBuffered(ch);
                 }, true);
 
                 ghostInput.addEventListener('input', () => {
