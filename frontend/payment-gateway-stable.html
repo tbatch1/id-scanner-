@@ -2871,18 +2871,11 @@
                 }
             } catch (e) { }
 
-            // IMPORTANT (iPad + Lightspeed iframe):
-            // Do NOT blur the active capture input or hide it in verify-only mode — that can cause focus to escape
-            // the iframe and the tail of the HID scan stream will type into Lightspeed fields after the modal closes.
-            if (!verifyOnlyMode) {
-                try { if (scanNowWrap) scanNowWrap.style.display = 'none'; } catch (e) { }
-                try { if (ghostInput) { ghostInput.blur(); ghostInput.value = ''; } } catch (e) { }
-                try { const p = document.getElementById('scanPreviewText'); if (p) p.textContent = '...'; } catch (e) { }
-            } else {
-                try { if (ghostInput) ghostInput.readOnly = false; } catch (e) { }
-                // Keep focus inside the iframe while the overlay is up.
-                try { focusKeySink('successOverlay'); } catch (e) { }
-            }
+            // Make the success popup look clean: hide the scan capture UI (input + preview)
+            // so staff don't see any masked characters/caret behind the overlay.
+            try { if (scanNowWrap) scanNowWrap.style.display = 'none'; } catch (e) { }
+            try { if (ghostInput) { ghostInput.blur(); ghostInput.value = ''; } } catch (e) { }
+            try { const p = document.getElementById('scanPreviewText'); if (p) p.textContent = '...'; } catch (e) { }
 
             document.getElementById('successOverlay').classList.add('active');
             latestVerificationId = data.verificationId || data.verification_id || latestVerificationId;
@@ -3002,17 +2995,11 @@
                 }
             } catch (e) { }
 
-            // IMPORTANT (iPad + Lightspeed iframe):
-            // Do NOT blur the active capture input or hide it in verify-only mode — that can cause focus to escape
-            // the iframe and the tail of the HID scan stream will type into Lightspeed fields after the modal closes.
-            if (!verifyOnlyMode) {
-                try { if (scanNowWrap) scanNowWrap.style.display = 'none'; } catch (e) { }
-                try { if (ghostInput) { ghostInput.blur(); ghostInput.value = ''; } } catch (e) { }
-                try { const p = document.getElementById('scanPreviewText'); if (p) p.textContent = '...'; } catch (e) { }
-            } else {
-                try { if (ghostInput) ghostInput.readOnly = false; } catch (e) { }
-                try { focusKeySink('errorOverlay'); } catch (e) { }
-            }
+            // Keep the rejection popup clean: hide the scan capture UI (input + preview)
+            // so staff don't see any masked characters/caret behind the overlay.
+            try { if (scanNowWrap) scanNowWrap.style.display = 'none'; } catch (e) { }
+            try { if (ghostInput) { ghostInput.blur(); ghostInput.value = ''; } } catch (e) { }
+            try { const p = document.getElementById('scanPreviewText'); if (p) p.textContent = '...'; } catch (e) { }
 
             document.getElementById('errorOverlay').classList.add('active');
 
