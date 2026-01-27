@@ -2406,6 +2406,19 @@
                     barcodeBuffer = String(ghostInput.value || '');
                     updateScanPreview(barcodeBuffer);
 
+                    // Speed win for slow-HID scanners: as soon as we have a parseable DOB + an ID token,
+                    // submit immediately instead of waiting for the terminator/quiet-time.
+                    try {
+                        if (verifyOnlyMode && !scanLocked && !isProcessingScan && barcodeBuffer.length >= 120) {
+                            const progress = getVerifyProgress(barcodeBuffer);
+                            if (progress.hasDob && progress.hasId) {
+                                reportRemoteError('SCAN_EARLY_FINALIZE', { len: barcodeBuffer.length }, 'CLIENT_LOG');
+                                finalizeScan(barcodeBuffer);
+                                return;
+                            }
+                        }
+                    } catch (e) { }
+
                     if (scanTimer) clearTimeout(scanTimer);
                     scanTimer = setTimeout(() => {
                         if (!isScanning || scanLocked) return;
