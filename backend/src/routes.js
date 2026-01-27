@@ -1265,6 +1265,29 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
 router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
   const { clerkId, scan } = req.body || {};
   const { saleId } = req.params;
+  const requestStartedAt = Date.now();
+
+  // Ensure we have an in-memory session so the gateway debug panel can show timing logs even without Vercel log tailing.
+  try {
+    if (!saleVerificationStore.getVerification(saleId)) {
+      saleVerificationStore.createVerification(saleId);
+    }
+  } catch (e) {
+    // Best-effort only.
+  }
+
+  const perf = {};
+  const mark = (key, startedAt) => {
+    perf[key] = Date.now() - startedAt;
+  };
+
+  const poolStats = db.pool
+    ? {
+        total: db.pool.totalCount,
+        idle: db.pool.idleCount,
+        waiting: db.pool.waitingCount
+      }
+    : null;
 
   if (!clerkId) {
     logger.logSecurity('missing_clerk_id', { saleId });
@@ -1294,8 +1317,10 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
     documentType: scan?.documentType || 'drivers_license'
   });
   let sale = null;
+  const saleLookupStartedAt = Date.now();
   try {
     sale = await lightspeed.getSaleById(saleId);
+    mark('saleLookupMs', saleLookupStartedAt);
     if (!sale) {
       logger.warn({ event: 'sale_not_found', saleId }, `Sale ${saleId} not found`);
       return res.status(404).json({
@@ -1304,6 +1329,7 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
       });
     }
   } catch (saleError) {
+    mark('saleLookupMs', saleLookupStartedAt);
     logger.logAPIError('get_sale_for_verification', saleError, { saleId, clerkId });
     const status = saleError.status === 404 ? 404 : 502;
     return res.status(status).json({
@@ -1318,6 +1344,7 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
   let bannedRecord = null;
 
   if (db.pool && (normalizedScan.documentNumber || (normalizedScan.firstName && normalizedScan.lastName && normalizedScan.dob))) {
+    const bannedCheckStartedAt = Date.now();
     try {
       bannedRecord = await complianceStore.findBannedCustomer({
         documentType: normalizedScan.documentType,
@@ -1342,7 +1369,9 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
           bannedId: bannedRecord.id
         });
       }
+      mark('bannedCheckMs', bannedCheckStartedAt);
     } catch (banError) {
+      mark('bannedCheckMs', bannedCheckStartedAt);
       logger.logAPIError('find_banned_customer', banError, {
         saleId,
         clerkId,
@@ -1372,6 +1401,7 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
       registerId: sale?.registerId || null
     });
     logger.logPerformance('recordVerification', Date.now() - startTime, true);
+    mark('lightspeedRecordMs', startTime);
 
     let persisted = null;
 
@@ -1380,11 +1410,13 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
       const userAgent = req.get('user-agent');
 
       try {
+        const dbSaveStartedAt = Date.now();
         persisted = await complianceStore.saveVerification(verification, {
           ipAddress,
           userAgent,
           locationId
         });
+        mark('dbSaveMs', dbSaveStartedAt);
       } catch (dbError) {
         logger.logAPIError('persist_verification', dbError, { saleId, clerkId });
       }
@@ -1399,6 +1431,17 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
       outlet: outletDescriptor,
       registerId: sale?.registerId || null
     };
+
+    perf.totalMs = Date.now() - requestStartedAt;
+    try {
+      saleVerificationStore.addSessionLog(
+        saleId,
+        `verify timing: saleLookup=${perf.saleLookupMs ?? 'n/a'}ms bannedCheck=${perf.bannedCheckMs ?? 'n/a'}ms lightspeedRecord=${perf.lightspeedRecordMs ?? 'n/a'}ms dbSave=${perf.dbSaveMs ?? 'n/a'}ms total=${perf.totalMs}ms pool=${poolStats ? `t${poolStats.total}/i${poolStats.idle}/w${poolStats.waiting}` : 'none'}`,
+        'info'
+      );
+    } catch (e) {
+      // Best-effort only.
+    }
 
     res.status(201).json({
       data: responsePayload

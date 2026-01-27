@@ -1840,6 +1840,13 @@
         let lastKeyAt = 0;
         let hasShownArmHint = false;
         let verifyOnlyKeyCaptureSeen = false;
+        let closeQuarantineActive = false;
+        let closeQuarantineStartedAtMs = 0;
+        let closeQuarantineTimer = null;
+        const CLOSE_QUIET_MS = 350;
+        const CLOSE_MIN_DELAY_MS = 900;
+        const CLOSE_MAX_DELAY_MS = 6500;
+        let keySinkEl = null;
 
         function clearScanTimers() {
             if (scanIdleTimer) clearTimeout(scanIdleTimer);
@@ -1848,6 +1855,73 @@
             scanIdleTimer = null;
             scanHardTimer = null;
             scanTimer = null;
+        }
+
+        function ensureKeySink() {
+            if (keySinkEl) return keySinkEl;
+            try {
+                const el = document.createElement('input');
+                el.type = 'text';
+                el.autocomplete = 'off';
+                el.autocorrect = 'off';
+                el.autocapitalize = 'off';
+                el.spellcheck = false;
+                el.setAttribute('inputmode', 'none');
+                el.setAttribute('aria-hidden', 'true');
+                el.tabIndex = -1;
+                el.readOnly = true;
+                el.style.position = 'fixed';
+                el.style.left = '-200vw';
+                el.style.top = '0';
+                el.style.width = '1px';
+                el.style.height = '1px';
+                el.style.opacity = '0';
+                el.style.pointerEvents = 'none';
+                document.body.appendChild(el);
+                keySinkEl = el;
+                return keySinkEl;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function focusKeySink(reason = 'keySink') {
+            const el = ensureKeySink();
+            if (!el) return;
+            try { el.focus({ preventScroll: true }); } catch (e) { try { el.focus(); } catch (e2) { } }
+            clientLog('focus key sink', { reason });
+        }
+
+        function beginCloseAfterKeyQuiet(reason, { minDelayMs = CLOSE_MIN_DELAY_MS, quietMs = CLOSE_QUIET_MS, maxDelayMs = CLOSE_MAX_DELAY_MS } = {}) {
+            closeQuarantineActive = true;
+            closeQuarantineStartedAtMs = Date.now();
+            try { if (closeQuarantineTimer) clearTimeout(closeQuarantineTimer); } catch (e) { }
+            closeQuarantineTimer = null;
+
+            // Keep key events routed into the iframe while we wait (so the remaining scan stream can't spill into POS fields).
+            focusKeySink(`closeQuarantine:${reason}`);
+
+            const tick = () => {
+                const now = Date.now();
+                const elapsed = now - closeQuarantineStartedAtMs;
+                const quietForMs = lastKeyAt ? (now - lastKeyAt) : Number.POSITIVE_INFINITY;
+
+                if (elapsed < minDelayMs) {
+                    closeQuarantineTimer = setTimeout(tick, 90);
+                    return;
+                }
+
+                if (quietForMs < quietMs && elapsed < maxDelayMs) {
+                    closeQuarantineTimer = setTimeout(tick, 90);
+                    return;
+                }
+
+                closeQuarantineActive = false;
+                closeQuarantineTimer = null;
+                closeGateway(true);
+            };
+
+            closeQuarantineTimer = setTimeout(tick, 80);
         }
 
         function resetScanCaptureState({ keepPreview = false } = {}) {
@@ -2316,6 +2390,14 @@
             }
         }
 
+        // While we are holding the iframe open to swallow remaining HID keystrokes (after an early finalize),
+        // consume keystrokes at the window level so nothing can land in other UI elements.
+        window.addEventListener('keydown', (e) => {
+            if (!closeQuarantineActive) return;
+            try { lastKeyAt = Date.now(); } catch (err) { }
+            try { e.preventDefault(); e.stopPropagation(); } catch (err) { }
+        }, true);
+
         if (!verifyOnlyMode) {
             // Barcode listener: wait until required AAMVA fields are present (DBB + DAQ).
             ghostInput.addEventListener('keydown', (e) => {
@@ -2351,18 +2433,19 @@
         } else {
             // Verify-only (iPad/Lightspeed): keep it BASIC and let the scanner type into the focused input.
             // We flush an "attempt" on Enter (CR) or on quiet-time.
-            if (ghostInput) {
-                ghostInput.addEventListener('keydown', (e) => {
-                    const ch = keyToScanChar(e);
-                    if (!ch) return;
-
-                    // Once we start processing (or finalize early), keep consuming keys so barcode output
-                    // cannot spill into the POS/iframe.
-                    if (scanLocked || isProcessingScan) {
-                        e.preventDefault();
-                        return;
-                    }
-                    if (!isScanning) armScan('ghostInput-keydown');
+             if (ghostInput) {
+                 ghostInput.addEventListener('keydown', (e) => {
+                     const ch = keyToScanChar(e);
+                     if (!ch) return;
+ 
+                     // Once we start processing (or finalize early), keep consuming keys so barcode output
+                     // cannot spill into the POS/iframe.
+                     if (scanLocked || isProcessingScan) {
+                         lastKeyAt = Date.now();
+                         e.preventDefault();
+                         return;
+                     }
+                     if (!isScanning) armScan('ghostInput-keydown');
 
                     // If readonly capture is enabled, the browser won't insert characters into the input.
                     // In that mode, buffer via keydown so HID scans still work and the iOS keyboard stays hidden.
@@ -2379,21 +2462,22 @@
 
                 // iOS embedded verifier fallback: capture keystrokes even when no text input is focused.
                 // (We intentionally keep focus on the button to avoid iOS edit UI.)
-                window.addEventListener('keydown', (e) => {
-                    if (!iosEmbeddedVerify) return;
-                    if (document.activeElement === ghostInput) return;
-                    const ch = keyToScanChar(e);
-                    if (!ch) return;
-
-                    // Once we start processing (or finalize early), keep consuming keys so barcode output
-                    // cannot spill into the POS/iframe.
-                    if (scanLocked || isProcessingScan) {
-                        e.preventDefault();
-                        return;
-                    }
-                    if (!isScanning) armScan('window-keydown');
-                    e.preventDefault();
-                    handleKeyBuffered(ch);
+                 window.addEventListener('keydown', (e) => {
+                     if (!iosEmbeddedVerify) return;
+                     if (document.activeElement === ghostInput) return;
+                     const ch = keyToScanChar(e);
+                     if (!ch) return;
+ 
+                     // Once we start processing (or finalize early), keep consuming keys so barcode output
+                     // cannot spill into the POS/iframe.
+                     if (scanLocked || isProcessingScan) {
+                         lastKeyAt = Date.now();
+                         e.preventDefault();
+                         return;
+                     }
+                     if (!isScanning) armScan('window-keydown');
+                     e.preventDefault();
+                     handleKeyBuffered(ch);
                 }, true);
 
                 ghostInput.addEventListener('input', () => {
@@ -2866,9 +2950,7 @@
                     return;
                 }
 
-                setTimeout(() => {
-                    closeGateway();
-                }, 1250);
+                beginCloseAfterKeyQuiet('verified');
             }
         }
 
@@ -2887,13 +2969,22 @@
             try { const p = document.getElementById('scanPreviewText'); if (p) p.textContent = '...'; } catch (e) { }
 
             document.getElementById('errorOverlay').classList.add('active');
+
+            const rawReason = String(data?.reason || data?.bannedReason || data?.message || 'Rejected').trim() || 'Rejected';
+            const normalizedReason = rawReason.replace(/^reason:\s*/i, '').trim();
+            const titleText = (() => {
+                if (data?.banned || /banned/i.test(normalizedReason) || normalizedReason === 'BANNED_CUSTOMER') return 'Banned';
+                if (/underage/i.test(normalizedReason)) return 'Underage';
+                if (Number.isFinite(data?.age) && data.age < 21) return 'Underage';
+                return 'Rejected';
+            })();
             try {
                 const titleEl = document.getElementById('errorTitle');
-                if (titleEl) titleEl.textContent = 'Rejected';
+                if (titleEl) titleEl.textContent = titleText;
             } catch (e) { }
 
             const ageText = `Age: ${data?.age ?? '??'}`;
-            const reasonText = `Reason: ${data?.reason || 'Rejected'}`;
+            const reasonText = `Reason: ${normalizedReason || 'Rejected'}`;
 
             try {
                 const ageEl = document.getElementById('errorAge');
@@ -2925,9 +3016,7 @@
                 try { visualRoot.classList.remove('scanning'); } catch (e) { }
                 if (actions) actions.style.display = 'none';
 
-                setTimeout(() => {
-                    closeGateway();
-                }, 1250);
+                beginCloseAfterKeyQuiet('rejected');
                 return;
             }
 
@@ -3161,7 +3250,20 @@
             }
         }
 
-        function closeGateway() {
+        function closeGateway(force = false) {
+            // In embedded verify-only mode, avoid closing the iframe while the scanner is still emitting keystrokes,
+            // otherwise the tail of the HID stream can spill into Lightspeed fields after the modal closes.
+            try {
+                if (!force && embeddedMode && verifyOnlyMode) {
+                    const quietForMs = lastKeyAt ? (Date.now() - lastKeyAt) : Number.POSITIVE_INFINITY;
+                    if (closeQuarantineActive) return;
+                    if (quietForMs < CLOSE_QUIET_MS) {
+                        beginCloseAfterKeyQuiet('manual-close', { minDelayMs: 0, quietMs: CLOSE_QUIET_MS, maxDelayMs: Math.min(CLOSE_MAX_DELAY_MS, 2500) });
+                        return;
+                    }
+                }
+            } catch (e) { }
+
             // Show a manual fallback in case Lightspeed ignores close messages in this embed context.
             setTimeout(() => {
                 const overlay = document.getElementById('closeOverlay');
