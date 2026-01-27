@@ -23,6 +23,21 @@ const lightspeedMode = process.env.LIGHTSPEED_USE_MOCK === 'true' ? 'mock' : 'li
 const recentClientDiagnostics = [];
 const maxRecentClientDiagnostics = 250;
 
+// Verify trace ring buffer (dev diagnostics; do not rely on this for persistence).
+const recentVerifyTraces = [];
+const maxRecentVerifyTraces = 200;
+
+function recordVerifyTrace(entry) {
+  try {
+    recentVerifyTraces.push(entry);
+    while (recentVerifyTraces.length > maxRecentVerifyTraces) {
+      recentVerifyTraces.shift();
+    }
+  } catch {
+    // ignore
+  }
+}
+
 function sanitizeDiagnosticDetails(details) {
   try {
     if (!details) return null;
@@ -118,6 +133,30 @@ router.get('/debug/client-errors/recent', (req, res) => {
   const limit = Math.max(1, Math.min(250, Number(req.query.limit) || 100));
   const items = recentClientDiagnostics.slice(-limit);
   res.json({ success: true, count: items.length, items });
+});
+
+router.get('/debug/verify-traces/recent', (req, res) => {
+  const adminToken = req.get('x-admin-token');
+  if (process.env.ADMIN_TOKEN && adminToken !== process.env.ADMIN_TOKEN) {
+    return res.status(403).json({ error: 'FORBIDDEN' });
+  }
+
+  const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
+  const items = recentVerifyTraces.slice(-limit);
+  res.json({ success: true, count: items.length, items });
+});
+
+router.get('/debug/verify-traces/sale/:saleId', (req, res) => {
+  const adminToken = req.get('x-admin-token');
+  if (process.env.ADMIN_TOKEN && adminToken !== process.env.ADMIN_TOKEN) {
+    return res.status(403).json({ error: 'FORBIDDEN' });
+  }
+
+  const { saleId } = req.params;
+  const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 10));
+  const matches = recentVerifyTraces.filter((t) => t.saleId === saleId);
+  const items = matches.slice(-limit);
+  res.json({ success: true, saleId, count: items.length, items });
 });
 
 // Ping Endpoint for connectivity testing
@@ -1266,6 +1305,7 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
   const { clerkId, scan } = req.body || {};
   const { saleId } = req.params;
   const requestStartedAt = Date.now();
+  const traceId = `v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
   // Ensure we have an in-memory session so the gateway debug panel can show timing logs even without Vercel log tailing.
   try {
@@ -1289,8 +1329,21 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
       }
     : null;
 
+  const sessionLog = (message, type = 'info') => {
+    try {
+      saleVerificationStore.addSessionLog(saleId, `[${traceId}] ${message}`, type);
+    } catch {
+      // ignore
+    }
+  };
+
+  sessionLog('VERIFY_START');
+  if (!db.pool) sessionLog('DB_POOL: none (DATABASE_URL missing/unavailable)', 'warn');
+  if (poolStats) sessionLog(`DB_POOL: t${poolStats.total}/i${poolStats.idle}/w${poolStats.waiting}`);
+
   if (!clerkId) {
     logger.logSecurity('missing_clerk_id', { saleId });
+    sessionLog('FAIL: missing clerkId', 'error');
     return res.status(400).json({
       error: 'INVALID_REQUEST',
       message: 'clerkId is required.'
@@ -1299,6 +1352,7 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
 
   if (!scan || typeof scan.approved !== 'boolean') {
     logger.logSecurity('invalid_scan_data', { saleId, clerkId });
+    sessionLog('FAIL: invalid scan payload (approved missing)', 'error');
     return res.status(400).json({
       error: 'INVALID_REQUEST',
       message: 'scan.approved boolean flag is required.'
@@ -1319,10 +1373,13 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
   let sale = null;
   const saleLookupStartedAt = Date.now();
   try {
+    sessionLog('SALE_LOOKUP_START');
     sale = await lightspeed.getSaleById(saleId);
     mark('saleLookupMs', saleLookupStartedAt);
+    sessionLog(`SALE_LOOKUP_DONE ${perf.saleLookupMs}ms`, perf.saleLookupMs > 1500 ? 'warn' : 'info');
     if (!sale) {
       logger.warn({ event: 'sale_not_found', saleId }, `Sale ${saleId} not found`);
+      sessionLog('FAIL: sale not found', 'error');
       return res.status(404).json({
         error: 'SALE_NOT_FOUND',
         message: 'Sale not found.'
@@ -1330,6 +1387,7 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
     }
   } catch (saleError) {
     mark('saleLookupMs', saleLookupStartedAt);
+    sessionLog(`SALE_LOOKUP_FAIL ${perf.saleLookupMs}ms ${saleError.message}`, 'error');
     logger.logAPIError('get_sale_for_verification', saleError, { saleId, clerkId });
     const status = saleError.status === 404 ? 404 : 502;
     return res.status(status).json({
@@ -1346,6 +1404,7 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
   if (db.pool && (normalizedScan.documentNumber || (normalizedScan.firstName && normalizedScan.lastName && normalizedScan.dob))) {
     const bannedCheckStartedAt = Date.now();
     try {
+      sessionLog('BANNED_CHECK_START');
       bannedRecord = await complianceStore.findBannedCustomer({
         documentType: normalizedScan.documentType,
         documentNumber: normalizedScan.documentNumber,
@@ -1370,8 +1429,10 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
         });
       }
       mark('bannedCheckMs', bannedCheckStartedAt);
+      sessionLog(`BANNED_CHECK_DONE ${perf.bannedCheckMs}ms hit=${Boolean(bannedRecord)}`, perf.bannedCheckMs > 750 ? 'warn' : 'info');
     } catch (banError) {
       mark('bannedCheckMs', bannedCheckStartedAt);
+      sessionLog(`BANNED_CHECK_FAIL ${perf.bannedCheckMs}ms ${banError.message}`, 'warn');
       logger.logAPIError('find_banned_customer', banError, {
         saleId,
         clerkId,
@@ -1383,6 +1444,7 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
 
   try {
     const startTime = Date.now();
+    sessionLog('LIGHTSPEED_RECORD_START');
 
     const verification = await lightspeed.recordVerification({
       saleId,
@@ -1402,6 +1464,7 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
     });
     logger.logPerformance('recordVerification', Date.now() - startTime, true);
     mark('lightspeedRecordMs', startTime);
+    sessionLog(`LIGHTSPEED_RECORD_DONE ${perf.lightspeedRecordMs}ms`, perf.lightspeedRecordMs > 1500 ? 'warn' : 'info');
 
     let persisted = null;
 
@@ -1411,13 +1474,16 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
 
       try {
         const dbSaveStartedAt = Date.now();
+        sessionLog('DB_SAVE_START');
         persisted = await complianceStore.saveVerification(verification, {
           ipAddress,
           userAgent,
           locationId
         });
         mark('dbSaveMs', dbSaveStartedAt);
+        sessionLog(`DB_SAVE_DONE ${perf.dbSaveMs}ms`, perf.dbSaveMs > 1500 ? 'warn' : 'info');
       } catch (dbError) {
+        sessionLog(`DB_SAVE_FAIL ${dbError.message}`, 'warn');
         logger.logAPIError('persist_verification', dbError, { saleId, clerkId });
       }
     }
@@ -1443,10 +1509,40 @@ router.post('/sales/:saleId/verify', validateVerification, async (req, res) => {
       // Best-effort only.
     }
 
+    recordVerifyTrace({
+      at: new Date().toISOString(),
+      traceId,
+      saleId,
+      clerkId: clerkId || null,
+      approved: Boolean(normalizedScan?.approved),
+      reason: normalizedScan?.reason ? sanitizeString(normalizedScan.reason) : null,
+      timings: perf,
+      pool: poolStats
+    });
+    sessionLog(`VERIFY_DONE total=${perf.totalMs}ms`, perf.totalMs > 2500 ? 'warn' : 'info');
+
     res.status(201).json({
-      data: responsePayload
+      data: {
+        ...responsePayload,
+        traceId,
+        timings: perf,
+        pool: poolStats
+      }
     });
   } catch (error) {
+    perf.totalMs = Date.now() - requestStartedAt;
+    recordVerifyTrace({
+      at: new Date().toISOString(),
+      traceId,
+      saleId,
+      clerkId: clerkId || null,
+      approved: Boolean(scan?.approved),
+      reason: scan?.reason ? sanitizeString(scan.reason) : null,
+      timings: perf,
+      pool: poolStats,
+      error: error?.message || 'UNKNOWN_ERROR'
+    });
+    sessionLog(`VERIFY_FAIL total=${perf.totalMs}ms ${error.message}`, 'error');
     logger.logAPIError('recordVerification', error, { saleId, clerkId });
     const status = error.message === 'SALE_NOT_FOUND' ? 404 : 500;
     res.status(status).json({
