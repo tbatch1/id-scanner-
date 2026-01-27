@@ -585,6 +585,12 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     // Keep scanning snappy by doing only: parse -> underage -> banned -> persist -> respond.
     // Customer profile population is handled asynchronously via customer reconcile jobs (cron) so it never blocks the scan UI.
     const fastVerifyStartedAt = Date.now();
+    const timing = {
+      parseMs: null,
+      bannedMs: null,
+      dbSaveMs: null,
+      totalMs: null
+    };
     const locationIdFast = determineLocationId(req, null);
     const saleTotalFast =
       req.body.saleTotal !== undefined
@@ -597,7 +603,9 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
 
     saleVerificationStore.addSessionLog(requestedSaleId, `FAST_VERIFY: starting (register: ${registerId || 'MISSING'})`, 'info');
 
+    const parseStartedAt = Date.now();
     let parsedFast = parseAAMVA(barcodeData);
+    timing.parseMs = Date.now() - parseStartedAt;
     console.log('📊 PARSE RESULT (FAST):', JSON.stringify(parsedFast, null, 2));
 
     if (!parsedFast || !parsedFast.age) {
@@ -627,6 +635,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
 
     if (approvedFast && db.pool && (parsedFast.documentNumber || (parsedFast.firstName && parsedFast.lastName && parsedFast.dob))) {
       try {
+        const bannedStartedAt = Date.now();
         const bannedRecord = await complianceStore.findBannedCustomer({
           documentType: 'drivers_license',
           documentNumber: parsedFast.documentNumber,
@@ -635,6 +644,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
           lastName: parsedFast.lastName,
           dateOfBirth: parsedFast.dob ? parsedFast.dob : null
         });
+        timing.bannedMs = Date.now() - bannedStartedAt;
         if (bannedRecord) {
           approvedFast = false;
           reasonFast = bannedRecord.notes || 'BANNED_CUSTOMER';
@@ -655,6 +665,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
     if (db.pool) {
       try {
         const safeIso = (d) => (d instanceof Date && !isNaN(d.getTime())) ? d.toISOString() : null;
+        const dbSaveStartedAt = Date.now();
         await complianceStore.saveVerification(
           {
             verificationId: verificationIdFast,
@@ -679,6 +690,7 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
             locationId: locationIdFast
           }
         );
+        timing.dbSaveMs = Date.now() - dbSaveStartedAt;
         dbSavedFast = true;
       } catch (dbError) {
         saleVerificationStore.addSessionLog(requestedSaleId, `DB save failed: ${dbError.message}`, 'warn');
@@ -742,6 +754,22 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       // ignore
     }
 
+    timing.totalMs = Date.now() - fastVerifyStartedAt;
+    logger.info(
+      {
+        event: 'verify_bluetooth_timing',
+        saleId: requestedSaleId,
+        approved: approvedFast,
+        reason: reasonFast || null,
+        dbEnabled: Boolean(db.pool),
+        parseMs: timing.parseMs,
+        bannedMs: timing.bannedMs,
+        dbSaveMs: timing.dbSaveMs,
+        totalMs: timing.totalMs
+      },
+      'Bluetooth verify timing'
+    );
+
     return res.json({
       success: true,
       approved: approvedFast,
@@ -756,7 +784,8 @@ router.post('/sales/:saleId/verify-bluetooth', async (req, res) => {
       dbSaved: dbSavedFast,
       customerReconcileQueued: customerReconcileQueuedFast,
       customerReconcileReason: customerReconcileReasonFast,
-      processingMs: Date.now() - fastVerifyStartedAt
+      processingMs: Date.now() - fastVerifyStartedAt,
+      timing
     });
 
     // 1. Get Sale Context

@@ -735,16 +735,16 @@
             </div>
         </div>
 
-        <!-- Error overlay -->
+        <!-- Error/Rejection overlay -->
         <div id="errorOverlay" class="overlay-card error">
             <div class="overlay-content">
-                <h2 style="color: var(--error)">Error</h2>
-                <p id="errorMsg">Failed to verify ID</p>
-                <div style="display: flex; gap: 10px; flex-direction: column;">
-                    <button class="btn-action" style="background: var(--error)" onclick="resetUI()">Try
-                        Again</button>
-                    <button class="btn-action" style="background: rgba(255,255,255,0.1); color: white;"
-                        onclick="closeGateway()">Cancel</button>
+                <h2 id="errorTitle" style="color: var(--error)">Rejected</h2>
+                <p id="errorAge">Age: --</p>
+                <p id="errorReason" style="opacity: 0.9; margin-top: -10px; margin-bottom: 18px;">Reason: --</p>
+                <p id="errorName" style="opacity: 0.7; margin-top: -10px; margin-bottom: 18px; display: none;">--</p>
+                <div id="errorActions" style="display: flex; gap: 10px; flex-direction: column;">
+                    <button class="btn-action" style="background: var(--error)" onclick="resetUI()">Try Again</button>
+                    <button class="btn-action" style="background: rgba(255,255,255,0.1); color: white;" onclick="closeGateway()">Cancel</button>
                 </div>
             </div>
         </div>
@@ -819,6 +819,7 @@
         const __isProdHost =
             __host === 'id-scanner-project.vercel.app' ||
             __host === 'id-scanner-project-thc-club.vercel.app';
+        const __isDevAliasHost = __host === 'id-scanner-project-dev-thc-club.vercel.app';
         const __debugAllowed = !__isProdHost;
 
         const debugKeysEnabled = __debugAllowed && ['1', 'true', 'yes', 'on'].includes((urlParams.get('debugKeys') || urlParams.get('debug') || '').toLowerCase());
@@ -837,7 +838,8 @@
         }
         let remoteTelemetryEnabled =
             __debugAllowed &&
-            (debugUiEnabled ||
+            (__isDevAliasHost ||
+                debugUiEnabled ||
                 debugKeysEnabled ||
                 ['1', 'true', 'yes', 'on'].includes(String(urlParams.get('telemetry') || urlParams.get('remoteTelemetry') || urlParams.get('clientLog') || '').trim().toLowerCase()));
 
@@ -1059,6 +1061,11 @@
         let pendingVerifyPayload = null;
         let pageOpenedAtMs = Date.now();
         let scanArmedAtMs = null;
+        let scanFirstKeyAtMs = null;
+        let scanFinalizedAtMs = null;
+        let verifyRequestStartedAtMs = null;
+        let verifyResponseAtMs = null;
+        let lastVerifyTimings = null;
         let lastUserGestureAtMs = null;
         const clientSessionId = (() => {
             try {
@@ -1170,6 +1177,12 @@
             if (preferReadOnlyCapture) {
                 try { ghostInput.readOnly = true; ghostInput.setAttribute('readonly', ''); } catch (e) { }
             }
+        }
+
+        function emitClientTiming(event, details = {}) {
+            try {
+                reportRemoteError(event, details, 'CLIENT_LOG');
+            } catch (e) { }
         }
 
         // When loaded as a Lightspeed gateway (iframe), remove the close button to prevent premature exits.
@@ -1840,6 +1853,11 @@
         function resetScanCaptureState({ keepPreview = false } = {}) {
             barcodeBuffer = '';
             scanLocked = false;
+            scanFirstKeyAtMs = null;
+            scanFinalizedAtMs = null;
+            verifyRequestStartedAtMs = null;
+            verifyResponseAtMs = null;
+            lastVerifyTimings = null;
             remoteProgressNextLen = 50;
             clearScanTimers();
             if (ghostInput) ghostInput.value = '';
@@ -1947,9 +1965,14 @@
             const payload = extractLikelyScanSegment(rawText);
             try {
                 const progress = getVerifyProgress(payload);
+                scanFinalizedAtMs = Date.now();
+                const captureStartMs = scanFirstKeyAtMs ?? scanArmedAtMs ?? pageOpenedAtMs;
+                const captureMs = Number.isFinite(captureStartMs) ? (scanFinalizedAtMs - captureStartMs) : null;
+                const armToFirstKeyMs = (scanArmedAtMs && scanFirstKeyAtMs) ? (scanFirstKeyAtMs - scanArmedAtMs) : null;
+                const quietMs = lastKeyAt ? (scanFinalizedAtMs - lastKeyAt) : null;
                 reportRemoteError(
                     'SCAN_FINALIZE',
-                    { len: String(payload || '').length, dob: progress.hasDob, id: progress.hasId, addr: progress.hasAddr },
+                    { len: String(payload || '').length, dob: progress.hasDob, id: progress.hasId, addr: progress.hasAddr, captureMs, armToFirstKeyMs, quietMs },
                     'CLIENT_LOG'
                 );
             } catch (e) { }
@@ -1960,6 +1983,11 @@
 
         function armScan(reason = 'arm') {
             scanArmedAtMs = Date.now();
+            scanFirstKeyAtMs = null;
+            scanFinalizedAtMs = null;
+            verifyRequestStartedAtMs = null;
+            verifyResponseAtMs = null;
+            lastVerifyTimings = null;
             lastUserGestureAtMs = Date.now();
 
             try {
@@ -2170,6 +2198,8 @@
         function handleKeyBuffered(key) {
             if (!isScanning || scanLocked) return;
             startHardTimeout();
+            lastKeyAt = Date.now();
+            if (!scanFirstKeyAtMs) scanFirstKeyAtMs = lastKeyAt;
             barcodeBuffer += key;
 
             try {
@@ -2215,6 +2245,7 @@
             if (!isScanning || scanLocked) return;
             startHardTimeout();
             lastKeyAt = Date.now();
+            if (!scanFirstKeyAtMs) scanFirstKeyAtMs = lastKeyAt;
             hasShownArmHint = false;
 
             ghostInput.value = (ghostInput.value || '') + text;
@@ -2343,6 +2374,7 @@
                     if (ghostInput.readOnly) return;
                     startHardTimeout();
                     lastKeyAt = Date.now();
+                    if (!scanFirstKeyAtMs) scanFirstKeyAtMs = lastKeyAt;
                     hasShownArmHint = false;
                     barcodeBuffer = String(ghostInput.value || '');
                     updateScanPreview(barcodeBuffer);
@@ -2490,6 +2522,7 @@
             } catch (e) { }
 
             try {
+                verifyRequestStartedAtMs = Date.now();
                 const response = await fetch(`/api/sales/${encodeURIComponent(saleId)}/verify-bluetooth`, {
                     method: 'POST',
                     headers: getApiHeaders({ 'Content-Type': 'application/json' }),
@@ -2520,6 +2553,7 @@
                 }
 
                 const data = await response.json();
+                verifyResponseAtMs = Date.now();
 
                 // Backend may resolve the POS gateway/register_sale id to the actual Retail sale id.
                 // Use the resolved id for polling and any follow-up API calls.
@@ -2559,6 +2593,26 @@
                     );
                 } catch (e) { }
 
+                try {
+                    const captureStartMs = scanFirstKeyAtMs ?? scanArmedAtMs ?? pageOpenedAtMs;
+                    const captureMs = (scanFinalizedAtMs && Number.isFinite(captureStartMs)) ? (scanFinalizedAtMs - captureStartMs) : null;
+                    const armToFirstKeyMs = (scanArmedAtMs && scanFirstKeyAtMs) ? (scanFirstKeyAtMs - scanArmedAtMs) : null;
+                    const verifyHttpMs = (verifyRequestStartedAtMs && verifyResponseAtMs) ? (verifyResponseAtMs - verifyRequestStartedAtMs) : null;
+                    lastVerifyTimings = {
+                        outcome: data.approved ? 'approved' : (data.success ? 'rejected' : 'error'),
+                        captureMs,
+                        armToFirstKeyMs,
+                        verifyHttpMs,
+                        backendProcessingMs: data.processingMs ?? null,
+                        dbSaved: Boolean(data.dbSaved),
+                        saleId: saleId || null,
+                        barcodeLen: String(rawData || '').length,
+                        reason: data.reason || null
+                    };
+                    emitClientTiming('SCAN_TIMING', lastVerifyTimings);
+                    clientLog('scan timing', lastVerifyTimings);
+                } catch (e) { }
+
                 if (data.success && data.approved) {
                     latestVerificationId = data.verificationId || data.verification_id || latestVerificationId;
                     isScanning = false;
@@ -2573,7 +2627,7 @@
                 if (isTerminalRejection(reason)) {
                     isScanning = false;
                     isProcessingScan = false;
-                    showError(reason);
+                    showRejection(data);
                     return;
                 }
 
@@ -2778,9 +2832,90 @@
             }
         }
 
+        function showRejection(data) {
+            try {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+            } catch (e) { }
+
+            // Keep the rejection popup clean: hide the scan capture UI (input + preview)
+            // so staff don't see any masked characters/caret behind the overlay.
+            try { if (scanNowWrap) scanNowWrap.style.display = 'none'; } catch (e) { }
+            try { if (ghostInput) { ghostInput.blur(); ghostInput.value = ''; } } catch (e) { }
+            try { const p = document.getElementById('scanPreviewText'); if (p) p.textContent = '...'; } catch (e) { }
+
+            document.getElementById('errorOverlay').classList.add('active');
+            try {
+                const titleEl = document.getElementById('errorTitle');
+                if (titleEl) titleEl.textContent = 'Rejected';
+            } catch (e) { }
+
+            const ageText = `Age: ${data?.age ?? '??'}`;
+            const reasonText = `Reason: ${data?.reason || 'Rejected'}`;
+
+            try {
+                const ageEl = document.getElementById('errorAge');
+                if (ageEl) ageEl.textContent = ageText;
+            } catch (e) { }
+            try {
+                const reasonEl = document.getElementById('errorReason');
+                if (reasonEl) reasonEl.textContent = reasonText;
+            } catch (e) { }
+
+            try {
+                // Keep name hidden for now to match the verified popup style.
+                const nameEl = document.getElementById('errorName');
+                if (nameEl) {
+                    nameEl.textContent = '';
+                    nameEl.style.display = 'none';
+                }
+            } catch (e) { }
+
+            clientLog('rejected', { age: data?.age ?? null, reason: data?.reason || null, dbSaved: Boolean(data?.dbSaved) });
+            if (debugStatus) debugStatus.textContent = `REJECTED: ${data?.reason || 'Rejected'}`;
+
+            const actions = document.getElementById('errorActions');
+            if (verifyOnlyMode) {
+                // Stop any scanning/focus loops once rejected.
+                isScanning = false;
+                isProcessingScan = false;
+                scanLocked = true;
+                try { visualRoot.classList.remove('scanning'); } catch (e) { }
+                if (actions) actions.style.display = 'none';
+
+                setTimeout(() => {
+                    closeGateway();
+                }, 1250);
+                return;
+            }
+
+            if (actions) actions.style.display = 'flex';
+        }
+
         function showError(msg) {
             document.getElementById('errorOverlay').classList.add('active');
-            document.getElementById('errorMsg').textContent = msg;
+            try {
+                const titleEl = document.getElementById('errorTitle');
+                if (titleEl) titleEl.textContent = 'Error';
+            } catch (e) { }
+            try {
+                const ageEl = document.getElementById('errorAge');
+                if (ageEl) ageEl.textContent = '';
+            } catch (e) { }
+            try {
+                const reasonEl = document.getElementById('errorReason');
+                if (reasonEl) reasonEl.textContent = msg;
+            } catch (e) { }
+            try {
+                const nameEl = document.getElementById('errorName');
+                if (nameEl) nameEl.style.display = 'none';
+            } catch (e) { }
+            try {
+                const actions = document.getElementById('errorActions');
+                if (actions) actions.style.display = 'flex';
+            } catch (e) { }
             document.getElementById('debugStatus').textContent = 'ERROR: ' + msg;
         }
 
