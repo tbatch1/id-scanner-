@@ -1847,6 +1847,12 @@
         const CLOSE_MIN_DELAY_MS = 900;
         const CLOSE_MAX_DELAY_MS = 6500;
         let keySinkEl = null;
+        let lastPreviewUpdateAt = 0;
+        const PREVIEW_UPDATE_MIN_MS = 80;
+        let lastEarlyCheckAt = 0;
+        let lastEarlyCheckLen = 0;
+        const EARLY_CHECK_MIN_MS = 90;
+        const EARLY_CHECK_MIN_LEN_STEP = 24;
 
         function clearScanTimers() {
             if (scanIdleTimer) clearTimeout(scanIdleTimer);
@@ -1942,6 +1948,10 @@
 
         function updateScanPreview(text) {
             try {
+                // For performance (especially iPad/WKWebView), do not touch the DOM on every keystroke unless
+                // the user explicitly enabled a visible preview.
+                if (!debugKeysEnabled && !maskKeysEnabled) return;
+
                 const preview = document.getElementById('scanPreviewText');
                 if (!preview) return;
                 const value = String(text || '');
@@ -1962,9 +1972,6 @@
                     preview.textContent = `${'*'.repeat(shown)} (${len})`;
                     return;
                 }
-
-                // Default: keep hidden in UI, but avoid leaking raw text if it is ever shown.
-                preview.textContent = value ? `(capturing ${value.length} chars)` : '...';
             } catch (e) { }
         }
 
@@ -2288,7 +2295,13 @@
                 }
             } catch (e) { }
 
-            updateScanPreview(barcodeBuffer);
+            const now = Date.now();
+            if (debugKeysEnabled || maskKeysEnabled) {
+                if (!lastPreviewUpdateAt || (now - lastPreviewUpdateAt) >= PREVIEW_UPDATE_MIN_MS) {
+                    lastPreviewUpdateAt = now;
+                    updateScanPreview(barcodeBuffer);
+                }
+            }
 
             // Speed win for slow-HID scanners: as soon as we have a parseable DOB + an ID token,
             // submit immediately instead of waiting for the terminator/quiet-time.
@@ -2296,11 +2309,18 @@
             // of the scanner stream cannot leak into the POS/UI.
             try {
                 if (verifyOnlyMode && !scanLocked && !isProcessingScan && barcodeBuffer.length >= 120) {
-                    const progress = getVerifyProgress(barcodeBuffer);
-                    if (progress.hasDob && progress.hasId) {
-                        reportRemoteError('SCAN_EARLY_FINALIZE', { len: barcodeBuffer.length }, 'CLIENT_LOG');
-                        finalizeScan(barcodeBuffer);
-                        return;
+                    const longEnoughSinceLast =
+                        !lastEarlyCheckLen || (barcodeBuffer.length - lastEarlyCheckLen) >= EARLY_CHECK_MIN_LEN_STEP;
+                    const timeOk = !lastEarlyCheckAt || (now - lastEarlyCheckAt) >= EARLY_CHECK_MIN_MS;
+                    if (longEnoughSinceLast && timeOk) {
+                        lastEarlyCheckAt = now;
+                        lastEarlyCheckLen = barcodeBuffer.length;
+                        const progress = getVerifyProgress(barcodeBuffer);
+                        if (progress.hasDob && progress.hasId) {
+                            reportRemoteError('SCAN_EARLY_FINALIZE', { len: barcodeBuffer.length }, 'CLIENT_LOG');
+                            finalizeScan(barcodeBuffer);
+                            return;
+                        }
                     }
                 }
             } catch (e) { }
@@ -2488,17 +2508,30 @@
                     if (!scanFirstKeyAtMs) scanFirstKeyAtMs = lastKeyAt;
                     hasShownArmHint = false;
                     barcodeBuffer = String(ghostInput.value || '');
-                    updateScanPreview(barcodeBuffer);
+                    const now = Date.now();
+                    if (debugKeysEnabled || maskKeysEnabled) {
+                        if (!lastPreviewUpdateAt || (now - lastPreviewUpdateAt) >= PREVIEW_UPDATE_MIN_MS) {
+                            lastPreviewUpdateAt = now;
+                            updateScanPreview(barcodeBuffer);
+                        }
+                    }
 
                     // Speed win for slow-HID scanners: as soon as we have a parseable DOB + an ID token,
                     // submit immediately instead of waiting for the terminator/quiet-time.
                     try {
                         if (verifyOnlyMode && !scanLocked && !isProcessingScan && barcodeBuffer.length >= 120) {
-                            const progress = getVerifyProgress(barcodeBuffer);
-                            if (progress.hasDob && progress.hasId) {
-                                reportRemoteError('SCAN_EARLY_FINALIZE', { len: barcodeBuffer.length }, 'CLIENT_LOG');
-                                finalizeScan(barcodeBuffer);
-                                return;
+                            const longEnoughSinceLast =
+                                !lastEarlyCheckLen || (barcodeBuffer.length - lastEarlyCheckLen) >= EARLY_CHECK_MIN_LEN_STEP;
+                            const timeOk = !lastEarlyCheckAt || (now - lastEarlyCheckAt) >= EARLY_CHECK_MIN_MS;
+                            if (longEnoughSinceLast && timeOk) {
+                                lastEarlyCheckAt = now;
+                                lastEarlyCheckLen = barcodeBuffer.length;
+                                const progress = getVerifyProgress(barcodeBuffer);
+                                if (progress.hasDob && progress.hasId) {
+                                    reportRemoteError('SCAN_EARLY_FINALIZE', { len: barcodeBuffer.length }, 'CLIENT_LOG');
+                                    finalizeScan(barcodeBuffer);
+                                    return;
+                                }
                             }
                         }
                     } catch (e) { }
