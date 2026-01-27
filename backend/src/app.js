@@ -25,9 +25,24 @@ app.use(
   })
 );
 
+const vercelEnv = process.env.VERCEL_ENV || null;
+const defaultCorsWhitelist = ['http://localhost:4000', 'http://localhost:3000'];
+
+// Preview deployments use random `*.vercel.app` URLs; allow those by default in preview
+// so the in-browser diagnostic logger can reach `/api/debug/*` reliably.
+if (vercelEnv === 'preview') {
+  defaultCorsWhitelist.push('https://*.vercel.app');
+}
+
+// If someone deploys without explicitly setting ALLOWED_ORIGINS, at least allow the
+// canonical production hostname (can be overridden via env var).
+if (vercelEnv === 'production') {
+  defaultCorsWhitelist.push('https://id-scanner-project.vercel.app');
+}
+
 const corsWhitelist = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((entry) => entry.trim()).filter(Boolean)
-  : ['http://localhost:4000', 'http://localhost:3000'];
+  : defaultCorsWhitelist;
 
 app.use(
   cors({

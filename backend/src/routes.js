@@ -20,23 +20,104 @@ const millisecondsPerMinute = 60 * 1000;
 const lightspeedMode = process.env.LIGHTSPEED_USE_MOCK === 'true' ? 'mock' : 'live';
 
 // Client Error Reporting Endpoint
-router.post('/debug/client-errors', async (req, res) => {
+const recentClientDiagnostics = [];
+const maxRecentClientDiagnostics = 250;
+
+function sanitizeDiagnosticDetails(details) {
   try {
-    const { type, error, details, userAgent, saleId } = req.body || {};
-    const allowedTypes = new Set(['CLIENT_ERROR', 'CLIENT_LOG']);
-    const normalizedType = allowedTypes.has(type) ? type : 'CLIENT_ERROR';
+    if (!details) return null;
+    if (typeof details !== 'object') return { value: String(details).slice(0, 500) };
+
+    const output = {};
+    for (const [key, value] of Object.entries(details)) {
+      const lowerKey = String(key || '').toLowerCase();
+      if (lowerKey.includes('barcode') || lowerKey.includes('payload') || lowerKey.includes('raw')) {
+        output[key] = '[redacted]';
+        continue;
+      }
+
+      if (typeof value === 'string') {
+        output[key] = value.length > 500 ? `${value.slice(0, 500)}…` : value;
+        continue;
+      }
+
+      output[key] = value;
+    }
+
+    return output;
+  } catch {
+    return null;
+  }
+}
+
+function recordClientDiagnostic(entry) {
+  try {
+    recentClientDiagnostics.push(entry);
+    while (recentClientDiagnostics.length > maxRecentClientDiagnostics) {
+      recentClientDiagnostics.shift();
+    }
+  } catch {
+    // ignore
+  }
+}
+
+router.post('/debug/client-errors', async (req, res) => {
+  const nowIso = new Date().toISOString();
+  const { type, error, details, userAgent, saleId } = req.body || {};
+  const allowedTypes = new Set(['CLIENT_ERROR', 'CLIENT_LOG']);
+  const normalizedType = allowedTypes.has(type) ? type : 'CLIENT_ERROR';
+  const safeDetails = sanitizeDiagnosticDetails(details);
+
+  recordClientDiagnostic({
+    at: nowIso,
+    type: normalizedType,
+    saleId: saleId || null,
+    error: error || null,
+    details: safeDetails,
+    userAgent: userAgent || null
+  });
+
+  // Always emit to runtime logs so we can tail it even when DB logging is disabled/misconfigured.
+  logger.info(
+    {
+      event: 'client_diagnostic',
+      type: normalizedType,
+      saleId: saleId || null,
+      error: error || null,
+      details: safeDetails
+    },
+    'Client diagnostic'
+  );
+
+  let dbStored = false;
+  try {
     await complianceStore.logDiagnostic({
       type: normalizedType,
       saleId,
       userAgent,
       error,
-      details
+      details: safeDetails
     });
-    res.json({ success: true });
+    dbStored = true;
   } catch (err) {
-    console.error('Diagnostic logging failed:', err);
-    res.json({ success: false, error: err.message });
+    logger.warn({ event: 'client_diagnostic_db_failed', error: err.message }, 'Failed to persist client diagnostic');
   }
+
+  // Always return success so the frontend never blocks on diagnostics.
+  res.json({ success: true, dbStored });
+});
+
+// Best-effort short-term "history" for debugging without a log drain.
+// Note: serverless instances are ephemeral; this is meant for immediate diagnosis only.
+router.get('/debug/client-errors/recent', (req, res) => {
+  const adminToken = req.get('x-admin-token');
+  if (process.env.ADMIN_TOKEN && adminToken !== process.env.ADMIN_TOKEN) {
+    return res.status(403).json({ error: 'FORBIDDEN' });
+  }
+
+  const limit = Math.max(1, Math.min(250, Number(req.query.limit) || 100));
+  const items = recentClientDiagnostics.slice(-limit);
+  res.json({ success: true, count: items.length, items });
 });
 
 // Ping Endpoint for connectivity testing

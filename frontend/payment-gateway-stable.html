@@ -2216,6 +2216,21 @@
 
             updateScanPreview(barcodeBuffer);
 
+            // Speed win for slow-HID scanners: as soon as we have a parseable DOB + an ID token,
+            // submit immediately instead of waiting for the terminator/quiet-time.
+            // IMPORTANT: we still keep suppressing keystrokes while processing so the remainder
+            // of the scanner stream cannot leak into the POS/UI.
+            try {
+                if (verifyOnlyMode && !scanLocked && !isProcessingScan && barcodeBuffer.length >= 120) {
+                    const progress = getVerifyProgress(barcodeBuffer);
+                    if (progress.hasDob && progress.hasId) {
+                        reportRemoteError('SCAN_EARLY_FINALIZE', { len: barcodeBuffer.length }, 'CLIENT_LOG');
+                        finalizeScan(barcodeBuffer);
+                        return;
+                    }
+                }
+            } catch (e) { }
+
             if (verifyOnlyMode && key === '\n') {
                 if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
                 flushVerifyOnlyAttempt('enter');
@@ -2338,9 +2353,15 @@
             // We flush an "attempt" on Enter (CR) or on quiet-time.
             if (ghostInput) {
                 ghostInput.addEventListener('keydown', (e) => {
-                    if (scanLocked) return;
                     const ch = keyToScanChar(e);
                     if (!ch) return;
+
+                    // Once we start processing (or finalize early), keep consuming keys so barcode output
+                    // cannot spill into the POS/iframe.
+                    if (scanLocked || isProcessingScan) {
+                        e.preventDefault();
+                        return;
+                    }
                     if (!isScanning) armScan('ghostInput-keydown');
 
                     // If readonly capture is enabled, the browser won't insert characters into the input.
@@ -2360,10 +2381,16 @@
                 // (We intentionally keep focus on the button to avoid iOS edit UI.)
                 window.addEventListener('keydown', (e) => {
                     if (!iosEmbeddedVerify) return;
-                    if (scanLocked) return;
                     if (document.activeElement === ghostInput) return;
                     const ch = keyToScanChar(e);
                     if (!ch) return;
+
+                    // Once we start processing (or finalize early), keep consuming keys so barcode output
+                    // cannot spill into the POS/iframe.
+                    if (scanLocked || isProcessingScan) {
+                        e.preventDefault();
+                        return;
+                    }
                     if (!isScanning) armScan('window-keydown');
                     e.preventDefault();
                     handleKeyBuffered(ch);
